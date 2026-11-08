@@ -121,6 +121,7 @@ function AdminTripRouteLine({ booking, driver, selected, onSelect, mapsOk }) {
   );
 }
 // Fleet owners (owner 2026-11-08): the owner's own record has no vehicle number, so lists show the fleet instead.
+function fleetTag(b) { return b && b.fleetBooking && b.fleetVehicleNumber ? ` · 🚛 ${b.fleetVehicleNumber}` : ""; }
 function driverPlateText(d, lang) {
   if (d?.fleetOwner) {
     const n = Number(d.fleetVehicleCount) || 0;
@@ -1534,7 +1535,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                 <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.bg }}>
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.returnTrip ? "↩ " : ""}{b.pickup} → {b.drop}</div>
-                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName}${fleetTag(b)} · ` : ""}{activityTime(b)}</div>
                   </div>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                 </div>
@@ -1584,7 +1585,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (t) => (
         <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fareKmText(t, lang)} · {statusMeta[t.status]?.label || t.status}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"}{fleetTag(t)} · {fareKmText(t, lang)} · {statusMeta[t.status]?.label || t.status}</div>
         </div>
       ),
     },
@@ -1596,7 +1597,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}{fleetTag(b)}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
         </div>
       ),
     },
@@ -1608,7 +1609,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}{fleetTag(b)}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
         </div>
       ),
     },
@@ -3072,7 +3073,7 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
                   <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(log.createdAt)}</span>
                 </div>
                 {b ? (
-                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}` : ""}</div>
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}${fleetTag(b)}` : ""}</div>
                 ) : (
                   <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}: {log.bookingId}</div>
                 )}
@@ -3654,7 +3655,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                           {bookingCategoryText(latestRide, lang)}
                         </div>
                         <div className="text-[10px] flex items-center justify-between mt-1">
-                          <span style={{ color: C.inkSoft }}>{latestRide.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${latestRide.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(latestRide)}</span>
+                          <span style={{ color: C.inkSoft }}>{latestRide.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${latestRide.driverName}${fleetTag(latestRide)}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(latestRide)}</span>
                           {latestRide.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(latestRide.fare)}</span>}
                         </div>
                       </>
@@ -3687,7 +3688,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                               {bookingCategoryText(b, lang)}
                             </div>
                             <div className="text-[10px] flex items-center justify-between mt-1">
-                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
+                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}${fleetTag(b)}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
                               {b.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(b.fare)}</span>}
                             </div>
                           </div>
@@ -4229,7 +4230,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
           <tbody>
             {tripLog.map((t) => (
               <tr key={t.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                <td className="py-1.5" style={{ color: C.ink }}>{t.driverName}</td>
+                <td className="py-1.5" style={{ color: C.ink }}>{t.driverName}{fleetTag(t)}</td>
                 <td className="py-1.5" style={{ color: C.inkSoft }}>{t.pickup} → {t.drop}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(t.fare)}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: t.status === "Cancelled" ? C.safety : C.success }}>

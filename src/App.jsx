@@ -8951,7 +8951,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex-1 p-3">
           <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</div>
-          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}{trip.fleetBooking && trip.fleetVehicleNumber && <div data-fleet-invoice-vehicle className="text-[11px] font-bold mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>🚛 {trip.fleetVehicleNumber}</div>}</div>
         </div>
         <div className="w-px" style={{ background: C.line }} />
         <div className="flex-1 p-3">
@@ -9405,7 +9405,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
                       <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                         <RideTypeBanner booking={ab} lang={lang} />
                         <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
-                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? `Driver assigned — ${ab.driverName}` : lang === "mr" ? `ड्रायव्हर निश्चित झाला — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`}</div>
+                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? `Driver assigned — ${ab.driverName}${ab.fleetVehicleNumber ? ` · ${ab.fleetVehicleNumber}` : ""}` : lang === "mr" ? `ड्रायव्हर निश्चित झाला — ${ab.driverName}${ab.fleetVehicleNumber ? ` · ${ab.fleetVehicleNumber}` : ""}` : `ड्राइवर तय हो गया — ${ab.driverName}${ab.fleetVehicleNumber ? ` · ${ab.fleetVehicleNumber}` : ""}`}</div>
                         {fareKmText(ab, lang) && <div data-fare-km className="text-sm font-extrabold mt-1" style={{ color: C.navy, fontFamily: monoFont }}>{fareKmText(ab, lang)}</div>}
                       </button>
                     ))}
@@ -9818,7 +9818,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex-1 p-3">
           <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</div>
-          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}{trip.fleetBooking && trip.fleetVehicleNumber && <div data-fleet-invoice-vehicle className="text-[11px] font-bold mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>🚛 {trip.fleetVehicleNumber}</div>}</div>
         </div>
         <div className="w-px" style={{ background: C.line }} />
         <div className="flex-1 p-3">
@@ -13601,6 +13601,8 @@ export default function App() {
   // itself, which is hidden — this is the actual enforcement point).
   // Returns an error string when blocked, null when the cancellation went
   // through.
+  // Whose booking is it? A fleet booking keeps the OWNER's mobile in driverMobile but the real driver's name in driverName (owner 2026-11-08), so a name match would miss it.
+  const bookingIsMine = (b) => (b.fleetBooking ? !!driver?.mobile && b.driverMobile === driver.mobile : b.driverName === driver?.name);
   const cancelBooking = (id) => {
     const b = bookings.find((x) => x.id === id);
     if (!b) return null;
@@ -13609,7 +13611,7 @@ export default function App() {
         ? "Trip cannot be cancelled! The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support for any help."
         : lang === "mr" ? "ट्रिप रद्द केली जाऊ शकत नाही! ड्रायव्हरने ओटीपी (OTP) सत्यापित केला आहे आणि माल लोड/ट्रान्झिटमध्ये आहे. ही ट्रिप फक्त ड्रायव्हरने प्रवास पूर्ण (End Trip) केल्यावरच संपेल. कोणत्याही मदतीसाठी सपोर्टशी संपर्क करा." : "ट्रिप कैंसल नहीं की जा सकती! ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए सपोर्ट से संपर्क करें।";
     }
-    if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
+    if (b.status === "Ongoing" && bookingIsMine(b) && b.fare) {
       // New cancellation rule: the cut commission/advance is held by admin,
       // not refunded instantly — it auto-adjusts against the driver's next
       // accepted trip so the driver isn't out of pocket. Matches whatever
@@ -13656,13 +13658,13 @@ export default function App() {
     const myExtras = bookingExtras.filter((e) => e.bookingId === id);
     const bill = buildBill({ fare: regularFare, isReturn: b.isReturn, returnPct: b.returnPct, haltingCharge, extras: myExtras });
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, haltingCharge, bill, completedAt: completedAtMs }).catch((e) => console.error(e));
-    if (b.driverName === driver?.name && driver?.mobile) patchDoc("drivers", driver.mobile, { online: true }).catch((e) => console.error("[duty after trip]", e));
+    if (bookingIsMine(b) && driver?.mobile) patchDoc("drivers", driver.mobile, { online: true }).catch((e) => console.error("[duty after trip]", e));
     // Return Load: this vehicle is now empty and (per the guide's own
     // background rule) assumed to be heading home for up to RETURN_HOURS —
     // see markReturnModePatch/isReturnLoadFor above.
     // Not after a customer's Round trip (deep-clean 2026-11-02): that vehicle has already driven back to the pickup, so it is NOT
     // "empty at the drop heading home" -- flagging it would hand out Return Load discounts from the wrong place.
-    if (b.driverName === driver?.name && driver?.mobile && !b.returnTrip) {
+    if (bookingIsMine(b) && driver?.mobile && !b.returnTrip && !b.fleetBooking) {
       patchDoc("drivers", driver.mobile, markReturnModePatch(driver, b)).catch((e) => console.error("[return mode]", e));
     }
     // Referral payout (₹200 to whichever driver referred this one, the
@@ -13674,7 +13676,7 @@ export default function App() {
     // — it already resolves { ok: false, ... } silently on every
     // not-eligible-yet case (not referred, already credited, etc.), so
     // there's nothing here worth awaiting or surfacing to the driver.
-    if (b.driverName === driver?.name) creditDriverReferral().catch((e) => console.error("[referral]", e));
+    if (bookingIsMine(b)) creditDriverReferral().catch((e) => console.error("[referral]", e));
     // Returned (not just patched to Firestore) so LoadingTimer's onEnded
     // snapshot -- built locally, before the patch above round-trips back
     // through the subscription -- can show the real bill immediately

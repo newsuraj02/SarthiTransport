@@ -286,3 +286,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: invariant pinning fleet fields in all three roles
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-08 -- Owner 2026-11-08: fleet bookings recognised by owner mobile in cancel/complete/referral (bookingIsMine); fleet vehicle shown in invoice, advance list and Admin lists
+- changed (10): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminCallLogs, code:src/AdminPanel.jsx#AdminCustomers, code:src/AdminPanel.jsx#AdminFinance, code:src/App.jsx#CustomerTripSummary, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverTripSummary, code:src/App.jsx#App
+- added (1): code:src/AdminPanel.jsx#fleetTag
+
+## 2026-11-08 -- Owner 2026-11-08: invariant text updated for fleetTag / fleet return-mode guard
+- changed (1): code:scripts/verifyInvariants.mjs#checks
