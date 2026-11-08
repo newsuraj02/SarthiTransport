@@ -293,3 +293,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: invariant text updated for fleetTag / fleet return-mode guard
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-08 -- Owner 2026-11-08: criteria inventory ignores stray *.log / .firebase files (functions/firebase-debug.log blocked a deploy)
+- changed (3): code:.gitignore, code:scripts/criteria.mjs#listFiles, code:scripts/verifyInvariants.mjs#checks
