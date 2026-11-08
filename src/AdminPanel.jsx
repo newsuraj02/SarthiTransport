@@ -120,6 +120,14 @@ function AdminTripRouteLine({ booking, driver, selected, onSelect, mapsOk }) {
     </>
   );
 }
+// Fleet owners (owner 2026-11-08): the owner's own record has no vehicle number, so lists show the fleet instead.
+function driverPlateText(d, lang) {
+  if (d?.fleetOwner) {
+    const n = Number(d.fleetVehicleCount) || 0;
+    return `🚛 ${lang === "en" ? "Fleet" : lang === "mr" ? "फ्लीट" : "फ्लीट"} · ${n} ${lang === "en" ? (n === 1 ? "vehicle" : "vehicles") : lang === "mr" ? "गाड्या" : "गाड़ियाँ"}`;
+  }
+  return d?.vehicleSpec?.vehicleNumber || "—";
+}
 function AdminTripDetailCard({ booking, driver, lang, onClose }) {
   const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const phase = tripPhase(booking);
@@ -141,8 +149,9 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
       </div>
       {row(T("Pickup", "पिकअप", "पिकअप"), booking.pickup)}
       {row(T("Drop", "ड्रॉप", "ड्रॉप"), booking.drop)}
-      {row(T("Driver", "ड्राइवर", "ड्रायव्हर"), [booking.driverName, booking.driverMobile].filter(Boolean).join(" · "))}
-      {row(T("Vehicle", "गाड़ी", "गाडी"), [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? vehicleCategoryText(spec.capacityKg, lang) : ""].filter(Boolean).join(" · "))}
+      {booking.fleetBooking && row(T("Fleet trip - owner", "फ्लीट ट्रिप - ओनर", "फ्लीट ट्रिप - ओनर"), [booking.ownerName, booking.driverMobile].filter(Boolean).join(" · "))}
+      {row(T("Driver", "ड्राइवर", "ड्रायव्हर"), [booking.driverName, booking.fleetBooking ? booking.fleetDriverMobile : booking.driverMobile].filter(Boolean).join(" · "))}
+      {row(T("Vehicle", "गाड़ी", "गाडी"), booking.fleetBooking ? booking.fleetVehicleNumber : [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? vehicleCategoryText(spec.capacityKg, lang) : ""].filter(Boolean).join(" · "))}
       {row(T("Customer", "ग्राहक", "ग्राहक"), [booking.customerName, booking.customerMobile].filter(Boolean).join(" · "))}
       {row(T("Category", "श्रेणी", "श्रेणी"), bookingCategoryText(booking, lang))}
       {row(T("Distance", "दूरी", "अंतर"), booking.distance ? formatTripKm(booking.distance, lang) : "")}
@@ -150,7 +159,8 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
       {row(T("Accepted", "स्वीकार किया", "स्वीकारले"), accepted ? accepted.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")}
       {row(T("Scheduled for", "निर्धारित", "ठरलेले"), booking.scheduledFor)}
       <div className="flex gap-2 mt-2">
-        {booking.driverMobile && <a href={`tel:+91${booking.driverMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.metallicGreen }}>📞 {T("Call driver", "ड्राइवर को कॉल", "ड्रायव्हरला कॉल")}</a>}
+        {(booking.fleetBooking ? booking.fleetDriverMobile : booking.driverMobile) && <a href={`tel:+91${booking.fleetBooking ? booking.fleetDriverMobile : booking.driverMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.metallicGreen }}>📞 {T("Call driver", "ड्राइवर को कॉल", "ड्रायव्हरला कॉल")}</a>}
+        {booking.fleetBooking && booking.driverMobile && <a href={`tel:+91${booking.driverMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.orange || C.navy }}>📞 {T("Call owner", "ओनर को कॉल", "ओनरला कॉल")}</a>}
         {booking.customerMobile && <a href={`tel:+91${booking.customerMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.navy }}>📞 {T("Call customer", "ग्राहक को कॉल", "ग्राहकाला कॉल")}</a>}
       </div>
     </div>
@@ -805,7 +815,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
         </div>
       ),
     },
@@ -842,7 +852,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-0.5">
             <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
@@ -913,7 +923,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                 </span>
               </div>
               <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-              <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+              <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
             </div>
             {d.blacklisted ? (
               <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
@@ -3245,7 +3255,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
             <div className="min-w-0">
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-              <div className="text-xs font-bold truncate" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+              <div className="text-xs font-bold truncate" style={{ color: C.ink, fontFamily: monoFont }}>{driverPlateText(d, lang)} · {d.mobile}</div>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">

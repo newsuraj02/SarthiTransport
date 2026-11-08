@@ -8356,6 +8356,7 @@ function RideTypeBanner({ booking, lang }) {
         {advance ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(booking)}
       </span>
       {booking.returnTrip && <span className="rounded-full px-2 py-0.5 text-[11px] font-extrabold" style={{ background: "#FFFFFF", color: C.ink }}>↩ {lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}</span>}
+      {booking.fleetBooking && <span data-fleet-chip className="rounded-full px-2 py-0.5 text-[11px] font-extrabold" style={{ background: "#FFFFFF", color: C.ink }}>🚛 {lang === "en" ? "Fleet" : "फ्लीट"}{booking.fleetVehicleNumber ? ` · ${booking.fleetVehicleNumber}` : ""}</span>}
     </div>
   );
 }
@@ -8518,10 +8519,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
 
   const shareTrip = () => {
     const text = lang === "en"
-      ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${b.fleetVehicleNumber || driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
       : lang === "mr"
-      ? `माझे सामान अपना ट्रान्सपोर्टद्वारे जात आहे.\nबुकिंग: ${b.id}\nड्रायव्हर: ${b.driverName || "—"}\nगाडी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूर्ण`
-      : `मेरा सामान अपना ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
+      ? `माझे सामान अपना ट्रान्सपोर्टद्वारे जात आहे.\nबुकिंग: ${b.id}\nड्रायव्हर: ${b.driverName || "—"}\nगाडी नंबर: ${b.fleetVehicleNumber || driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूर्ण`
+      : `मेरा सामान अपना ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${b.fleetVehicleNumber || driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
