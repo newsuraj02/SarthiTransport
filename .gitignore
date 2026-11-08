@@ -17,3 +17,8 @@ scratchpad
 
 # generated at deploy time (scripts/writeFunctionsStamp.mjs)
 functions/build.json
+
+# stray logs (a failed firebase command writes firebase-debug.log into whatever folder it ran from)
+firebase-debug.log
+firestore-debug.log
+*.log
