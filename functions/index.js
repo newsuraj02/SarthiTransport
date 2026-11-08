@@ -205,6 +205,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // solely because onDirectRequestBroadcast's `secrets: [...]` list still
 // references it; that function is frozen (CLAUDE.md), so this declaration
 // isn't removed along with the rest.
+const { judgeMsg91Response } = require("./bulkWhatsApp");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -249,12 +250,13 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
   if (list.length === 0) throw new HttpsError("invalid-argument", "mobiles is required.");
 
   const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
-  if (!authKey || !fromNumber || !namespace) throw new HttpsError("failed-precondition", "MSG91 WhatsApp not configured.");
+  if (!authKey || !fromNumber || !namespace) throw new HttpsError("failed-precondition", `MSG91 WhatsApp is not configured (missing: ${[!authKey && "MSG91_AUTH_KEY", !fromNumber && "MSG91_WHATSAPP_NUMBER", !namespace && "MSG91_WHATSAPP_NAMESPACE"].filter(Boolean).join(", ")}).`);
 
   const chunks = [];
   for (let i = 0; i < list.length; i += MSG91_BULK_CHUNK_SIZE) chunks.push(list.slice(i, i + MSG91_BULK_CHUNK_SIZE));
 
   let sent = 0;
+  let failure = null; // the last real reason a chunk did not go out -- returned to Admin so a failure is never just "try again"
   for (const chunk of chunks) {
     const to_and_components = chunk.map((mobile) => ({
       to: [`91${mobile}`],
@@ -282,17 +284,20 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
       // console.log, not console.error, on the success path so normal
       // sends don't spam Cloud Functions' error-level logs.
       const bodyText = await res.text();
-      if (!res.ok) {
+      const verdict = judgeMsg91Response(res.status, bodyText);
+      if (!verdict.ok) {
         console.error(`[whatsapp bulk:${kind}] rejected by MSG91 (HTTP ${res.status}):`, bodyText);
+        failure = { reason: "msg91_rejected", detail: verdict.detail };
         continue;
       }
       console.log(`[whatsapp bulk:${kind}] MSG91 response (HTTP ${res.status}):`, bodyText);
       sent += chunk.length;
     } catch (e) {
       console.error(`[whatsapp bulk:${kind}] send failed:`, e.message);
+      failure = { reason: "send_failed", detail: String(e.message || e).slice(0, 220) };
     }
   }
-  return { ok: sent > 0, sent, requested: list.length };
+  return { ok: sent > 0, sent, requested: list.length, ...(sent < list.length && failure ? failure : {}) };
 });
 
 // Full-screen "incoming call" ring alert -- see AppFirebaseMessagingService.java/

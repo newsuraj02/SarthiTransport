@@ -120,6 +120,8 @@ function AdminTripRouteLine({ booking, driver, selected, onSelect, mapsOk }) {
     </>
   );
 }
+// Why a bulk WhatsApp send failed, as one short line shown under the red message (owner 2026-11-08: it used to say only "Couldn't send").
+function whatsappFailDetail(r) { return r && !r.ok && (r.reason || r.detail) ? [r.reason, r.detail].filter(Boolean).join(": ").slice(0, 240) : ""; }
 // Fleet owners (owner 2026-11-08): the owner's own record has no vehicle number, so lists show the fleet instead.
 function fleetTag(b) { return b && b.fleetBooking && b.fleetVehicleNumber ? ` · 🚛 ${b.fleetVehicleNumber}` : ""; }
 function driverPlateText(d, lang) {
@@ -783,7 +785,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     setSingleSendResult(null);
     const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
     if (result.ok) markSent(d.mobile);
-    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason });
+    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason, detail: result.detail });
     setSingleSendingMobile(null);
   };
 
@@ -845,6 +847,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               {bulkSendResult.ok
                 ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
                 : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+              {whatsappFailDetail(bulkSendResult) && <div data-whatsapp-fail-detail className="mt-1 text-[10px] font-normal break-words opacity-90">{whatsappFailDetail(bulkSendResult)}</div>}
             </div>
           )}
         </>
@@ -861,7 +864,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
             </button>
             {singleSendResult?.mobile === d.mobile && (
-              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
+              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : whatsappFailDetail(singleSendResult)}>
                 {singleSendResult.ok
                   ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
                   : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
@@ -899,6 +902,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               {bulkSendResult.ok
                 ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
                 : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+              {whatsappFailDetail(bulkSendResult) && <div data-whatsapp-fail-detail className="mt-1 text-[10px] font-normal break-words opacity-90">{whatsappFailDetail(bulkSendResult)}</div>}
             </div>
           )}
         </>
@@ -3432,6 +3436,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 {msgResult.ok
                   ? L3(`Sent to ${msgResult.sent} drivers.`, `${msgResult.sent} ड्रायव्हर्सना पाठवले.`, `${msgResult.sent} ड्राइवरों को भेजा गया।`)
                   : L3("Couldn't send — try again.", "पाठवता आले नाही — पुन्हा प्रयत्न करा.", "भेजा नहीं जा सका — फिर कोशिश करें।")}
+                {whatsappFailDetail(msgResult) && <div data-whatsapp-fail-detail className="mt-1 text-[10px] font-normal break-words opacity-90">{whatsappFailDetail(msgResult)}</div>}
               </div>
             )}
           </div>

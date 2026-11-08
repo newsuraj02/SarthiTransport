@@ -232,7 +232,8 @@ export async function sendBulkDriverWhatsApp(kind, mobiles) {
     return result.data;
   } catch (e) {
     console.error("[bulkWhatsApp] callable failed", e);
-    return { ok: false, reason: "error" };
+    // The real reason (permission, MSG91 not configured, network ...) travels to Admin's screen instead of a bare "error".
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 220) };
   }
 }
 

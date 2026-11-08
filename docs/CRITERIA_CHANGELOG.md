@@ -313,3 +313,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-08 -- Owner 2026-11-08: removed the Admin Call Logs tab, screen and subscription
 - changed (7): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#EN_LABELS, code:src/App.jsx#MR_LABELS, code:src/App.jsx#App
 - removed (1): code:src/AdminPanel.jsx#AdminCallLogs
+
+## 2026-11-08 -- Owner 2026-11-08: bulk WhatsApp reads MSG91's reply honestly and shows the real failure reason (judgeMsg91Response, reason/detail, UI line)
+- changed (9): fn:sendBulkDriverWhatsApp, file:src/firebaseClient.js, code:CLAUDE.md, code:functions/index.js#other, code:functions/index.js#fn:sendBulkDriverWhatsApp, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/firebaseClient.js#sendBulkDriverWhatsApp
+- added (2): code:src/AdminPanel.jsx#whatsappFailDetail, code:functions/bulkWhatsApp.js
