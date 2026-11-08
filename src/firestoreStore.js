@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, serverTimestamp, writeBatch,
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, where, serverTimestamp, writeBatch,
   runTransaction, arrayUnion,
 } from "firebase/firestore";
 import { getDb, hasConfig } from "./firebaseClient";
@@ -63,6 +63,15 @@ export function subscribeCollection(name, onChange, orderByField = "createdAt", 
     console.error(`[firestore] ${name} subscription error:`, err);
     if (onError) onError(err);
   });
+}
+
+// Live list of the docs where `field == value` (a scoped query -- needed where the rules only let a person read THEIR OWN docs, e.g. a fleet owner's private vehicle details).
+export function subscribeWhere(name, field, value, onChange) {
+  const db = getDb();
+  if (!db) return () => {};
+  return onSnapshot(query(col(name), where(field, "==", value)), (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error(`[firestore] ${name} (${field}) subscription error:`, err));
 }
 
 export function subscribeDoc(name, id, onChange) {

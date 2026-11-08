@@ -317,6 +317,21 @@ export async function verifyPickupOtp(bookingId, otp) {
   }
 }
 
+// Fleet owner accepted a booking and picked a vehicle (owner 2026-11-08): the server makes the driver's trip link, sends the WhatsApp message automatically when
+// MSG91 is set up for it, and returns { link, sent }. Never throws -- { link: null, sent: false } on any failure (the owner's app still offers the one-tap WhatsApp button).
+export async function dispatchFleetTrip(bookingId) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { link: null, sent: false };
+  try {
+    const call = httpsCallable(functions, "dispatchFleetTrip");
+    const result = await call({ bookingId });
+    return result.data || { link: null, sent: false };
+  } catch (e) {
+    console.error("[dispatchFleetTrip] callable failed", e);
+    return { link: null, sent: false };
+  }
+}
+
 // Mints a Firebase custom token (see functions/index.js:
 // mintLocationServiceToken) for LocationTrackerService's own native
 // signInWithCustomToken() session — the foreground service writes to

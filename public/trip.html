@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Apna Transport – Trip</title>
+<style>
+:root{--navy:#0052cc;--g:#0b6b3a;--bg:#f4f7fb;--t:#0f1b2d;--m:#475569;--line:#d5dce8;--warn:#b84a00;--red:#c62828}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Devanagari",sans-serif;background:var(--bg);color:var(--t);line-height:1.5}
+header{background:var(--navy);color:#fff;padding:16px;text-align:center;font-weight:800;font-size:1.05rem}
+header small{display:block;color:#ffcc00;font-weight:600;font-size:.78rem;margin-top:2px}
+.wrap{max-width:520px;margin:0 auto;padding:14px 14px 40px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+.lbl{font-size:.72rem;font-weight:800;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.val{font-size:1rem;font-weight:700;word-break:break-word}
+.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+a.btn,button.btn{display:inline-block;text-align:center;border:0;border-radius:12px;padding:12px 16px;font-size:1rem;font-weight:800;text-decoration:none;color:#fff;background:var(--navy);cursor:pointer}
+a.btn.g,button.btn.g{background:var(--g)}a.btn.o{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+button.btn[disabled]{background:#9aa3b0}
+input.otp{width:100%;font-size:1.6rem;letter-spacing:.5rem;text-align:center;font-weight:900;border:2px solid var(--navy);border-radius:12px;padding:12px;outline:none}
+.msg{font-weight:700;margin-top:8px}.ok{color:var(--g)}.bad{color:var(--red)}.warn{color:var(--warn)}
+.steps{display:flex;gap:6px;margin:6px 0 2px}.dot{flex:1;height:6px;border-radius:3px;background:var(--line)}.dot.on{background:var(--g)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header>अपना ट्रांसपोर्ट — आपकी ट्रिप<small>Apna Transport — your trip</small></header>
+<div class="wrap">
+  <div id="loading" class="card">लोड हो रहा है… / Loading…</div>
+  <div id="error" class="card hide"><div class="val bad" id="errtext"></div></div>
+  <div id="main" class="hide">
+    <div class="steps"><div class="dot on" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div></div>
+    <div class="card">
+      <div class="lbl">🚛 गाड़ी / Vehicle</div><div class="val" id="veh"></div>
+      <div id="sched" class="msg warn hide"></div>
+    </div>
+    <div class="card">
+      <div class="lbl">📍 पिकअप — माल यहाँ से उठाना है / Pickup</div><div class="val" id="pickup"></div>
+      <div class="row"><a class="btn o hide" id="pmap" target="_blank" rel="noopener">नक्शा / Map</a></div>
+      <div class="lbl" style="margin-top:14px">🏁 ड्रॉप — माल यहाँ छोड़ना है / Drop</div><div class="val" id="drop"></div>
+      <div class="row"><a class="btn o hide" id="dmap" target="_blank" rel="noopener">नक्शा / Map</a></div>
+    </div>
+    <div class="card">
+      <div class="lbl">📞 कस्टमर / Customer</div><div class="val" id="cust"></div>
+      <div class="row"><a class="btn g" id="callc">कस्टमर को कॉल करें / Call customer</a></div>
+      <div class="lbl" style="margin-top:14px">👤 ओनर / Owner</div><div class="val" id="own"></div>
+      <div class="row"><a class="btn o" id="callo">ओनर को कॉल करें / Call owner</a></div>
+    </div>
+    <div class="card" id="otpCard">
+      <div class="lbl">1️⃣ पिकअप पर कस्टमर से 4 अंकों का OTP लें / Ask the customer for the 4-digit OTP</div>
+      <input class="otp" id="otp" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="••••">
+      <div class="row"><button class="btn g" id="otpBtn" style="flex:1">OTP जाँचें / Check OTP</button></div>
+      <div class="msg" id="otpMsg"></div>
+    </div>
+    <div class="card hide" id="delCard">
+      <div class="lbl">2️⃣ माल पहुँचाने के बाद / After delivering</div>
+      <div class="msg ok" id="startedMsg">✓ लोडिंग शुरू हो गई / Loading started</div>
+      <div class="row"><button class="btn g" id="delBtn" style="flex:1">डिलीवर हो गया / Delivered</button></div>
+      <div class="msg" id="delMsg"></div>
+    </div>
+    <div class="card hide" id="doneCard"><div class="val ok">✅ धन्यवाद! आपने ट्रिप पूरी होने की सूचना दे दी। ओनर आगे का काम देखेंगे।<br><small style="font-weight:600;color:var(--m)">Thank you — the owner has been told the trip is delivered.</small></div></div>
+  </div>
+</div>
+<script>
+(function () {
+  var API = "https://asia-south1-sarthi-transport-74865.cloudfunctions.net/fleetTripAction";
+  var q = new URLSearchParams(location.search), b = q.get("b"), k = q.get("k");
+  var $ = function (id) { return document.getElementById(id); };
+  function show(id, on) { $(id).classList.toggle("hide", !on); }
+  function fail(t) { show("loading", false); show("main", false); show("error", true); $("errtext").textContent = t; }
+  function call(action, extra) {
+    return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ b: b, k: k, action: action }, extra || {})) }).then(function (r) { return r.json().then(function (j) { j._http = r.status; return j; }); });
+  }
+  function map(lat, lng) { return lat != null && lng != null ? "https://maps.google.com/?q=" + lat + "," + lng : ""; }
+  function render(s) {
+    show("loading", false); show("error", false); show("main", true);
+    $("veh").textContent = (s.vehicleNumber || "-") + (s.driverName ? " · " + s.driverName : "");
+    $("pickup").textContent = s.pickup || "-"; $("drop").textContent = s.drop || "-";
+    var pm = map(s.pickupLat, s.pickupLng), dm = map(s.dropLat, s.dropLng);
+    if (pm) { $("pmap").href = pm; show("pmap", true); } if (dm) { $("dmap").href = dm; show("dmap", true); }
+    $("cust").textContent = s.customerMobile || "-"; $("own").textContent = (s.ownerName ? s.ownerName + " · " : "") + (s.ownerMobile || "-");
+    $("callc").href = "tel:" + s.customerMobile; $("callo").href = "tel:" + s.ownerMobile;
+    if (s.scheduledFor) { $("sched").textContent = "📅 एडवांस ट्रिप / Advance trip: " + s.scheduledFor; show("sched", true); }
+    var active = s.status === "Ongoing";
+    $("d2").classList.toggle("on", !!s.started); $("d3").classList.toggle("on", !!s.delivered);
+    show("otpCard", active && !s.started); show("delCard", active && s.started && !s.delivered); show("doneCard", !!s.delivered || !active);
+    if (!active && !s.delivered) { $("doneCard").firstChild.innerHTML = "ℹ️ यह ट्रिप अब चालू नहीं है / This trip is no longer active."; }
+  }
+  if (!b || !k) { fail("लिंक सही नहीं है। / This link is not valid."); return; }
+  call("info").then(function (j) { if (!j.ok) fail(j.error === "bad-link" ? "लिंक सही नहीं है या बदल गया है। / This link is not valid." : "ट्रिप नहीं मिली। / Trip not found."); else render(j); }).catch(function () { fail("इंटरनेट की दिक्कत — दोबारा खोलें। / Network problem — open the link again."); });
+  $("otpBtn").onclick = function () {
+    var v = $("otp").value.replace(/\D/g, "");
+    if (v.length !== 4) { $("otpMsg").className = "msg bad"; $("otpMsg").textContent = "4 अंकों का OTP डालें / Enter the 4-digit OTP"; return; }
+    $("otpBtn").disabled = true; $("otpMsg").className = "msg"; $("otpMsg").textContent = "…";
+    call("otp", { otp: v }).then(function (j) {
+      $("otpBtn").disabled = false;
+      if (j.valid) { render(j); return; }
+      $("otp").value = "";
+      $("otpMsg").className = "msg bad";
+      $("otpMsg").textContent = j.locked ? "बहुत ज़्यादा गलत कोशिशें — थोड़ी देर बाद करें। / Too many wrong tries — wait a while." : j.pending ? "OTP अभी बन रहा है — कुछ सेकंड बाद दोबारा डालें। / OTP is still being made — try again in a few seconds." : "OTP गलत है — कस्टमर से दोबारा पूछें। / Wrong OTP — ask the customer again.";
+    }).catch(function () { $("otpBtn").disabled = false; $("otpMsg").className = "msg bad"; $("otpMsg").textContent = "इंटरनेट की दिक्कत / Network problem"; });
+  };
+  $("delBtn").onclick = function () {
+    $("delBtn").disabled = true; $("delMsg").className = "msg"; $("delMsg").textContent = "…";
+    call("delivered").then(function (j) { if (j.ok) render(j); else { $("delBtn").disabled = false; $("delMsg").className = "msg bad"; $("delMsg").textContent = "नहीं हो पाया — दोबारा दबाएँ / Could not save — tap again"; } })
+      .catch(function () { $("delBtn").disabled = false; $("delMsg").className = "msg bad"; $("delMsg").textContent = "इंटरनेट की दिक्कत / Network problem"; });
+  };
+})();
+</script>
+</body>
+</html>

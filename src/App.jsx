@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useId, useMemo, useSyncExternalStor
 // Admin's 16 screens live in their own module and are lazy-loaded here so a
 // customer or driver never downloads any of it — see AdminPanel.jsx's own
 // header comment for how this was split out.
+const FleetSetup = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default: m.FleetSetup })));
+const FleetAssignSheet = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default: m.FleetAssignSheet })));
+const FleetDispatchSheet = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default: m.FleetDispatchSheet })));
 const AdminPanel = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminPanel })));
 const AdminLogin = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminLogin })));
 const AdminPinLock = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminPinLock })));
@@ -21,7 +24,7 @@ import {
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
-  claimBooking, addDeclinedBy,
+  claimBooking, addDeclinedBy, subscribeWhere,
 } from "./firestoreStore";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
@@ -29,7 +32,7 @@ import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -1032,13 +1035,34 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 // DUTY ON + KYC Approved + not blacklisted + has a vehicle + NOT on a trip (a running trip, or an advance booking's buffer for THAT slot) + WITHIN
 // bidRadiusKm of the pickup (30 km Current / 50 km Advance, owner 2026-11-04). The distance is measured from the driver's LAST KNOWN location, however
 // old -- GPS being off now does not matter, but a driver who has never reported a location cannot be placed and is not listed. No weight condition.
+// FLEET OWNERS (owner 2026-11-08): each approved, active vehicle of a fleet owner acts as ONE vehicle in the lists and the eligibility rules, built from the owner's account
+// (duty, KYC, block, name for "declined") + the vehicle's public record (capacity). It has no phone and no GPS: no location, no radius, and only the trips assigned to
+// THIS vehicle make it busy (isDriverRecord). The owner's own account has no capacity, so it never shows up as a vehicle itself.
+function fleetPseudoDrivers(owner, fleetVehicles) {
+  if (!owner || !owner.fleetOwner) return [];
+  return (fleetVehicles || [])
+    .filter((v) => v.ownerMobile === owner.mobile && v.kyc === "Approved" && v.active !== false && Number(v.capacityKg) > 0)
+    .map((v) => ({
+      id: v.id, mobile: v.id, name: owner.name, fleetVehicleId: v.id, fleetOwnerMobile: owner.mobile, isFleetVehicle: true,
+      online: !!owner.online, kyc: owner.kyc, blacklisted: !!owner.blacklisted, lastKnownLocation: null,
+      vehicleSpec: { type: v.vehicleName || "fleet", capacityKg: Number(v.capacityKg), vehicleNumber: null, photoSide: null },
+    }));
+}
+// Every owner's pseudo vehicles at once (the customer's vehicle list and the "does anyone qualify" check).
+function allFleetPseudoDrivers(drivers, fleetVehicles) {
+  return (drivers || []).filter((d) => d.fleetOwner).flatMap((o) => fleetPseudoDrivers(o, fleetVehicles));
+}
+
 function isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi" }) {
   if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
   if (dCapKg <= 0) return false;
   const loc = d.lastKnownLocation;
-  if (!pickupCoords || !loc || loc.lat == null || loc.lng == null) return false;
-  if (haversineKm(pickupCoords.lat, pickupCoords.lng, loc.lat, loc.lng) > bidRadiusKm) return false;
+  // A fleet vehicle has no phone of its own, so the 30 / 50 km radius cannot apply to it (owner 2026-11-08).
+  if (!d.fleetVehicleId) {
+    if (!pickupCoords || !loc || loc.lat == null || loc.lng == null) return false;
+    if (haversineKm(pickupCoords.lat, pickupCoords.lng, loc.lat, loc.lng) > bidRadiusKm) return false;
+  }
   return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, vehicleTypes, lang);
 }
 
@@ -1058,7 +1082,7 @@ function isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance = f
 function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang) {
   if (!driver) return null;
   const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
-  const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+  const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || Number(driver.vehicleSpec?.capacityKg) || 0);
   const newStart = candidate.scheduledFor ? parseScheduledFor(candidate.scheduledFor) : new Date();
   const newEnd = candidate.hours ? new Date(newStart.getTime() + candidate.hours * 60 * 60 * 1000) : newStart;
   const myCommitments = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && b.id !== candidate.id);
@@ -1417,7 +1441,7 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   if (dCat === -1) return false;
   const lCat = ringCategoryIndexOfLoad(b);
   if (lCat !== -1 && !ringCategoryInRange(dCat, lCat, (Number(b.escalatedTierIndex) || 0) > 0)) return false;
-  if (b.pickupLat != null && b.pickupLng != null) {
+  if (b.pickupLat != null && b.pickupLng != null && !d.fleetVehicleId) {
     const loc = d.lastKnownLocation;
     if (!loc || loc.lat == null || loc.lng == null) return false;
     if (haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > (b.scheduledFor ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM)) return false;
@@ -2990,6 +3014,8 @@ function getKycMissingFromValues(v = {}) {
 }
 function getDriverKycMissing(driver) {
   if (!driver) return DRIVER_KYC_FIELDS.map((f) => f.key);
+  // A fleet owner's "KYC" is the vehicle loop (FleetOwner.jsx): done once they answered "no more vehicles" with at least one vehicle added (owner 2026-11-08).
+  if (driver.fleetOwner) return driver.fleetSetupDone && Number(driver.fleetVehicleCount) >= 1 ? [] : ["fleetVehicle"];
   const spec = driver.vehicleSpec || {};
   return getKycMissingFromValues({
     photo: driver.docs?.photo || driver.photo, dl: driver.docs?.dl,
@@ -2999,6 +3025,7 @@ function getDriverKycMissing(driver) {
 }
 const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
 const kycFieldLabel = (key, lang) => {
+  if (key === "fleetVehicle") return lang === "en" ? "Add your vehicles and drivers" : lang === "mr" ? "तुमच्या गाड्या व ड्रायव्हर जोडा" : "अपनी गाड़ियाँ और ड्राइवर जोड़ें";
   const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);
   return f ? (lang === "en" ? f.en : lang === "mr" ? f.mr : f.hi) : key;
 };
@@ -5628,10 +5655,13 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile"); // "checking" | "mobile" | "pin"
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  // Sign Up step 2 starts with "who are you": one driver with his own vehicle (the documents form below) or a FLEET OWNER with several vehicles driven by people who have
+  // no app (owner 2026-11-08) -- the fleet owner gets the account straight away and adds every vehicle + driver in the app (FleetOwner.jsx).
+  const [accountKind, setAccountKind] = useState(null); // null | "self" | "fleet"
   // Back arrow = start over (owner 2026-10-28): nothing typed is kept. Only
   // reachable before the account exists (the documents form unmounts with it).
   const resetForm = () => {
-    setName(""); setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError("");
+    setName(""); setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError(""); setAccountKind(null);
     pendingSignupRef.current = null;
   };
 
@@ -5803,6 +5833,16 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     (async () => {
       try {
         const ref = new URLSearchParams(window.location.search).get("ref");
+        if (pendingSignupRef.current.fleet) {
+          // Fleet owner: no documents here -- the vehicle loop (FleetOwner.jsx) is the "KYC". A placeholder vehicleSpec keeps every existing gate working (it is only
+          // ever read for capacity by the single-driver paths, which a fleet owner never takes: fleetPseudoDrivers / evaluateFleetOwnerVehicles do the fleet rule).
+          setDriver({ ...driver, name: pendingSignupRef.current.name, referredBy: ref && ref !== driver.mobile ? ref : null, referralCredited: false, kyc: "Pending",
+            fleetOwner: true, fleetVehicleCount: 0, fleetSetupDone: false, vehicleSpec: { type: "fleet", photo: null, photoFront: null, photoSide: null, capacityKg: null, vehicleNumber: null, fleet: true } });
+          setName("");
+          setFinalizeState("applied");
+          onFirstSignupComplete?.();
+          return;
+        }
         await runDriverSignupFinalize(pendingSignupRef.current, driver, {
           uploadPhoto: (file, path, onFail) => uploadPhoto(file, path, 900, 0.72, null, onFail),
           classifyPhoto: async (file, docType) => {
@@ -6137,9 +6177,35 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
           </button>
         </div>
         <div className="px-5 pb-1"><StepDots step={2} total={2} /></div>
-        <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+        {accountKind === null && (
+          <div className="px-5 pt-3 space-y-3" data-account-kind>
+            <h3 className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Who are you?" : lang === "mr" ? "तुम्ही कोण आहात?" : "आप कौन हैं?"}</h3>
+            <button data-account-kind-self onClick={() => setAccountKind("self")} className="w-full text-left rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "I drive my own vehicle" : lang === "mr" ? "मी स्वतःची गाडी चालवतो" : "मैं अपनी गाड़ी खुद चलाता हूँ"}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "One driver, one vehicle — documents next." : lang === "mr" ? "एक ड्रायव्हर, एक गाडी — पुढे कागदपत्रे." : "एक ड्राइवर, एक गाड़ी — आगे दस्तावेज़।"}</div>
+            </button>
+            <button data-account-kind-fleet onClick={() => setAccountKind("fleet")} className="w-full text-left rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "I own several vehicles (fleet owner / transporter)" : lang === "mr" ? "माझ्याकडे अनेक गाड्या आहेत (फ्लीट ओनर / ट्रान्सपोर्टर)" : "मेरे पास कई गाड़ियाँ हैं (फ्लीट ओनर / ट्रांसपोर्टर)"}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Only you use the app; your drivers get each trip on WhatsApp." : lang === "mr" ? "फक्त तुम्ही अ‍ॅप वापरता; ड्रायव्हरना प्रत्येक ट्रिप WhatsApp वर मिळते." : "सिर्फ़ आप ऐप चलाते हैं; ड्राइवरों को हर ट्रिप WhatsApp पर मिलती है।"}</div>
+            </button>
+          </div>
+        )}
+        {accountKind === "fleet" && (
+          <div className="px-5 pt-3 space-y-3" data-account-kind-fleet-confirm>
+            <div className="rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+              <div className="text-sm font-extrabold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fleet owner account" : lang === "mr" ? "फ्लीट ओनर अकाउंट" : "फ्लीट ओनर अकाउंट"}</div>
+              <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Next you will add each vehicle with its driver's name, mobile, photo and licence. Admin approves them, then booking requests ring only your phone." : lang === "mr" ? "पुढे तुम्ही प्रत्येक गाडी ड्रायव्हरचे नाव, मोबाइल, फोटो व लायसन्ससह जोडाल. अ‍ॅडमिन मंजुरी देतो, मग बुकिंग फक्त तुमच्या फोनवर वाजते." : "आगे आप हर गाड़ी को उसके ड्राइवर के नाम, मोबाइल, फोटो और लाइसेंस के साथ जोड़ेंगे। एडमिन मंज़ूरी देगा, फिर बुकिंग सिर्फ़ आपके फोन पर बजेगी।"}</div>
+            </div>
+            {error && <div className="text-xs font-bold" style={{ color: C.safety }}>{error}</div>}
+            <button data-fleet-create-account onClick={() => createAccountAndSubmit({ fleet: true })} disabled={sending} className="w-full rounded-lg py-3.5 text-base font-extrabold text-white" style={{ background: sending ? "#9AA3B0" : C.success }}>
+              {sending ? "…" : (lang === "mr" ? "अकाउंट तयार करा" : lang === "en" ? "Create Account" : "अकाउंट बनाएँ")}
+            </button>
+            <button onClick={() => setAccountKind(null)} className="w-full text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"}</button>
+          </div>
+        )}
+        {accountKind === "self" && <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
-          onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />
+          onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />}
       </div>
     );
   }
@@ -8303,11 +8369,15 @@ function RideTypeBanner({ booking, lang }) {
 // used as a fallback for old records saved before driverMobile existed.
 function isDriverRecord(rec, driver) {
   if (!rec || !driver) return false;
+  // A fleet vehicle (fleetPseudoDrivers) is its own "driver": only the trips assigned to THAT vehicle count against it (owner 2026-11-08).
+  if (driver.fleetVehicleId) return rec.fleetVehicleId === driver.fleetVehicleId;
   if (rec.driverMobile && driver.mobile) return rec.driverMobile === driver.mobile;
   return !!rec.driverName && rec.driverName === driver.name;
 }
 function findBookingDriver(drivers, b) {
   if (!b || !drivers) return null;
+  // A fleet trip's real driver has no app / no GPS here; the owner's phone location must not pass for the vehicle's (owner 2026-11-08).
+  if (b.fleetBooking) return null;
   if (b.driverMobile) return drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile) || null;
   return b.driverName ? drivers.find((d) => d.name === b.driverName) || null : null;
 }
@@ -8380,7 +8450,7 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
           <div className="text-xs font-bold truncate mt-0.5" style={{ color: C.inkSoft }}>{modelName}</div>
         </div>
         <div className="shrink-0 rounded-md px-2 py-1 text-xs font-black" style={{ background: "#FFF6D6", color: C.ink, border: `1.5px solid ${C.ink}`, fontFamily: monoFont, letterSpacing: 1 }}>
-          {spec?.vehicleNumber || T("No. pending", "नंबर नाही", "नंबर नहीं")}
+          {b.fleetVehicleNumber || spec?.vehicleNumber || T("No. pending", "नंबर नाही", "नंबर नहीं")}
         </div>
       </div>
       <div className="grid grid-cols-2">
@@ -9775,7 +9845,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, onOpenKycSettings, raiseAlert, locationPermission, bookingExtras }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, onOpenKycSettings, raiseAlert, locationPermission, bookingExtras, fleetVehicles }) {
   const [cancelError, setCancelError] = useState("");
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
@@ -10211,7 +10281,9 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // driverRespondBooking) naturally drops it out of this list on the next
   // render via isDriverBroadcastEligible's own declinedBy check.
   const broadcastBookings = bookings
-    .filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang))
+    .filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && (driver.fleetOwner
+      ? fleetPseudoDrivers(driver, fleetVehicles).some((pv) => isDriverBroadcastEligible(pv, b, vehicleTypes, bookings, fareTiers, lang)) // a fleet owner sees a load when ANY free vehicle fits (owner 2026-11-08)
+      : isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang)))
     .sort((a, b) => haversineKm(driver.lastKnownLocation?.lat, driver.lastKnownLocation?.lng, a.pickupLat, a.pickupLng)
       - haversineKm(driver.lastKnownLocation?.lat, driver.lastKnownLocation?.lng, b.pickupLat, b.pickupLng));
   const [respondingBroadcastId, setRespondingBroadcastId] = useState(null);
@@ -10432,6 +10504,15 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               )}
             </div>
 
+            {/* Fleet trip (owner 2026-11-08): the driver has no app -- the trip link (public/trip.html) tells the owner here when the driver says "delivered";
+                the OWNER still taps End Trip below (money / bill / trip log stay in the owner's app). */}
+            {myTrip.fleetBooking && (
+              <div data-fleet-trip-note className="rounded-lg px-3 py-2 mb-2 text-xs font-bold" style={{ background: myTrip.fleetDeliveredAt ? C.success : C.metallicGold, color: myTrip.fleetDeliveredAt ? "#fff" : "#000000" }}>
+                {myTrip.fleetDeliveredAt
+                  ? (lang === "en" ? `✓ Driver ${myTrip.fleetDriverName || ""} says the goods are delivered — tap End Trip below.` : lang === "mr" ? `✓ ड्रायव्हर ${myTrip.fleetDriverName || ""} म्हणतो माल पोहोचला — खाली End Trip दाबा.` : `✓ ड्राइवर ${myTrip.fleetDriverName || ""} ने बताया माल पहुँच गया — नीचे End Trip दबाएँ।`)
+                  : (lang === "en" ? `Fleet trip — driver ${myTrip.fleetDriverName || ""} (${myTrip.fleetVehicleNumber || ""}) ${myTrip.loadingStartedAt ? "has started loading." : "has the trip on WhatsApp."}` : lang === "mr" ? `फ्लीट ट्रिप — ड्रायव्हर ${myTrip.fleetDriverName || ""} (${myTrip.fleetVehicleNumber || ""}) ${myTrip.loadingStartedAt ? "ने लोडिंग सुरू केली." : "ला ट्रिप WhatsApp वर मिळाली."}` : `फ्लीट ट्रिप — ड्राइवर ${myTrip.fleetDriverName || ""} (${myTrip.fleetVehicleNumber || ""}) ${myTrip.loadingStartedAt ? "ने लोडिंग शुरू कर दी।" : "को ट्रिप WhatsApp पर मिल गई।"}`)}
+              </div>
+            )}
             {/* Kharch hidden for now -- see matching note in ActiveRide. */}
             <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
           </div>
@@ -11998,7 +12079,7 @@ function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre,
 // send NO ring / full-screen push for that driver (functions/index.js isAppOpenNow, 30 s window); the in-app load card + sound (untouched)
 // do the job. The stamp is cleared the moment the app is hidden, closed or leaves Home. No stamp / an old stamp = the ring works as before.
 const APP_OPEN_BEAT_MS = 15000;
-function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, adminRouteFares, dieselPricePerLitre, fareTiers, bookingExtras }) {
+function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, adminRouteFares, dieselPricePerLitre, fareTiers, bookingExtras, fleetVehicles, fleetPrivateById }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [setFareOpen, setSetFareOpen] = useState(false);
@@ -12217,6 +12298,11 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : lang === "mr" ? "माझ्या ट्रिप्स" : "मेरी ट्रिप्स"}
               </button>
+              {driver.fleetOwner && (
+                <button data-menu-my-fleet onClick={() => { setTab("fleet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                  <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Fleet" : lang === "mr" ? "माझी फ्लीट" : "मेरी फ्लीट"}
+                </button>
+              )}
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
                 {announcementAlerts.unreadCount > 0 && (
@@ -12267,7 +12353,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         {realHamburgerVisible && !kycReminderDismissed && !isDriverKycComplete(driver) && (
           <KycReminderBanner lang={lang} missing={getDriverKycMissing(driver)} onComplete={() => setSettingsView("kyc")} onDismiss={() => setKycReminderDismissed(true)} />
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} onOpenKycSettings={() => setSettingsView("kyc")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} onOpenKycSettings={() => setSettingsView("kyc")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles}/>}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -12339,6 +12425,19 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         )}
         {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} minWallet={minWallet} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
         {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} lang={lang} />}
+        {tab === "fleet" && driver.fleetOwner && (
+          <>
+            <div className="px-5 pt-3">
+              <button onClick={() => setTab("home")} className="flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} strokeWidth={3} />
+              </button>
+            </div>
+            <Suspense fallback={null}>
+              <FleetSetup owner={driver} vehicles={fleetVehicles} privateById={fleetPrivateById} lang={lang} mode="manage"
+                onCountChange={(n) => patchDoc("drivers", driver.mobile, { fleetVehicleCount: n }).catch((e) => console.error(e))} />
+            </Suspense>
+          </>
+        )}
       </div>
     </>
   );
@@ -12850,6 +12949,24 @@ export default function App() {
   // scoped to the owning driver (or Admin) in firestore.rules.
   const [routeFares, setRouteFares] = useState([]);
   useEffect(() => (firestoreReady ? subscribeCollection("routeFares", setRouteFares, null) : undefined), authDeps);
+  // FLEET OWNERS (owner 2026-11-08): the public part of every fleet vehicle (every signed-in user: the customer's vehicle list counts them) and the PRIVATE part (driver
+  // name + phone, vehicle number, document photos) only for the owner themself (scoped query) and Admin. See src/FleetOwner.jsx and firestore.rules.
+  const [fleetVehicles, setFleetVehicles] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("fleetVehicles", setFleetVehicles, null) : undefined), authDeps);
+  const [fleetPrivate, setFleetPrivate] = useState([]);
+  useEffect(() => {
+    if (!firestoreReady) return undefined;
+    if (role === "admin" && adminAuth) return subscribeCollection("fleetVehiclePrivate", setFleetPrivate, null);
+    if (role === "driver" && driverAuth.verified && driver?.fleetOwner && driver?.mobile) return subscribeWhere("fleetVehiclePrivate", "ownerMobile", driver.mobile, setFleetPrivate);
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, adminAuth, driverAuth.verified, driver?.fleetOwner, driver?.mobile]);
+  // Each approved vehicle of every fleet owner as one vehicle (fleetPseudoDrivers): fed to the customer's vehicle list and the "does anyone qualify" check below.
+  const fleetPseudo = useMemo(() => allFleetPseudoDrivers(drivers, fleetVehicles), [drivers, fleetVehicles]);
+  const [fleetAssign, setFleetAssign] = useState(null); // { bookingId } while the owner picks a vehicle
+  const [fleetDispatch, setFleetDispatch] = useState(null); // { booking, priv, link, autoSent, working } after the claim
+  const fleetPrivateById = useMemo(() => Object.fromEntries(fleetPrivate.map((p) => [p.id, p])), [fleetPrivate]);
+  const driversForCustomer = useMemo(() => (fleetPseudo.length ? [...drivers, ...fleetPseudo] : drivers), [drivers, fleetPseudo]);
   // Mutual-consent hamali/extra-stop/other proposals (see addExtra/
   // respondExtra above) -- flat collection keyed by bookingId rather than
   // a trips/{id}/extras subcollection, matching this app's own existing
@@ -13268,7 +13385,7 @@ export default function App() {
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
     // pre-check needs the same field or it would always see loadWeightKg as 0.
     const draftBooking = { id: bookingId, tierMaxKg, listCategory, listCategoryKg, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
-    const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
+    const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang)) || fleetPseudo.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
     if (!anyEligible) {
       return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";
     }
@@ -13344,7 +13461,7 @@ export default function App() {
   // driver to retarget to, everyone else already eligible keeps seeing it.
   // Returns a Promise resolving to an error message string to show the
   // driver, or null on success.
-  const driverRespondBooking = async (bookingId, accept) => {
+  const driverRespondBooking = async (bookingId, accept, opts = null) => {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b || b.status !== "AwaitingDriver") return null;
 
@@ -13352,6 +13469,11 @@ export default function App() {
       addDeclinedBy("bookings", bookingId, driver.name).catch((e) => console.error(e));
       return null;
     }
+    // FLEET OWNER (owner 2026-11-08): Accept never claims by itself -- it opens the "which vehicle?" sheet (every entry point: the in-app card, the native ring screen's
+    // Accept). The claim happens in fleetClaimWithVehicle once a free vehicle is picked. "Reject" above stays today's behaviour: a decline only; the booking is cancelled
+    // only when nobody accepts.
+    if (driver.fleetOwner && !opts?.fleetVehicle) { setFleetAssign({ bookingId }); return null; }
+    if (driver.fleetOwner && opts?.fleetVehicle) return fleetClaimWithVehicle(b, opts.fleetVehicle);
     const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
     // The pickup OTP is made by the SERVER now (functions/index.js: issuePickupOtp, fires when this claim flips the booking to
@@ -13399,6 +13521,31 @@ export default function App() {
   // this effect should be tearing down and re-registering a native
   // appStateChange listener for. Updated after every render (no deps array)
   // so the effect below never calls a stale closure.
+  // FLEET OWNER accept (owner 2026-11-08): the same claim as a single driver, assigned to ONE vehicle of the fleet. driverMobile stays the OWNER's (their trip list, wallet,
+  // OTP, End Trip); driverName is the real driver's name; the vehicle + driver are kept on the booking (fleet* fields). Busy is per vehicle (isDriverRecord on the pseudo vehicle).
+  const fleetClaimWithVehicle = async (b, pseudo) => {
+    const priv = fleetPrivate.find((p) => p.id === pseudo.fleetVehicleId);
+    const conflict = findDriverLoadConflict(pseudo, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
+    if (!priv) return lang === "en" ? "Vehicle details are still loading — try again." : lang === "mr" ? "गाडीचा तपशील अजून लोड होत आहे — पुन्हा प्रयत्न करा." : "गाड़ी की जानकारी अभी लोड हो रही है — दोबारा कोशिश करें।";
+    let result;
+    try {
+      result = await claimBooking(b.id, {
+        status: "Ongoing", driverName: priv.driverName, driverMobile: driver.mobile, vehicle: pseudo.vehicleSpec.type || null, progress: 0,
+        fleetBooking: true, fleetVehicleId: pseudo.fleetVehicleId, fleetDriverName: priv.driverName, fleetDriverMobile: priv.driverMobile, fleetVehicleNumber: priv.vehicleNumber || null, ownerName: driver.name,
+      });
+    } catch (e) {
+      console.error(e);
+      return lang === "en" ? "Couldn't accept — please try again." : lang === "mr" ? "स्वीकार करता आले नाही — कृपया पुन्हा प्रयत्न करा." : "एक्सेप्ट नहीं हो पाया — कृपया दोबारा कोशिश करें।";
+    }
+    if (!result.ok) return lang === "en" ? "This load has already been taken by another driver." : lang === "mr" ? "हा लोड आधीच दुसऱ्या ड्रायव्हरने घेतला आहे." : "यह लोड पहले ही किसी दूसरे ड्राइवर ने ले लिया है।";
+    if (driver.mobile) patchDoc("drivers", driver.mobile, clearReturnModePatch()).catch((e) => console.error("[return mode clear]", e));
+    finishAcceptSideEffects(b, b.id);
+    setFleetAssign(null);
+    setFleetDispatch({ booking: b, priv, link: null, autoSent: false, working: true });
+    dispatchFleetTrip(b.id).then((r) => setFleetDispatch((cur) => (cur ? { ...cur, link: r.link || null, autoSent: !!r.sent, working: false } : cur)));
+    return null;
+  };
   const driverRespondBookingRef = useRef(driverRespondBooking);
   useEffect(() => { driverRespondBookingRef.current = driverRespondBooking; });
 
@@ -13772,7 +13919,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} requestByCategory={requestByCategory} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} requestByCategory={requestByCategory} drivers={driversForCustomer} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
@@ -13802,7 +13949,9 @@ export default function App() {
               <ShieldCheck size={15} color={C.marigoldDeep} />
               <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : lang === "mr" ? "होम पेज उघडण्यापूर्वी KYC पूर्ण करणे आवश्यक आहे." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
             </div>
-            <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
+            {driver.fleetOwner ? (<><Suspense fallback={null}><FleetSetup owner={driver} vehicles={fleetVehicles} privateById={fleetPrivateById} lang={lang} mode="manage"
+              onCountChange={(n) => patchDoc("drivers", driver.mobile, { fleetVehicleCount: n }).catch((e) => console.error(e))} /></Suspense>
+            <div className="px-4 pb-6"><button onClick={() => { patchDoc("drivers", driver.mobile, { kyc: "Pending", fleetSetupDone: true }).catch((e) => console.error(e)); setDriverResubmitting(false); }} className="w-full rounded-lg py-3 text-sm font-extrabold text-white" style={{ background: C.success }}>{lang === "en" ? "Send for approval again" : lang === "mr" ? "पुन्हा मंजुरीसाठी पाठवा" : "दोबारा मंज़ूरी के लिए भेजें"}</button></div></>) : <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
           </div>
         )}
         {role === "driver" && driverKycIncomplete && !driverResubmitting && (
@@ -13811,7 +13960,9 @@ export default function App() {
               <ChevronLeft size={18} strokeWidth={3} />
             </button>
             <KycIncompleteNotice lang={lang} missing={getDriverKycMissing(driver)} />
-            <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
+            {driver.fleetOwner ? (<Suspense fallback={null}><FleetSetup owner={driver} vehicles={fleetVehicles} privateById={fleetPrivateById} lang={lang} mode="setup"
+              onCountChange={(n) => patchDoc("drivers", driver.mobile, { fleetVehicleCount: n }).catch((e) => console.error(e))}
+              onFinish={() => patchDoc("drivers", driver.mobile, { fleetSetupDone: true, kyc: driver.kyc === "Rejected" ? "Pending" : driver.kyc }).catch((e) => console.error(e))} /></Suspense>) : <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
           </div>
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && !driverKycIncomplete && driver.kyc !== "Approved" && (
@@ -13842,7 +13993,24 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras}
+            fleetVehicles={fleetVehicles} fleetPrivateById={fleetPrivateById} />
+        )}
+        {role === "driver" && driver?.fleetOwner && fleetAssign && (() => {
+          const fb = bookings.find((x) => x.id === fleetAssign.bookingId);
+          if (!fb || fb.status !== "AwaitingDriver") return null;
+          const free = fleetPseudoDrivers(driver, fleetVehicles).filter((pv) => isDriverBroadcastEligible(pv, fb, vehicleTypes, bookings, fareTiers, lang));
+          return (
+            <Suspense fallback={null}>
+              <FleetAssignSheet booking={fb} vehicles={free} privateById={fleetPrivateById} lang={lang} onClose={() => setFleetAssign(null)}
+                onPick={async (pv) => { const err = await driverRespondBooking(fb.id, true, { fleetVehicle: pv }); if (err) window.alert(err); }} />
+            </Suspense>
+          );
+        })()}
+        {role === "driver" && driver?.fleetOwner && fleetDispatch && (
+          <Suspense fallback={null}>
+            <FleetDispatchSheet booking={fleetDispatch.booking} priv={fleetDispatch.priv} owner={driver} link={fleetDispatch.link} autoSent={fleetDispatch.autoSent} working={fleetDispatch.working} lang={lang} onClose={() => setFleetDispatch(null)} />
+          </Suspense>
         )}
         {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
           <Suspense fallback={<AdminLoadingFallback />}>
@@ -13862,7 +14030,8 @@ export default function App() {
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}
                 expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
-                bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
+                bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth}
+                fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} setFleetKyc={(id, status) => patchDoc("fleetVehicles", id, { kyc: status }).catch((e) => console.error(e))} />
             </Suspense>
           </div>
         )}

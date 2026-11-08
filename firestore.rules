@@ -140,6 +140,24 @@ service cloud.firestore {
       allow delete: if isOwnPhone(mobile) || isAdmin();
     }
 
+    // FLEET OWNERS (owner 2026-11-08): a transporter's vehicles, driven by people who have no app. The PUBLIC part (capacity, kyc, active) is readable by every signed-in user
+    // so the customer's vehicle list can count them; the owner can only ever set kyc to 'Pending' (Admin approves). The PRIVATE part (driver name + phone, vehicle number, document
+    // photos) is readable only by the owner and Admin -- never by customers, other drivers or other owners.
+    match /fleetVehicles/{id} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || (isOwnPhone(request.resource.data.ownerMobile) && request.resource.data.kyc == 'Pending');
+      allow update: if isAdmin() || (isOwnPhone(resource.data.ownerMobile)
+        && request.resource.data.ownerMobile == resource.data.ownerMobile
+        && (request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending'));
+      allow delete: if isAdmin() || isOwnPhone(resource.data.ownerMobile);
+    }
+    match /fleetVehiclePrivate/{id} {
+      allow read: if isAdmin() || isOwnPhone(resource.data.ownerMobile);
+      allow create: if isAdmin() || isOwnPhone(request.resource.data.ownerMobile);
+      allow update: if isAdmin() || (isOwnPhone(resource.data.ownerMobile) && request.resource.data.ownerMobile == resource.data.ownerMobile);
+      allow delete: if isAdmin() || isOwnPhone(resource.data.ownerMobile);
+    }
+
     match /customers/{mobile} {
       allow get: if isOwnPhone(mobile) || isAdmin();
       allow list: if isAdmin();
@@ -173,7 +191,8 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'bids', 'status', 'pendingDriverName', 'pendingDriverMobile', 'pendingBidId', 'acceptedAt',
               'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress',
-              'dispatchPass', 'dispatchTierOffset'
+              'dispatchPass', 'dispatchTierOffset',
+              'fleetBooking', 'fleetVehicleId', 'fleetDriverName', 'fleetDriverMobile', 'fleetVehicleNumber', 'ownerName'
             ]))
         // Return Load accept (deep-clean 2026-11-02): driverRespondBooking's claim writes the return-discounted `fare` plus
         // originalFare / isReturn / returnPct in the SAME update that assigns the driver. None of those keys were in the list
@@ -184,6 +203,7 @@ service cloud.firestore {
               'bids', 'status', 'pendingDriverName', 'pendingDriverMobile', 'pendingBidId', 'acceptedAt',
               'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress',
               'dispatchPass', 'dispatchTierOffset',
+              'fleetBooking', 'fleetVehicleId', 'fleetDriverName', 'fleetDriverMobile', 'fleetVehicleNumber', 'ownerName',
               'fare', 'originalFare', 'isReturn', 'returnPct'
             ])
             && request.resource.data.get('fare', 0) <= resource.data.get('fare', 0)

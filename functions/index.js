@@ -6,6 +6,7 @@ const { ringWeightText } = require("./ringText");
 const { evaluateNewLoadDriver } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
+const { buildFleetDispatchText, newLinkToken, tokenMatches, cleanMobile: fleetCleanMobile } = require("./fleetDispatch");
 const { findStuckTrips, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
@@ -384,6 +385,17 @@ exports.ringAck = onRequest({ region: "asia-south1", cors: false }, async (req, 
   }
 });
 
+// FLEET OWNERS (owner 2026-11-08): a transporter account whose vehicles are driven by people with no app. Their approved, active vehicles live in `fleetVehicles`
+// (public part: ownerMobile, capacityKg, kyc, active); a vehicle on a trip is found through the Ongoing bookings that carry its `fleetVehicleId`.
+// functions/tripLock.js evaluateFleetOwnerVehicles decides with these.
+async function loadFleetContext(ongoingSnap) {
+  const vehiclesSnap = await db.collection("fleetVehicles").where("kyc", "==", "Approved").get();
+  const byOwner = {};
+  vehiclesSnap.forEach((d) => { const v = { id: d.id, ...d.data() }; if (v.active === false || !v.ownerMobile) return; (byOwner[v.ownerMobile] ||= []).push(v); });
+  const byVehicle = {};
+  ongoingSnap.forEach((d) => { const b = d.data(); if (b.fleetVehicleId) (byVehicle[b.fleetVehicleId] ||= []).push(b); });
+  return { vehiclesFor: (ownerMobile) => byOwner[ownerMobile] || [], mineFor: (vehicleId) => byVehicle[vehicleId] || [] };
+}
 exports.onDirectRequestBroadcast = onDocumentCreated(
   { document: "bookings/{bookingId}", timeoutSeconds: 120, secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
   async (event) => {
@@ -394,6 +406,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       db.collection("drivers").get(),
       db.collection("bookings").where("status", "==", "Ongoing").get(),
     ]);
+    const fleet = await loadFleetContext(ongoingSnap);
     const ongoingByDriver = {};
     // Keyed by mobile (name only for old bookings without driverMobile) --
     // two drivers sharing a name must not block each other's loads.
@@ -419,7 +432,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       // 30 km / 50 km of the pickup by the last known location (GPS being off does not matter; never-located is not rung); no weight condition. One rule for this ring and the later
       // rounds: functions/tripLock.js evaluateNewLoadDriver.
       const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-      const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
+      const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()), fleetVehicles: driver.fleetOwner ? fleet.vehiclesFor(doc.id) : [], fleetMine: fleet.mineFor });
       if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
 
       if (driver.fcmToken) {
@@ -564,6 +577,7 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
     (ongoingByDriver[key] ||= []).push(b);
   });
 
+  const fleet = await loadFleetContext(ongoingSnap);
   const alreadyAlerted = new Set([...(load.alertedDriverMobiles || []), ...(load.ringTargets || [])]);
   const newlyAlerted = [];
   const sends = [];
@@ -578,7 +592,7 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
     // Same radius as the first ring (owner 2026-11-04), so a later round reaches anyone who has become eligible since the first ring
     // (went on duty, came inside the radius, finished a trip) and was not alerted yet.
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-    const verdict = evaluateNewLoadDriver(driver, load, { extended: true, mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
+    const verdict = evaluateNewLoadDriver(driver, load, { extended: true, mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()), fleetVehicles: driver.fleetOwner ? fleet.vehiclesFor(doc.id) : [], fleetMine: fleet.mineFor });
     if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
     if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
     skipLog.push(`${tag}: NUDGING (round ${tierIndex + 1})`);
@@ -932,6 +946,113 @@ exports.verifyPickupOtp = onCall({ region: "asia-south1" }, async (request) => {
   const verdict = judgeOtpGuess(otpSnap.exists ? otpSnap.data() : null, otp);
   if (verdict.update) await otpRef.update(verdict.update).catch((e) => console.error("[verifyPickupOtp] counter", e.message));
   return { valid: verdict.valid, ...(verdict.locked ? { locked: true } : {}), ...(verdict.pending ? { pending: true } : {}) };
+});
+
+// =====================================================================================================================================================================
+// FLEET OWNERS (owner 2026-11-08): a transporter's vehicles are driven by people with NO app. When the owner accepts a booking and picks a vehicle (src/App.jsx
+// fleetClaimWithVehicle) this callable (1) makes the driver's private trip link, (2) sends the same message by WhatsApp through MSG91 when an approved template is
+// set in settings/main.fleetDispatchTemplate (a template name; its 5 body variables are, in order: pickup, drop, customer mobile, owner mobile, trip link), and
+// (3) returns { link, sent } so the owner's app can offer the one-tap WhatsApp button when nothing was sent. The link opens public/trip.html, which talks to
+// fleetTripAction below (driver enters the customer's pickup OTP, later taps "delivered"; the OWNER's app still ends the trip and does the money).
+const FLEET_TRIP_PAGE = "https://sarthi-transport-74865.web.app/trip.html";
+async function fleetLinkFor(bookingId) {
+  const ref = db.collection("fleetTripLinks").doc(bookingId);
+  const snap = await ref.get();
+  if (snap.exists && snap.data().token) return snap.data().token;
+  const token = newLinkToken();
+  await ref.set({ token, bookingId, createdAt: FieldValue.serverTimestamp() });
+  return token;
+}
+exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const { bookingId } = request.data || {};
+  if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
+  const bSnap = await db.collection("bookings").doc(bookingId).get();
+  if (!bSnap.exists) throw new HttpsError("not-found", "Booking not found.");
+  const booking = bSnap.data();
+  if (!booking.fleetBooking || !booking.fleetVehicleId || !booking.driverMobile || callerPhone !== `+91${booking.driverMobile}`) {
+    throw new HttpsError("permission-denied", "Not the fleet owner of this booking.");
+  }
+  const privSnap = await db.collection("fleetVehiclePrivate").doc(booking.fleetVehicleId).get();
+  const priv = privSnap.exists ? privSnap.data() : null;
+  const token = await fleetLinkFor(bookingId);
+  const link = `${FLEET_TRIP_PAGE}?b=${encodeURIComponent(bookingId)}&k=${token}`;
+  const driverMobile = fleetCleanMobile(priv?.driverMobile || booking.fleetDriverMobile);
+  let sent = false;
+  try {
+    const cfg = (await db.collection("settings").doc("main").get()).data() || {};
+    const templateName = typeof cfg.fleetDispatchTemplate === "string" ? cfg.fleetDispatchTemplate.trim() : "";
+    const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
+    if (templateName && authKey && fromNumber && namespace && driverMobile.length === 10) {
+      const vars = [booking.pickup || "-", booking.drop || "-", fleetCleanMobile(booking.customerMobile) || "-", fleetCleanMobile(booking.driverMobile), link];
+      const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
+        method: "POST",
+        headers: { authkey: authKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          integrated_number: fromNumber, content_type: "template",
+          payload: { messaging_product: "whatsapp", type: "template", template: { name: templateName, language: { code: "hi", policy: "deterministic" }, namespace,
+            to_and_components: [{ to: [`91${driverMobile}`], components: Object.fromEntries(vars.map((v, i) => [`body_${i + 1}`, { type: "text", value: String(v).slice(0, 900) }])) }] } },
+        }),
+      });
+      const bodyText = await res.text();
+      if (res.ok) { sent = true; console.log(`[dispatchFleetTrip] ${bookingId}: MSG91 response (HTTP ${res.status}):`, bodyText); }
+      else console.error(`[dispatchFleetTrip] ${bookingId}: rejected by MSG91 (HTTP ${res.status}):`, bodyText);
+    }
+  } catch (e) {
+    console.error("[dispatchFleetTrip] send failed:", e.message);
+  }
+  return { link, sent, text: buildFleetDispatchText({ booking, ownerName: booking.ownerName, ownerMobile: booking.driverMobile, link }) };
+});
+
+// The trip page's own door (public/trip.html): no login -- the secret in the link is the proof. Actions: "info" (what the driver needs to see), "otp" (the customer's 4-digit
+// pickup code, same guess limit as verifyPickupOtp; right code starts the loading timer exactly like the app does), "delivered" (a flag the owner's app shows; the OWNER
+// ends the trip). Nothing here touches money, the wallet or the trip log.
+exports.fleetTripAction = onRequest({ region: "asia-south1", cors: true }, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.method !== "POST") { res.status(405).json({ ok: false, error: "post-only" }); return; }
+  const { b: bookingId, k: key, action, otp } = req.body || {};
+  if (!bookingId || !key || typeof bookingId !== "string" || bookingId.length > 80) { res.status(400).json({ ok: false, error: "bad-request" }); return; }
+  try {
+    const linkSnap = await db.collection("fleetTripLinks").doc(bookingId).get();
+    if (!linkSnap.exists || !tokenMatches(linkSnap.data().token, key)) { res.status(403).json({ ok: false, error: "bad-link" }); return; }
+    const bRef = db.collection("bookings").doc(bookingId);
+    const bSnap = await bRef.get();
+    if (!bSnap.exists) { res.status(404).json({ ok: false, error: "not-found" }); return; }
+    const b = bSnap.data();
+    const state = () => ({
+      status: b.status, started: !!b.loadingStartedAt, delivered: !!b.fleetDeliveredAt,
+      pickup: b.pickup || "", drop: b.drop || "", pickupLat: b.pickupLat ?? null, pickupLng: b.pickupLng ?? null, dropLat: b.dropLat ?? null, dropLng: b.dropLng ?? null,
+      customerMobile: fleetCleanMobile(b.customerMobile), ownerMobile: fleetCleanMobile(b.driverMobile), ownerName: b.ownerName || "", driverName: b.fleetDriverName || "",
+      vehicleNumber: b.fleetVehicleNumber || "", scheduledFor: b.scheduledFor || null,
+    });
+    if (!b.fleetBooking) { res.status(403).json({ ok: false, error: "not-a-fleet-trip" }); return; }
+    if (action === "info" || !action) { res.json({ ok: true, ...state() }); return; }
+    if (b.status !== "Ongoing") { res.json({ ok: false, error: "trip-not-active", ...state() }); return; }
+    if (action === "otp") {
+      if (b.loadingStartedAt) { res.json({ ok: true, valid: true, already: true, ...state() }); return; }
+      const otpRef = db.collection("bookingOtps").doc(bookingId);
+      const otpSnap = await otpRef.get();
+      const verdict = judgeOtpGuess(otpSnap.exists ? otpSnap.data() : null, otp);
+      if (verdict.update) await otpRef.update(verdict.update).catch((e) => console.error("[fleetTripAction] counter", e.message));
+      if (verdict.valid) {
+        await bRef.update({ loadingStartedAt: Date.now(), travelPausedAt: null, pausedMs: 0, reachedDropAt: null, fleetOtpVerifiedAt: Date.now() });
+        b.loadingStartedAt = Date.now();
+      }
+      res.json({ ok: true, valid: !!verdict.valid, ...(verdict.locked ? { locked: true } : {}), ...(verdict.pending ? { pending: true } : {}), ...state() });
+      return;
+    }
+    if (action === "delivered") {
+      if (!b.loadingStartedAt) { res.json({ ok: false, error: "enter-otp-first", ...state() }); return; }
+      if (!b.fleetDeliveredAt) { await bRef.update({ fleetDeliveredAt: Date.now() }); b.fleetDeliveredAt = Date.now(); }
+      res.json({ ok: true, ...state() });
+      return;
+    }
+    res.status(400).json({ ok: false, error: "unknown-action" });
+  } catch (e) {
+    console.error("[fleetTripAction]", e);
+    res.status(500).json({ ok: false, error: "server-error" });
+  }
 });
 
 // Makes the pickup OTP when a booking first becomes Ongoing (owner request 2026-11-02). The driver's own phone used to make and

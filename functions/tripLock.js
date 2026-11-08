@@ -69,13 +69,42 @@ function categoryInRingRange(dCat, lCat, extended) {
   return dCat >= lCat && categoryLimitKg(dCat) <= categoryLimitKg(lCat) + RING_EXTRA_RANGE_KG;
 }
 
-// ctx: { extended: true from an escalation round, mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver), haversineKm(lat1, lng1, lat2, lng2) }
+// Fleet owner (owner 2026-11-08): the account is a transporter with several vehicles driven by people who have NO app. The ring goes to the OWNER's phone, and the owner is
+// rung when ANY one of their approved, active vehicles fits the category rule (first ring: the picked category; escalation: up to the picked limit + 5000 kg) and is not busy.
+// "Busy" is per VEHICLE (a vehicle on a trip does not stop the owner from taking another load on a different vehicle). The 30 / 50 km radius is skipped: the owner's phone is not
+// where the vehicles are. Returns the first suitable vehicle id so callers / logs can name it.
+function evaluateFleetOwnerVehicles(driver, load, ctx) {
+  const vehicles = Array.isArray(ctx.fleetVehicles) ? ctx.fleetVehicles : [];
+  if (!vehicles.length) return { ok: false, reason: "fleet owner with no approved vehicle" };
+  const lCat = loadCategoryIndex(load);
+  let sawCategory = false;
+  for (const v of vehicles) {
+    const cap = Number(v.capacityKg) || 0;
+    if (cap <= 0) continue;
+    const dCat = categoryIndexOfCapacity(cap);
+    if (lCat !== -1 && !categoryInRingRange(dCat, lCat, !!ctx.extended)) continue;
+    sawCategory = true;
+    const mine = typeof ctx.fleetMine === "function" ? ctx.fleetMine(v.id) : [];
+    if (ctx.hasLoadConflict(load, mine || [], ctx.notificationLockHours(cap))) continue;
+    return { ok: true, vehicleId: v.id };
+  }
+  return { ok: false, reason: sawCategory ? "every vehicle in the category is on a trip / has a conflicting commitment" : `no fleet vehicle in the ${ctx.extended ? "picked category .. +" + RING_EXTRA_RANGE_KG + " kg" : "picked category"}` };
+}
+
+// ctx: { extended: true from an escalation round, mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver), haversineKm(lat1, lng1, lat2, lng2),
+//        fleetVehicles / fleetMine(vehicleId): only for a fleet owner }
 // Returns { ok: true } or { ok: false, reason }.
 function evaluateNewLoadDriver(driver, load, ctx) {
   if (!driver.online) return { ok: false, reason: "off duty" };
   if (driver.kyc !== "Approved") return { ok: false, reason: `kyc=${driver.kyc}` };
   if (driver.blacklisted) return { ok: false, reason: "blacklisted" };
   if ((load.declinedBy || []).includes(driver.name)) return { ok: false, reason: "declined this load" };
+  if (driver.fleetOwner) {
+    const fleet = evaluateFleetOwnerVehicles(driver, load, ctx);
+    if (!fleet.ok) return fleet;
+    if (ctx.isAppOpen(driver)) return { ok: false, reason: "app is OPEN on screen -> in-app card + sound only, no ring" };
+    return fleet;
+  }
   const capacityKg = Number(driver.vehicleSpec && driver.vehicleSpec.capacityKg) || 0;
   const dCat = categoryIndexOfCapacity(capacityKg);
   if (dCat === -1) return { ok: false, reason: "no vehicle capacity on file" };
@@ -94,4 +123,4 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   return { ok: true };
 }
 
-module.exports = { RING_CATEGORY_MAX_KG, LEGACY_RING_CATEGORY_MAX_KG, RING_EXTRA_RANGE_KG, RING_RADIUS_KM, categoryInRingRange, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
+module.exports = { RING_CATEGORY_MAX_KG, LEGACY_RING_CATEGORY_MAX_KG, RING_EXTRA_RANGE_KG, RING_RADIUS_KM, categoryInRingRange, evaluateFleetOwnerVehicles, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
