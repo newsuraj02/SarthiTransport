@@ -4311,6 +4311,13 @@ export function vehicleCategoryText(capacityKg, lang) {
   const i = customerListCategoryIndex(kg);
   return `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
 }
+// The 15 vehicle categories as a dropdown list (owner 2026-11-09, fleet "Add new vehicle": "show the dropdown with vehicle category exactly like we have in the Driver list and Admin list"): one entry per
+// customer-list category, light -> heavy, labelled "<category name> \u00b7 <N kg>" like every other screen. `capacityKg` is the weight a vehicle of that category is stored with (the category's limit, so it
+// is listed and rung in exactly that category); the last category ("32t+ truck", above 32000 kg) uses the 35 ton maximum the app accepts.
+export function customerListCategoryOptions(lang) {
+  const kgs = [...CUSTOMER_LIST_CATEGORY_KG, MAX_BOOKING_WEIGHT_KG];
+  return kgs.map((capacityKg, index) => ({ index, capacityKg, name: customerListCategoryName(index, lang), nameEn: customerListCategoryName(index, "en"), label: `${customerListCategoryName(index, lang)} \u00b7 ${customerListCategoryLabel(index, lang)}` }));
+}
 // The category index a BOOKING was made for: its `listCategoryKg` (the picked category's limit), else an old booking's `listCategory` (an index into the previous
 // table), else the vehicle tier it asked for; null when none is known.
 export function bookingCategoryIndex(b) {

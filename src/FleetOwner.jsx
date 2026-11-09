@@ -3,7 +3,7 @@
 // phone, vehicle number, document photos -- owner + Admin only). Rules: firestore.rules. Logic of who is rung / listed: functions/tripLock.js + fleetPseudoDrivers (App.jsx).
 // Loaded lazily from App.jsx / AdminPanel.jsx (they import from here, this imports from App.jsx -- lazy keeps the cycle harmless).
 import React, { useState } from "react";
-import { C, uploadPhoto } from "./App.jsx";
+import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
@@ -31,7 +31,7 @@ const fieldStyle = { background: C.bg, border: `1px solid ${C.line}`, color: C.i
 
 // One vehicle + its driver. Everything the owner types lands in the PRIVATE doc; only capacity / name / kyc / active are public.
 function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
-  const [v, setV] = useState({ driverName: "", driverMobile: "", vehicleNumber: "", vehicleName: "", capacityKg: "" });
+  const [v, setV] = useState({ driverName: "", driverMobile: "", vehicleNumber: "", categoryIndex: "" });
   const [files, setFiles] = useState({ driverPhoto: null, dl: null, vehicleSide: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -40,8 +40,12 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   if (!isValidPersonName(v.driverName)) missing.push(T(lang, "driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव"));
   if (digits(v.driverMobile, 10).length !== 10) missing.push(T(lang, "driver's 10-digit mobile", "ड्राइवर का 10 अंकों का मोबाइल", "ड्रायव्हरचा 10 अंकी मोबाइल"));
   if (!v.vehicleNumber.trim()) missing.push(T(lang, "vehicle number", "गाड़ी नंबर", "गाडी नंबर"));
-  if (!v.vehicleName.trim()) missing.push(T(lang, "vehicle model", "गाड़ी का मॉडल", "गाडीचे मॉडेल"));
-  if (!(Number(v.capacityKg) > 0)) missing.push(T(lang, "capacity (kg)", "क्षमता (किग्रा)", "क्षमता (किग्रा)"));
+  // Vehicle category (owner 2026-11-09): the app's 15 categories as a dropdown; the name and the capacity come from the pick (the category's limit), so a vehicle is always listed in the category it was chosen as.
+  const categories = customerListCategoryOptions(lang);
+  const picked = v.categoryIndex === "" ? null : categories[Number(v.categoryIndex)];
+  const vehicleName = picked ? picked.nameEn : "";
+  const capacityKg = picked ? picked.capacityKg : 0;
+  if (!picked) missing.push(T(lang, "vehicle category", "गाड़ी की कैटेगरी", "गाडीची कॅटेगरी"));
   if (!files.driverPhoto) missing.push(T(lang, "driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो"));
   if (!files.dl) missing.push(T(lang, "driving licence photo", "ड्राइविंग लाइसेंस की फोटो", "ड्रायव्हिंग लायसन्स फोटो"));
 
@@ -58,10 +62,10 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
         return done.url;
       };
       const [driverPhotoUrl, dlPhotoUrl, vehicleSideUrl] = await Promise.all([up(files.driverPhoto, "driver"), up(files.dl, "dl"), up(files.vehicleSide, "vehicle")]);
-      await createDoc("fleetVehicles", id, { ownerMobile, vehicleName: v.vehicleName.trim(), capacityKg: Number(v.capacityKg), kyc: "Pending", active: true });
+      await createDoc("fleetVehicles", id, { ownerMobile, vehicleName, capacityKg, categoryIndex: picked.index, kyc: "Pending", active: true });
       await createDoc("fleetVehiclePrivate", id, {
         ownerMobile, driverName: v.driverName.trim(), driverMobile: digits(v.driverMobile, 10), vehicleNumber: v.vehicleNumber.trim().toUpperCase(),
-        vehicleName: v.vehicleName.trim(), capacityKg: Number(v.capacityKg), driverPhotoUrl, dlPhotoUrl, vehicleSideUrl,
+        vehicleName, capacityKg, categoryIndex: picked.index, driverPhotoUrl, dlPhotoUrl, vehicleSideUrl,
       });
       onSaved(id);
     } catch (e) {
@@ -78,8 +82,10 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
       <input value={v.driverMobile} onChange={(e) => set("driverMobile", digits(e.target.value, 10))} inputMode="numeric" className={field} style={fieldStyle}
         placeholder={T(lang, "Driver's mobile number (gets the trip on WhatsApp)", "ड्राइवर का मोबाइल नंबर (ट्रिप WhatsApp पर मिलेगी)", "ड्रायव्हरचा मोबाइल (ट्रिप WhatsApp वर मिळेल)")} />
       <input value={v.vehicleNumber} onChange={(e) => set("vehicleNumber", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Vehicle number (e.g. MH12AB1234)", "गाड़ी नंबर (जैसे MH12AB1234)", "गाडी नंबर (उदा. MH12AB1234)")} />
-      <input value={v.vehicleName} onChange={(e) => set("vehicleName", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Vehicle model (e.g. Tata Ace / Pickup)", "गाड़ी का मॉडल (जैसे छोटा हाथी / पिकअप)", "गाडीचे मॉडेल (उदा. छोटा हत्ती / पिकअप)")} />
-      <input value={v.capacityKg} onChange={(e) => set("capacityKg", digits(e.target.value, 6))} inputMode="numeric" className={field} style={fieldStyle} placeholder={T(lang, "Capacity in kg (e.g. 750)", "क्षमता किलोग्राम में (जैसे 750)", "क्षमता किलोग्राममध्ये (उदा. 750)")} />
+      <select data-fleet-category value={v.categoryIndex} onChange={(e) => set("categoryIndex", e.target.value)} className={field} style={{ ...fieldStyle, color: v.categoryIndex === "" ? C.inkSoft : C.ink }}>
+        <option value="">{T(lang, "Select vehicle category", "गाड़ी की कैटेगरी चुनें", "गाडीची कॅटेगरी निवडा")}</option>
+        {categories.map((c) => <option key={c.index} value={c.index}>{c.label}</option>)}
+      </select>
       <div className="grid grid-cols-2 gap-2">
         <PhotoPick lang={lang} required label={T(lang, "Driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो")} file={files.driverPhoto} onFile={(f) => setFiles((p) => ({ ...p, driverPhoto: f }))} />
         <PhotoPick lang={lang} required label={T(lang, "Driving licence", "ड्राइविंग लाइसेंस", "ड्रायव्हिंग लायसन्स")} file={files.dl} onFile={(f) => setFiles((p) => ({ ...p, dl: f }))} />
@@ -142,8 +148,8 @@ export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup",
               <div key={x.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {x.capacityKg} kg</div>
-                    <div className="text-xs truncate" style={{ color: C.inkSoft }}>{x.vehicleName}{p.driverName ? ` · ${p.driverName}` : ""}{p.driverMobile ? ` · ${p.driverMobile}` : ""}</div>
+                    <div className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`}</div>
+                    <div className="text-xs truncate" style={{ color: C.inkSoft }}>{[x.categoryIndex == null ? x.vehicleName : "", p.driverName, p.driverMobile].filter(Boolean).join(" · ")}</div>
                   </div>
                   <span className="text-[10px] font-extrabold px-2 py-1 rounded-full shrink-0" style={{ background: "#fff", border: `1px solid ${color}`, color }}>{label}</span>
                 </div>
@@ -184,7 +190,7 @@ export function FleetAssignSheet({ booking, vehicles, privateById, lang, onPick,
             const p = (privateById || {})[v.fleetVehicleId] || {};
             return (
               <button key={v.fleetVehicleId} data-fleet-pick={v.fleetVehicleId} disabled={busy} onClick={() => onPick(v)} className="w-full text-left rounded-xl p-3" style={{ background: C.bg, border: `1.5px solid ${C.line}` }}>
-                <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || v.vehicleSpec.type} · {v.vehicleSpec.capacityKg} kg</div>
+                <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || v.vehicleSpec.type} · {vehicleCategoryText(v.vehicleSpec.capacityKg, lang) || `${v.vehicleSpec.capacityKg} kg`}</div>
                 <div className="text-xs" style={{ color: C.inkSoft }}>{v.vehicleSpec.type}{p.driverName ? ` · ${T(lang, "Driver", "ड्राइवर", "ड्रायव्हर")}: ${p.driverName}` : ""}</div>
               </button>
             );
@@ -242,7 +248,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
         const p = privById[x.id] || {};
         return (
           <div key={x.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {x.capacityKg} kg · <span style={{ color: x.kyc === "Approved" ? C.success : x.kyc === "Rejected" ? C.safety : C.marigoldDeep }}>{x.kyc}</span></div>
+            <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`} · <span style={{ color: x.kyc === "Approved" ? C.success : x.kyc === "Rejected" ? C.safety : C.marigoldDeep }}>{x.kyc}</span></div>
             <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "Owner", "ओनर", "ओनर")}: {ownerName(x.ownerMobile)} ({x.ownerMobile}) · {T(lang, "Driver", "ड्राइवर", "ड्रायव्हर")}: {p.driverName || "-"} {p.driverMobile || ""}</div>
             <div className="flex gap-2 mt-2 items-center">
               {[p.driverPhotoUrl, p.dlPhotoUrl, p.vehicleSideUrl].filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} /></a>)}
