@@ -93,15 +93,10 @@ service cloud.firestore {
         request.resource.data.createdAt == resource.data.createdAt;
     }
 
-    // Vehicle types / materials: anyone signed in may ADD an entry (a driver typing a new vehicle name at sign-up creates one) but
+    // Vehicle types (the unused `materials` collection and its rule were removed in the 2026-11-09 audit): anyone signed in may ADD an entry (a driver typing a new vehicle name at sign-up creates one) but
     // only Admin may change or delete an existing one (owner request 2026-11-02; before this any signed-in customer could rewrite or
     // delete every vehicle type). `create` is refused if the document already exists, so a new sign-up can never overwrite a type.
     match /vehicleTypes/{id} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
-    }
-    match /materials/{id} {
       allow read: if true;
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();

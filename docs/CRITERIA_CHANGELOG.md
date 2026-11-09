@@ -342,3 +342,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-09 -- Owner bug report 2026-11-09: customer screen crash 'reading lat' -- CustomerBooking list km no longer reads a null lastKnownLocation (fleet vehicles have none)
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
 - added (1): code:src/App.jsx#NO_LOCATION_KM
+
+## 2026-11-09 -- Owner 2026-11-09: dead-code audit part 2 -- removed unused materials rule from firestore.rules and the unused drivers prop of AdminAlerts
+- changed (6): file:firestore.rules, code:CLAUDE.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminAlerts, code:src/AdminPanel.jsx#AdminPanel
