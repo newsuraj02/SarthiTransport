@@ -6,9 +6,10 @@ import React, { useState } from "react";
 import { C, uploadPhoto } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
+import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
-const digits = (v, n) => String(v || "").replace(/\D/g, "").slice(0, n);
+const digits = (v, n) => digitsOnly(v, n);
 const newVehicleId = (owner) => `${owner}_${Date.now().toString(36)}${Math.floor(Math.random() * 36 ** 2).toString(36)}`;
 
 function PhotoPick({ label, file, onFile, required, lang }) {
@@ -36,7 +37,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   const [error, setError] = useState("");
   const set = (k, val) => { setV((p) => ({ ...p, [k]: val })); setError(""); };
   const missing = [];
-  if (v.driverName.trim().length < 2) missing.push(T(lang, "driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव"));
+  if (!isValidPersonName(v.driverName)) missing.push(T(lang, "driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव"));
   if (digits(v.driverMobile, 10).length !== 10) missing.push(T(lang, "driver's 10-digit mobile", "ड्राइवर का 10 अंकों का मोबाइल", "ड्रायव्हरचा 10 अंकी मोबाइल"));
   if (!v.vehicleNumber.trim()) missing.push(T(lang, "vehicle number", "गाड़ी नंबर", "गाडी नंबर"));
   if (!v.vehicleName.trim()) missing.push(T(lang, "vehicle model", "गाड़ी का मॉडल", "गाडीचे मॉडेल"));
@@ -73,7 +74,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   return (
     <div className="p-4 space-y-3" data-fleet-vehicle-form>
       <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, "Vehicle and driver", "गाड़ी और ड्राइवर की जानकारी", "गाडी व ड्रायव्हरची माहिती")}</div>
-      <input value={v.driverName} onChange={(e) => set("driverName", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव")} />
+      <input value={v.driverName} onChange={(e) => set("driverName", cleanNameInput(e.target.value))} className={field} style={fieldStyle} placeholder={T(lang, "Driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव")} />
       <input value={v.driverMobile} onChange={(e) => set("driverMobile", digits(e.target.value, 10))} inputMode="numeric" className={field} style={fieldStyle}
         placeholder={T(lang, "Driver's mobile number (gets the trip on WhatsApp)", "ड्राइवर का मोबाइल नंबर (ट्रिप WhatsApp पर मिलेगी)", "ड्रायव्हरचा मोबाइल (ट्रिप WhatsApp वर मिळेल)")} />
       <input value={v.vehicleNumber} onChange={(e) => set("vehicleNumber", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Vehicle number (e.g. MH12AB1234)", "गाड़ी नंबर (जैसे MH12AB1234)", "गाडी नंबर (उदा. MH12AB1234)")} />
@@ -100,9 +101,9 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
 // Setup (the gate right after a fleet owner signs up) and "My fleet" (manage later) in one component.
 // mode "setup": form -> "Add another vehicle?" Yes/No loop -> onFinish() on No (needs at least one vehicle).
 // mode "manage": the list with Add / on-off / remove.
-export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup", onFinish, onClose, onCountChange }) {
+export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup", openForm = false, onFinish, onClose, onCountChange }) {
   const mine = (vehicles || []).filter((x) => x.ownerMobile === owner.mobile);
-  const [view, setView] = useState(mode === "setup" && mine.length === 0 ? "form" : mode === "setup" ? "ask" : "list");
+  const [view, setView] = useState(openForm || (mode === "setup" && mine.length === 0) ? "form" : mode === "setup" ? "ask" : "list");
   const afterSave = (n) => { onCountChange && onCountChange(n); setView(mode === "setup" ? "ask" : "list"); };
   const statusChip = (x) => x.kyc === "Approved" ? [T(lang, "Approved", "स्वीकृत", "मंजूर"), C.success] : x.kyc === "Rejected" ? [T(lang, "Rejected", "अस्वीकृत", "नाकारले"), C.safety] : [T(lang, "Under review", "जाँच में", "तपासणीत"), C.marigoldDeep];
   return (

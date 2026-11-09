@@ -20,7 +20,7 @@ import {
   Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
-  AlertTriangle, Volume2, Square,
+  AlertTriangle, Volume2, Square, Plus,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
@@ -30,9 +30,10 @@ import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
+import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -5132,7 +5133,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const detailsValid = name.trim().length >= 3;
+  const detailsValid = name.trim().length >= 3 && isValidPersonName(name);
 
   // Spoken onboarding guidance (see speakGuide in the shared helpers above)
   // -- mobile entry once a Login/Sign Up mode is picked, PIN setup once the
@@ -5165,7 +5166,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // Guided-step highlighting for the registration details field — see
   // GuidedStep. Shared by both places this form renders (post-login
   // completion and Sign Up), since both use the same field state.
-  const regStepCompleted = [name.trim().length >= 3];
+  const regStepCompleted = [name.trim().length >= 3 && isValidPersonName(name)];
   // pinFocus: true — don't jump the guided highlight/scroll to the next
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
@@ -5387,7 +5388,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
           )}
           <GuidedStep {...regStepProps(0)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(cleanNameInput(e.target.value))} />
           </GuidedStep>
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Firm Name (Optional)" : lang === "mr" ? "फर्मचे नाव (ऐच्छिक)" : "फर्म का नाम (वैकल्पिक)"}</label>
@@ -5448,7 +5449,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
-                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+                  value={mobile} onChange={(e) => { setMobile(digitsOnly(e.target.value, 10)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={mobile.length !== 10}
@@ -5463,7 +5464,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
                 <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                   <ShieldCheck size={16} color={C.inkSoft} />
                   <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#94A3B8" }} placeholder="• • • • • •" value={forgotOtp}
-                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                    onChange={(e) => { setForgotOtp(digitsOnly(e.target.value, 6)); setForgotError(""); }} />
                 </div>
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
@@ -5479,9 +5480,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               <div className="space-y-3">
                 <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
-                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(digitsOnly(e.target.value, 4)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
-                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(digitsOnly(e.target.value, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
@@ -5495,7 +5496,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
           ) : (
             <div className="space-y-3">
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pin} onChange={(e) => { setPin(digitsOnly(e.target.value, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
@@ -5537,7 +5538,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         </div>
         <GuidedStep {...regStepProps(0)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(cleanNameInput(e.target.value))} />
         </GuidedStep>
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Firm Name (Optional)" : lang === "mr" ? "फर्मचे नाव (ऐच्छिक)" : "फर्म का नाम (वैकल्पिक)"}</label>
@@ -5553,7 +5554,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
-                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+                  value={mobile} onChange={(e) => { setMobile(digitsOnly(e.target.value, 10)); setError(""); }} />
               </div>
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
@@ -5566,9 +5567,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
             <div className="space-y-3">
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pin} onChange={(e) => { setPin(digitsOnly(e.target.value, 4)); setError(""); }} />
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pinConfirm} onChange={(e) => { setPinConfirm(digitsOnly(e.target.value, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
@@ -5742,12 +5743,12 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
 
-  const detailsValid = name.trim().length >= 3;
+  const detailsValid = name.trim().length >= 3 && isValidPersonName(name);
 
   // Guided-step highlighting for the registration details field — see
   // GuidedStep. Shared by both places this form renders (the fallback
   // completion form and Sign Up), since both use the same field state.
-  const regStepCompleted = [name.trim().length >= 3];
+  const regStepCompleted = [name.trim().length >= 3 && isValidPersonName(name)];
   // pinFocus: true — don't jump the guided highlight/scroll to the next
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
@@ -6048,7 +6049,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         <div className="space-y-3">
           <GuidedStep {...regStepProps(0)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(cleanNameInput(e.target.value))} />
           </GuidedStep>
         </div>
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
@@ -6104,7 +6105,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
-                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+                  value={mobile} onChange={(e) => { setMobile(digitsOnly(e.target.value, 10)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={mobile.length !== 10}
@@ -6119,7 +6120,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                   <ShieldCheck size={16} color={C.inkSoft} />
                   <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#94A3B8" }} placeholder="• • • • • •" value={forgotOtp}
-                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                    onChange={(e) => { setForgotOtp(digitsOnly(e.target.value, 6)); setForgotError(""); }} />
                 </div>
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
@@ -6135,9 +6136,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               <div className="space-y-3">
                 <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
-                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(digitsOnly(e.target.value, 4)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
-                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(digitsOnly(e.target.value, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
@@ -6151,7 +6152,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
           ) : (
             <div className="space-y-3">
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pin} onChange={(e) => { setPin(digitsOnly(e.target.value, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
@@ -6231,7 +6232,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       <div className="space-y-3">
         <GuidedStep {...regStepProps(0)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(cleanNameInput(e.target.value))} />
         </GuidedStep>
       </div>
 
@@ -6244,7 +6245,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
-                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+                  value={mobile} onChange={(e) => { setMobile(digitsOnly(e.target.value, 10)); setError(""); }} />
               </div>
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above first" : lang === "mr" ? "आधी वरील नाव भरा" : "पहले ऊपर नाम भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
@@ -6257,9 +6258,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
             <div className="space-y-3">
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pin} onChange={(e) => { setPin(digitsOnly(e.target.value, 4)); setError(""); }} />
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+                value={pinConfirm} onChange={(e) => { setPinConfirm(digitsOnly(e.target.value, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
@@ -6376,7 +6377,7 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
 // fill, not editing a value that's already saved).
 function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
   const [name, setName] = useState(driver?.name === driver?.mobile ? "" : (driver?.name || ""));
-  const valid = name.trim().length >= 3;
+  const valid = name.trim().length >= 3 && isValidPersonName(name);
   const save = () => {
     if (!valid) return;
     setDriver({ ...driver, name: name.trim() });
@@ -6390,7 +6391,7 @@ function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Review or update your name." : lang === "mr" ? "तुमचे नाव तपासा किंवा बदला." : "अपना नाम जांचें या बदलें।"}</p>
       <input className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
-        placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+        placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(cleanNameInput(e.target.value))} />
       {!valid && <div className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Name must be at least 3 characters" : lang === "mr" ? "नाव किमान 3 अक्षरांचे असावे" : "नाम कम से कम 3 अक्षर का होना चाहिए"}</div>}
       <button onClick={save} disabled={!valid} className="w-full rounded-lg py-4 font-bold text-base mt-4"
         style={{ background: valid ? C.marigold : "#E5EAF2", color: valid ? "#000000" : "#9AA3B0" }}>
@@ -8808,7 +8809,11 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
   // Kept to just name + photo (mobile is the login itself, never edited
   // here) — email/address/area/city/state/pincode were dropped in the
   // profile-simplification pass; the app never used them for anything.
+  const [nameError, setNameError] = useState(false);
   const save = () => {
+    // Letters only (owner 2026-11-09): a name that is just numbers (e.g. the mobile number an account starts with) is not saved.
+    if (!isValidPersonName(name)) { setNameError(true); return; }
+    setNameError(false);
     onSave?.({ name: name.trim(), photo });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -8868,7 +8873,8 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
         )}
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
-          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => { setName(cleanNameInput(e.target.value)); setNameError(false); }} />
+          {nameError && <p data-name-error className="text-[11px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Please enter your name using letters only (no numbers)." : lang === "mr" ? "कृपया नाव फक्त अक्षरांत लिहा (अंक नको)." : "कृपया नाम सिर्फ़ अक्षरों में लिखें (अंक नहीं)।"}</p>}
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
@@ -8903,9 +8909,9 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
           ) : (
             <div className="space-y-2">
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+                value={newPin} onChange={(e) => { setNewPin(digitsOnly(e.target.value, 4)); setPinError(""); }} />
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(digitsOnly(e.target.value, 4)); setPinError(""); }} />
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
               <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
@@ -9565,7 +9571,7 @@ function TripExtras({ booking, myRole, myMobile, extras, lang }) {
               </button>
             ))}
           </div>
-          <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)}
+          <input type="text" inputMode="numeric" value={amount} onChange={(e) => setAmount(digitsOnly(e.target.value, 7))}
             placeholder={lang === "en" ? "Amount" : lang === "mr" ? "रक्कम" : "रकम"}
             className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
           <input value={note} onChange={(e) => setNote(e.target.value)}
@@ -9759,7 +9765,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   // check the driver can actually fail, not a formality their own app
   // already knew the answer to.
   const handleChange = async (e) => {
-    const next = e.target.value.replace(/\D/g, "").slice(0, 4);
+    const next = digitsOnly(e.target.value, 4);
     setOtpInput(next);
     setOtpError(false);
     if (next.length === 4) {
@@ -11500,7 +11506,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           </p>
         )}
         <div className="mb-4">
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKgStr} onChange={(e) => setCapacityKg(e.target.value)} />
+          <input type="text" inputMode="numeric" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKgStr} onChange={(e) => setCapacityKg(digitsOnly(e.target.value, 6))} />
         </div>
       </GuidedStep>
 
@@ -11594,9 +11600,19 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 // isn't separately uploadable here either: it's the KYC "Driver Photo"
 // (DriverKyc's submit writes it to driver.photo), shown read-only so it's
 // always exactly what the customer sees on their active ride page.
-function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, onEditDocuments }) {
+function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, onEditDocuments, onAddVehicle }) {
   const [name, setName] = useState(driver?.name || "");
   const [saved, setSaved] = useState(false);
+  // "Add new vehicle" (owner 2026-11-09): a driver who owns another vehicle becomes an OWNER; his own vehicle stays in the fleet and the new one is added through the fleet form.
+  const [addVehicleAsk, setAddVehicleAsk] = useState(false);
+  const [addVehicleBusy, setAddVehicleBusy] = useState(false);
+  const [addVehicleError, setAddVehicleError] = useState("");
+  const startAddVehicle = async () => {
+    if (addVehicleBusy) return;
+    setAddVehicleBusy(true); setAddVehicleError("");
+    const msg = await onAddVehicle?.();
+    if (msg) { setAddVehicleError(msg); setAddVehicleBusy(false); }
+  };
 
   // "My Rates" (rate card) editing removed here along with pricing —
   // preserved on the backup-before-pricing-removal branch.
@@ -11604,7 +11620,11 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
+  const [nameError, setNameError] = useState(false);
   const save = () => {
+    // Letters only (owner 2026-11-09): a name that is just numbers (e.g. the mobile number an account starts with) is not saved.
+    if (!isValidPersonName(name)) { setNameError(true); return; }
+    setNameError(false);
     setDriver({ ...driver, name: name.trim() });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -11648,7 +11668,8 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
-          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => { setName(cleanNameInput(e.target.value)); setNameError(false); }} />
+          {nameError && <p data-name-error className="text-[11px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Please enter your name using letters only (no numbers)." : lang === "mr" ? "कृपया नाव फक्त अक्षरांत लिहा (अंक नको)." : "कृपया नाम सिर्फ़ अक्षरों में लिखें (अंक नहीं)।"}</p>}
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
@@ -11681,7 +11702,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
           <div className="grid grid-cols-2 gap-2">
             {[
               { key: "dl", label: lang === "en" ? "Driving License" : lang === "mr" ? "ड्रायव्हिंग लायसन्स" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
-              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
+              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url || driver?.ownVehicleSpec?.photoSide?.url },
             ].map((d) => (
               <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
             ))}
@@ -11691,6 +11712,34 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
         <button onClick={save} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: saved ? C.metallicGreen : C.marigoldDeep }}>
           {saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
         </button>
+        {onAddVehicle && (
+          <div data-add-vehicle>
+            {!addVehicleAsk ? (
+              <button type="button" data-add-vehicle-btn onClick={() => (driver?.fleetOwner ? startAddVehicle() : setAddVehicleAsk(true))} disabled={addVehicleBusy}
+                className="w-full rounded-lg py-3.5 font-bold text-base text-white flex items-center justify-center gap-2" style={{ background: C.navy, opacity: addVehicleBusy ? 0.7 : 1 }}>
+                <Plus size={18} /> {lang === "en" ? "Add new vehicle" : lang === "mr" ? "नवीन गाडी जोडा" : "नई गाड़ी जोड़ें"}
+              </button>
+            ) : (
+              <div className="rounded-lg p-3" style={{ background: "#EEF4FF", border: `1.5px solid ${C.navy}` }}>
+                <div className="text-sm font-extrabold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Do you own another vehicle?" : lang === "mr" ? "तुमच्याकडे आणखी एखादी गाडी आहे का?" : "क्या आपके पास एक और गाड़ी है?"}</div>
+                <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "Your profile will become an Owner profile. Your current vehicle stays in your fleet, and you add the new vehicle and its driver next. Loads will ring on your phone, and you choose which vehicle takes each trip."
+                    : lang === "mr" ? "तुमची प्रोफाइल ओनर प्रोफाइल होईल. तुमची सध्याची गाडी तुमच्या फ्लीटमध्येच राहील आणि पुढे नवीन गाडी व तिचा ड्रायव्हर जोडता येईल. लोड तुमच्या फोनवर वाजेल आणि कोणती गाडी जाईल ते तुम्ही निवडाल."
+                    : "आपकी प्रोफाइल ओनर प्रोफाइल बन जाएगी। आपकी मौजूदा गाड़ी आपकी फ्लीट में ही रहेगी, और आगे नई गाड़ी व उसका ड्राइवर जोड़ना होगा। लोड आपके फोन पर बजेगा और कौन-सी गाड़ी जाएगी यह आप चुनेंगे।"}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" data-add-vehicle-yes onClick={startAddVehicle} disabled={addVehicleBusy} className="rounded-lg py-2.5 text-sm font-extrabold text-white" style={{ background: C.navy, opacity: addVehicleBusy ? 0.7 : 1 }}>
+                    {addVehicleBusy ? (lang === "en" ? "Please wait…" : lang === "mr" ? "थांबा…" : "रुकिए…") : (lang === "en" ? "Yes, continue" : lang === "mr" ? "हो, पुढे जा" : "हाँ, आगे बढ़ें")}
+                  </button>
+                  <button type="button" onClick={() => { setAddVehicleAsk(false); setAddVehicleError(""); }} disabled={addVehicleBusy} className="rounded-lg py-2.5 text-sm font-extrabold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+                    {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {addVehicleError && <p data-add-vehicle-error className="text-xs font-semibold mt-2" style={{ color: C.safety }}>{addVehicleError}</p>}
+          </div>
+        )}
       </div>
 
       {!hasPinAlready && (
@@ -11709,9 +11758,9 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
           ) : (
             <div className="space-y-2">
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
-                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+                value={newPin} onChange={(e) => { setNewPin(digitsOnly(e.target.value, 4)); setPinError(""); }} />
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(digitsOnly(e.target.value, 4)); setPinError(""); }} />
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
               <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
@@ -12090,6 +12139,25 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   // whenever the menu itself closes, so it's always collapsed on reopen.
   const [shareNoteOpen, setShareNoteOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
+  // "Add new vehicle" in My Profile (owner 2026-11-09): becomes an owner first (server), then opens My Fleet straight on the add-vehicle form. Returns a message to show, or null.
+  const [fleetOpenForm, setFleetOpenForm] = useState(false);
+  const addVehicleFromProfile = async () => {
+    if (!driver?.fleetOwner) {
+      const r = await convertToFleetOwner();
+      if (!r.ok) {
+        const T3 = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+        if (r.reason === "trip-running") return T3("Finish your current trip first, then add the new vehicle.", "आधी तुमची चालू ट्रिप पूर्ण करा, मग नवीन गाडी जोडा.", "पहले अपनी चालू ट्रिप पूरी करें, फिर नई गाड़ी जोड़ें।");
+        if (r.reason === "no-vehicle") return T3("Complete your own vehicle details (KYC) first.", "आधी तुमच्या गाडीचा तपशील (KYC) पूर्ण करा.", "पहले अपनी गाड़ी की जानकारी (KYC) पूरी करें।");
+        if (r.reason === "blocked") return T3("Your account is blocked. Contact support.", "तुमचे खाते ब्लॉक आहे. सपोर्टशी संपर्क करा.", "आपका अकाउंट ब्लॉक है। सपोर्ट से संपर्क करें।");
+        return T3("Couldn't switch to Owner — check your internet and try again.", "ओनर प्रोफाइल करता आले नाही — इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.", "ओनर प्रोफाइल नहीं बन सका — इंटरनेट जाँचें और दोबारा कोशिश करें।");
+      }
+    }
+    setFleetOpenForm(true);
+    setSettingsView(null);
+    setTab("fleet");
+    return null;
+  };
+  useEffect(() => { if (tab !== "fleet" && fleetOpenForm) setFleetOpenForm(false); }, [tab, fleetOpenForm]);
   // "Later" on the incomplete-KYC reminder (see KycReminderBanner) -- plain
   // component state on purpose: it hides the banner for this app session
   // only and it's back the next time the app is opened, until the form is done.
@@ -12192,7 +12260,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} alerts={alerts} lang={lang} mobile={driver.mobile} />}
-        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
+        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} onAddVehicle={addVehicleFromProfile} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
         {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
       </div>
@@ -12434,7 +12502,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
               </button>
             </div>
             <Suspense fallback={null}>
-              <FleetSetup owner={driver} vehicles={fleetVehicles} privateById={fleetPrivateById} lang={lang} mode="manage"
+              <FleetSetup owner={driver} vehicles={fleetVehicles} privateById={fleetPrivateById} lang={lang} mode="manage" openForm={fleetOpenForm}
                 onCountChange={(n) => patchDoc("drivers", driver.mobile, { fleetVehicleCount: n }).catch((e) => console.error(e))} />
             </Suspense>
           </>
@@ -13555,6 +13623,8 @@ export default function App() {
     if (driver.mobile) patchDoc("drivers", driver.mobile, clearReturnModePatch()).catch((e) => console.error("[return mode clear]", e));
     finishAcceptSideEffects(b, b.id);
     setFleetAssign(null);
+    // The owner drives this vehicle himself (his own vehicle from "Add new vehicle"): there is nobody to message, his own trip screen has the OTP.
+    if (priv.driverMobile && priv.driverMobile === driver.mobile) return null;
     setFleetDispatch({ booking: b, priv, link: null, autoSent: false, working: true });
     dispatchFleetTrip(b.id).then((r) => setFleetDispatch((cur) => (cur ? { ...cur, link: r.link || null, autoSent: !!r.sent, working: false } : cur)));
     return null;

@@ -323,3 +323,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: thicker (2px) border on every Admin customer and driver row
 - changed (4): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers
+
+## 2026-11-09 -- Owner 2026-11-09: Add new vehicle -> owner conversion (convertDriverToFleetOwner, profile button, openForm) + names letters-only / numbers digits-only (inputRules)
+- changed (20): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#DriverKycPortalNameEdit, code:src/App.jsx#CustomerProfileEdit, code:src/App.jsx#TripExtras, code:src/App.jsx#DriverOtpEntry, code:src/App.jsx#DriverKyc, code:src/App.jsx#DriverProfileEdit, code:src/App.jsx#DriverApp, code:src/App.jsx#App, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#digits, code:src/FleetOwner.jsx#FleetVehicleForm, code:src/FleetOwner.jsx#FleetSetup
+- added (5): fn:convertDriverToFleetOwner, code:functions/index.js#fn:convertDriverToFleetOwner, code:src/firebaseClient.js#convertToFleetOwner, code:functions/fleetConvert.js, code:src/inputRules.js

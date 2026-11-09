@@ -237,6 +237,21 @@ export async function sendBulkDriverWhatsApp(kind, mobiles) {
   }
 }
 
+// "Add new vehicle" in My Profile (owner 2026-11-09): asks the server to turn this driver into a fleet owner (functions/index.js: convertDriverToFleetOwner). Never throws:
+// { ok, already?, vehicleId?, reason? } -- reason is "trip-running" / "no-vehicle" / "blocked" / "no-profile" or a short error code.
+export async function convertToFleetOwner() {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "convertDriverToFleetOwner");
+    const result = await call({});
+    return result.data;
+  } catch (e) {
+    console.error("[convertToFleetOwner] failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", "") };
+  }
+}
+
 // Checks a KYC photo actually shows what its tile claims before it's
 // uploaded (see functions/index.js: classifyKycPhoto and DriverKyc's
 // startPhotoUpload) -- docType is "vehicleSide" (rejects front/diagonal

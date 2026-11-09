@@ -205,6 +205,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // solely because onDirectRequestBroadcast's `secrets: [...]` list still
 // references it; that function is frozen (CLAUDE.md), so this declaration
 // isn't removed along with the rest.
+const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
@@ -968,6 +969,30 @@ async function fleetLinkFor(bookingId) {
   await ref.set({ token, bookingId, createdAt: FieldValue.serverTimestamp() });
   return token;
 }
+// "Add new vehicle" in a driver's My Profile (owner 2026-11-09): turns a self-driving driver into a fleet owner. His own vehicle becomes the first fleet vehicle (he is its driver),
+// approval is inherited from his KYC, and the account gets the same owner shape the "I own several vehicles" sign-up makes. Refused while he has a trip running, because a running
+// trip is not tied to a fleet vehicle and the new vehicle list could not tell he is busy. Idempotent: a second call just says already.
+exports.convertDriverToFleetOwner = onCall({ region: "asia-south1" }, async (request) => {
+  const token = request.auth?.token;
+  const phoneMatch = (token?.phone_number || "").match(/^\+91(\d{10})$/);
+  const emailMatch = (token?.email || "").match(/^(\d{10})@driver\.apnatransport\.local$/);
+  const mobile = phoneMatch ? phoneMatch[1] : emailMatch ? emailMatch[1] : null;
+  if (!mobile) throw new HttpsError("unauthenticated", "Sign in as a driver.");
+  const ref = db.collection("drivers").doc(mobile);
+  const snap = await ref.get();
+  const plan = buildFleetConversion(snap.exists ? snap.data() : null, mobile);
+  if (plan.already) return { ok: true, already: true };
+  if (plan.error) return { ok: false, reason: plan.error };
+  const running = await db.collection("bookings").where("driverMobile", "==", mobile).where("status", "==", "Ongoing").get();
+  if (!running.empty) return { ok: false, reason: "trip-running" };
+  const batch = db.batch();
+  batch.set(db.collection("fleetVehicles").doc(plan.id), { ...plan.vehicle, createdAt: FieldValue.serverTimestamp() });
+  batch.set(db.collection("fleetVehiclePrivate").doc(plan.id), { ...plan.priv, createdAt: FieldValue.serverTimestamp() });
+  batch.update(ref, { ...plan.ownerPatch, fleetConvertedAt: FieldValue.serverTimestamp() });
+  await batch.commit();
+  return { ok: true, vehicleId: plan.id };
+});
+
 exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
   const callerPhone = callerPhoneFromAuth(request.auth?.token);
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
