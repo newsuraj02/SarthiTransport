@@ -19,7 +19,7 @@ import {
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
+  FileText, X, Upload, ArrowRight, Languages, Smartphone, Weight, LocateFixed,
   AlertTriangle, Volume2, Square, Plus,
 } from "lucide-react";
 import {
@@ -258,32 +258,6 @@ function lookupVehicleModelSpec(name) {
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
 
-// A curated slot picker (period -> a handful of round-hour times) instead of
-// a native <input type="time"> clock/dial, which testers found fiddly —
-// tap a period, then a slot, done. Slot values stay 24-hour "HH:MM" so
-// advanceTime/scheduledFor storage format is unchanged.
-const TIME_PERIODS = [
-  { key: "morning", icon: "🌅", labelHi: "सुबह", labelEn: "Morning", labelMr: "सकाळ", slots: ["06:00", "07:00", "08:00", "09:00"] },
-  { key: "afternoon", icon: "☀️", labelHi: "दोपहर", labelEn: "Afternoon", labelMr: "दुपार", slots: ["12:00", "13:00", "14:00", "15:00"] },
-  { key: "evening", icon: "🌆", labelHi: "शाम", labelEn: "Evening", labelMr: "संध्याकाळ", slots: ["16:00", "17:00", "18:00", "19:00"] },
-  { key: "night", icon: "🌙", labelHi: "रात", labelEn: "Night", labelMr: "रात्र", slots: ["20:00", "21:00", "22:00", "23:00"] },
-];
-function periodLabel(period, lang) {
-  return lang === "en" ? period.labelEn : lang === "mr" ? period.labelMr : period.labelHi;
-}
-function formatSlotShort(hhmm, lang) {
-  const [h, m] = hhmm.split(":").map(Number);
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  const mm = String(m).padStart(2, "0");
-  return lang === "en" ? `${h12}:${mm} ${h < 12 ? "AM" : "PM"}` : lang === "mr" ? `${h12}:${mm} वाजता` : `${h12}:${mm} बजे`;
-}
-function formatTimeSlot(hhmm, lang) {
-  if (!hhmm) return "";
-  // Any HH:MM (the native date-time picker is not limited to the old hourly slots): the period comes from the hour.
-  const h = Number(hhmm.split(":")[0]);
-  const period = TIME_PERIODS[h >= 5 && h < 12 ? 0 : h >= 12 && h < 16 ? 1 : h >= 16 && h < 20 ? 2 : 3];
-  return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
-}
 // One sheet for BOTH the date and the time, as a two-step flow (owner 2026-10-30): 1. Select Date  ->  2. Time slots  ->
 // Confirm. The chosen date is held here until Confirm, which hands back (time, date) together.
 // Owner 2026-11-04: Advance Booking is DATE ONLY -- Kal / Parso / the day after Parso. The booking is saved as "YYYY-MM-DD 08:00" (fixed morning start), the
@@ -293,143 +267,6 @@ const ADVANCE_DEFAULT_TIME = "08:00";
 function advanceDayLabel(offset, lang) {
   const L = { en: ["Tomorrow", "Day after tomorrow", "In 3 days"], hi: ["कल", "परसों", "परसों के बाद"], mr: ["उद्या", "परवा", "परवा नंतर"] };
   return (L[lang] || L.hi)[offset - 1];
-}
-function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
-  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  const [step, setStep] = useState(1); // 1 = Select Date, 2 = Time slots
-  const [pendingDate, setPendingDate] = useState(selectedDate || "");
-  const todayStr = localDateKey();
-  // Mirrors the date picker's own past-date block: if the chosen date is
-  // today, any slot whose hour has already passed (or is the current hour)
-  // is disabled — same "no past" rule, just applied at the hour level too.
-  const isToday = pendingDate === todayStr;
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  const isPastSlot = (hhmm) => {
-    if (!isToday) return false;
-    const [h, m] = hhmm.split(":").map(Number);
-    return h * 60 + m <= nowMinutes;
-  };
-  const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
-  const [activePeriod, setActivePeriod] = useState(defaultPeriod);
-  const [pending, setPending] = useState(value || "");
-  // Reselecting an already-set time shouldn't let Confirm through on the old
-  // value alone — the period defaults to the right one for convenience
-  // (so the relevant slots show immediately), but both it and a slot must
-  // be actively tapped again before Confirm unlocks. That requirement only
-  // makes sense when there WAS a prior value to reconfirm — on a genuinely
-  // first-time pick there's nothing to accidentally confirm, so the
-  // period (already shown highlighted as the sensible default) counts as
-  // picked from the start; only the slot itself needs a tap.
-  const [periodPicked, setPeriodPicked] = useState(!value);
-  const [slotPicked, setSlotPicked] = useState(false);
-  useEffect(() => {
-    if (open) { setStep(1); setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); setPendingDate(selectedDate || ""); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  if (!open) return null;
-  const period = TIME_PERIODS.find((p) => p.key === activePeriod);
-  const canConfirm = !!pendingDate && periodPicked && slotPicked && !!pending && !(isToday && isPastSlot(pending));
-  const dateLabel = pendingDate ? new Date(`${pendingDate}T00:00:00`).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
-  const stepChip = (n, label, active, done, onClick, disabled) => (
-    <button type="button" onClick={onClick} disabled={disabled} className="flex-1 min-w-0 rounded-full px-2 py-2 text-xs font-extrabold flex items-center justify-center gap-1.5"
-      style={{ background: active ? "#0052CC" : done ? "rgba(0,168,84,0.12)" : "#F1F4F9", color: active ? "#FFFFFF" : done ? C.success : C.inkSoft, border: `1.5px solid ${active ? "#0052CC" : done ? C.success : C.line}`, opacity: disabled ? 0.6 : 1 }}>
-      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] shrink-0" style={{ background: active ? "rgba(255,255,255,0.25)" : done ? C.success : "#E5EAF2", color: active ? "#FFFFFF" : done ? "#FFFFFF" : C.inkSoft }}>{done ? "✓" : n}</span>
-      <span className="truncate">{label}</span>
-    </button>
-  );
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-3xl overflow-hidden shadow-lg sheet-up" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 pt-3 pb-4" style={{ background: C.navy }}>
-          <div className="mx-auto mb-2.5 rounded-full" style={{ width: 36, height: 4, background: "rgba(255,255,255,0.35)" }} />
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold" style={{ color: "#fff" }}>{T("Choose Date & Time", "तारीख और समय चुनें", "तारीख आणि वेळ निवडा")}</h3>
-            <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold" style={{ color: "#fff", background: "rgba(255,255,255,0.18)" }}>✕</button>
-          </div>
-          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{step === 1 ? T("First pick the date.", "पहले तारीख चुनें।", "आधी तारीख निवडा.") : T("Now pick a period and a time slot, then confirm.", "अब पहर और समय चुनें, फिर पुष्टि करें।", "आता प्रहर आणि वेळ निवडा, मग निश्चित करा.")}</p>
-        </div>
-        <div className="p-5">
-          {/* The flow: 1 Select Date -> 2 Time slots -> Confirm */}
-          <div className="flex items-center gap-2 mb-4">
-            {stepChip(1, T("Select Date", "तारीख चुनें", "तारीख निवडा"), step === 1, step === 2 && !!pendingDate, () => setStep(1), false)}
-            <span className="shrink-0 text-xs font-black" style={{ color: C.inkSoft }} aria-hidden="true">›</span>
-            {stepChip(2, T("Time slots", "समय स्लॉट", "वेळेचे स्लॉट"), step === 2, false, () => { if (pendingDate) setStep(2); }, !pendingDate)}
-          </div>
-
-          {step === 1 ? (
-            <>
-              {/* A native date input can't take a real placeholder -- so our own label sits over it (pointer-events-none lets the tap
-                  through to open the phone's date picker): grey "Select date" like every other box, the chosen date once picked. */}
-              <div className="relative mb-5">
-                <input type="date" value={pendingDate} min={todayStr} aria-label={T("Select date", "तारीख चुनें", "तारीख निवडा")}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v || v >= todayStr) {
-                      if (v !== pendingDate) { setPending(""); setSlotPicked(false); }
-                      setPendingDate(v);
-                      if (v) setStep(2); // a date was picked -> straight on to the time slots
-                    }
-                  }}
-                  className="w-full rounded-lg px-3 py-3.5 text-base font-bold outline-none" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: "transparent", WebkitTextFillColor: "transparent" }} />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold pointer-events-none" style={{ color: pendingDate ? C.ink : "#94A3B8" }}>
-                  {pendingDate ? dateLabel : T("Select date", "तारीख चुनें", "तारीख निवडा")}
-                </span>
-                <CalendarClock size={18} color={C.inkSoft} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              <button type="button" onClick={() => { if (pendingDate) setStep(2); }} disabled={!pendingDate}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pendingDate ? "#0052CC" : "#E5EAF2", color: pendingDate ? "#fff" : "#9AA3B0" }}>
-                {T("Next", "आगे", "पुढे")}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 mb-4" style={{ background: "#F1F4F9", border: `1px solid ${C.line}` }}>
-                <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>📅 {dateLabel}</span>
-                <button type="button" onClick={() => setStep(1)} className="text-xs font-extrabold underline shrink-0" style={{ color: "#0052CC" }}>{T("Change date", "तारीख बदलें", "तारीख बदला")}</button>
-              </div>
-              <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{T("Choose period:", "पहर चुनें:", "प्रहर निवडा:")}</div>
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                {TIME_PERIODS.map((p) => {
-                  const active = activePeriod === p.key;
-                  return (
-                    <button key={p.key} type="button" onClick={() => { setActivePeriod(p.key); setPeriodPicked(true); }}
-                      className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
-                      style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft, boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined }}>
-                      <span className="text-lg leading-none">{p.icon}</span>
-                      {periodLabel(p, lang)}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{T("Available time slots:", "उपलब्ध समय स्लॉट:", "उपलब्ध वेळ (Time Slots):")}</div>
-              <div className="grid grid-cols-2 gap-2 mb-5">
-                {period.slots.map((s) => {
-                  const active = pending === s;
-                  const past = isPastSlot(s);
-                  return (
-                    <button key={s} type="button" disabled={past} onClick={() => { setPending(s); setSlotPicked(true); }}
-                      className="rounded-lg py-3.5 text-base font-bold text-left px-4"
-                      style={{
-                        background: past ? "#F1F4F9" : active ? C.marigoldDeep : C.paper,
-                        border: `1.5px solid ${past ? "#E8EDF5" : active ? C.marigoldDeep : C.line}`,
-                        color: past ? "#B4BDCB" : active ? "#FFFFFF" : C.ink,
-                        boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined,
-                      }}>
-                      {period.icon} {formatSlotShort(s, lang)}
-                    </button>
-                  );
-                })}
-              </div>
-              <button onClick={() => { if (canConfirm) { onSelect(pending, pendingDate); onClose(); } }} disabled={!canConfirm}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E5EAF2", color: canConfirm ? "#fff" : "#9AA3B0" }}>
-                {T("Confirm", "पुष्टि करें", "निश्चित करा")}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 export const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
@@ -1377,27 +1214,6 @@ export function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
   return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
 }
 
-// Customer-facing "what vehicle should I book for this weight" picker (guide
-// section 4/14) — deliberately NOT the same as findFareTier above. A real
-// driver's own vehicle maps to exactly one bracket by capacity (findFareTier,
-// ascending-first-match), but a customer choosing a vehicle to book should
-// get whichever qualifying tier is actually CHEAPEST, since a heavier-
-// capacity tier can have a lower innerFix than a lighter one right above the
-// customer's weight (e.g. 7500kg/20ft container undercuts 7000kg/19ft open
-// truck). Picks the lowest innerFix among all tiers that can carry the
-// weight; ties broken by the smaller maxKg.
-export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
-  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
-  const qualifying = list.filter((t) => t.maxKg >= (weightKg || 0));
-  const pool = qualifying.length > 0 ? qualifying : list;
-  return pool.reduce((cheapest, t) => {
-    if (!cheapest) return t;
-    if (t.innerFix < cheapest.innerFix) return t;
-    if (t.innerFix === cheapest.innerFix && t.maxKg < cheapest.maxKg) return t;
-    return cheapest;
-  }, null);
-}
-
 // WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
 // (escalated: up to the picked limit + RING_EXTRA_RANGE_KG), and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
@@ -1816,22 +1632,6 @@ export const EXTRA_TYPES = [
   { id: "stop", label: "एक्स्ट्रा स्टॉप", labelEn: "Extra stop" },
   { id: "other", label: "दूसरा खर्च", labelEn: "Other expense" },
 ];
-// Proposes one extra charge on a trip -- "pending" until the OTHER party
-// accepts or rejects it (see respondExtra; enforced again server-side in
-// firestore.rules so a client can't just flip its own proposal to accepted).
-export function addExtra(bookingId, { type, amount, note, by, byMobile }) {
-  return createDoc("bookingExtras", genId(), {
-    bookingId, type, amount: Number(amount) || 0, note: note || "",
-    by, byMobile, status: "pending", at: Date.now(), answeredAt: null,
-  });
-}
-// `responderMobile` must differ from the extra's own `byMobile` -- the
-// guide's own "जिसने जोड़ा वह खुद मंज़ूर नहीं कर सकता" rule, enforced here too
-// (not just firestore.rules) so the UI can refuse before even trying.
-export function respondExtra(extra, accept, responderMobile) {
-  if (extra.byMobile === responderMobile) return Promise.reject(new Error("self-approval not allowed"));
-  return patchDoc("bookingExtras", extra.id, { status: accept ? "accepted" : "rejected", answeredAt: Date.now() });
-}
 
 // The guide's own mandated bill-footer note (section 15) -- shown under
 // every completed trip's bill, unchanged regardless of what's actually on it.
@@ -2246,20 +2046,6 @@ export function sanitizeForDocId(s) {
   return (s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x";
 }
 
-// True for a route+bracket combination where a dedicated vehicle this
-// small, sent this far, is a bad match to how the real market actually
-// prices it (see the Maharashtra Rate Card's research note: a freight
-// marketplace quoted Pune-Nagpur at 5-6x less per kg than a dedicated
-// small truck would cost, because real shippers consolidate onto a shared
-// truck instead of dedicating one for a small long-haul load). Computed
-// live from each entry's own estimatedKm/tierMaxKg rather than stored, so
-// it applies equally to bulk-imported and hand-typed entries, and stays
-// correct if either field is edited later. Admin-facing only (shown in
-// AdminRateCalculator's saved-rates list) -- never seen by customers or
-// drivers, and never affects the price actually charged.
-export function isLongHaulSmallLoad(estimatedKm, tierMaxKg) {
-  return estimatedKm != null && estimatedKm >= 400 && tierMaxKg != null && tierMaxKg <= 1500;
-}
 // Turns a failed adminRouteFares write into something Admin can actually
 // act on. "permission-denied" specifically means the Firestore security
 // rule for this collection isn't live yet (it has to be deployed by hand
@@ -3713,16 +3499,6 @@ const TRIAL_DAYS = 30;
 // from before this field existed) is treated as "in trial" — generous by
 // default rather than accidentally charging someone commission early.
 export const isInTrial = (createdAt) => (createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < TRIAL_DAYS * DAY_MS : true);
-// Whole days left in trial (0 on the last day, null once it's over or
-// createdAt isn't known yet) — used only for the admin's Free Trial /
-// Main Routine driver split and the "X days left" badge, purely derived
-// from createdAt like isInTrial so it can never drift out of sync with
-// the actual gating logic above.
-export const trialDaysLeft = (createdAt) => {
-  if (!createdAt?.toMillis || !isInTrial(createdAt)) return null;
-  const elapsedMs = Date.now() - createdAt.toMillis();
-  return Math.max(0, Math.ceil((TRIAL_DAYS * DAY_MS - elapsedMs) / DAY_MS) - 1);
-};
 
 // There's no direct signal telling the backend a driver actually uninstalled
 // the app -- this infers it from inactivity instead, for AdminFleet's
@@ -4454,35 +4230,6 @@ function truckMarkerIcon(headingDeg = null, active = true) {
 }
 export function driverTruckIcon(headingDeg = null) { return truckMarkerIcon(headingDeg, true); }
 export function driverTruckIconInactive() { return truckMarkerIcon(null, false); }
-
-// Original silhouette (not any reference app's artwork) for the category
-// booking sheet — cab + cargo box + wheels, same flat-icon language as
-// driverTruckIcon above but rendered as real JSX (not a Maps marker icon,
-// so this can just be an <svg> straight in the card) and in the app's own
-// yellow rather than navy. Box width and rear-axle count scale with
-// tierIndex (the category's position in DEFAULT_FARE_TIERS, 0 = smallest)
-// so a heavier category visibly reads as "bigger vehicle" at a glance
-// instead of every card showing the same generic truck glyph.
-function VehicleCategoryIcon({ tierIndex, size = 40 }) {
-  const boxWidth = 16 + tierIndex * 5;
-  const cabWidth = 12;
-  const bodyHeight = 16;
-  const y = 4;
-  const wheelY = y + bodyHeight + 3;
-  const rearAxleX = cabWidth + 2 + boxWidth * 0.72;
-  const dualRear = tierIndex >= 5;
-  const vbWidth = cabWidth + boxWidth + 14;
-  return (
-    <svg width={size} height={size * 0.6} viewBox={`0 0 ${vbWidth} 32`} style={{ overflow: "visible" }}>
-      <rect x="1" y={y + 4} width={cabWidth} height={bodyHeight - 4} rx="2" fill={C.marigoldDeep} />
-      <rect x="4" y={y + 6} width={cabWidth - 6} height="6" rx="1" fill="#FFFFFF" opacity="0.55" />
-      <rect x={cabWidth + 2} y={y} width={boxWidth} height={bodyHeight} rx="2" fill={C.marigoldDeep} />
-      <circle cx={cabWidth * 0.5 + 1} cy={wheelY} r="3.4" fill={C.navy} />
-      <circle cx={rearAxleX} cy={wheelY} r="3.4" fill={C.navy} />
-      {dualRear && <circle cx={rearAxleX + 7} cy={wheelY} r="3.4" fill={C.navy} />}
-    </svg>
-  );
-}
 
 // One marker per online driver on the customer's browse map, each gliding
 // toward their latest Firestore position (useSmoothPosition) and rotated
@@ -7172,87 +6919,9 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
   return { activeStep, stepProps };
 }
 
-// The heaviest capacity this app's live fleet can actually carry right
-// now -- any KYC-Approved, non-blacklisted driver's registered vehicle
-// counts (not just online ones; "do we have a truck this big at all" is
-// about fleet composition, not moment-to-moment duty status). Used to cap
-// the Enter Weight input itself, per explicit request: a customer
-// shouldn't be able to type a weight heavier than anything the fleet
-// could ever carry, and should see a clear "we don't have a vehicle for
-// this" note instead of the vehicle list once they do. Recomputed on
-// every render straight from the live `drivers` subscription, so it
-// grows the moment a bigger vehicle completes KYC -- no separate wiring
-// needed for that.
-function maxFleetVehicleCapacityKg(drivers, VEHICLES) {
-  return (drivers || []).reduce((max, d) => {
-    if (d.kyc !== "Approved" || d.blacklisted) return max;
-    const capKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-    return Math.max(max, capKg);
-  }, 0);
-}
-
-// Weight input shape per unit -- kg is a plain 3-5 digit integer (100kg to
-// 99999kg; nobody books a <100kg truck load). Tons allow up to 2 integer
-// digits plus 3 decimal digits (0 to 99.999t), typed manually including
-// the decimal point itself -- a prior version auto-inserted the "." after
-// the 2nd digit, but that was confusing (no visible cue for whether the
-// next digit landed before or after the point), so this reverted back to
-// plain manual typing, same interaction as any normal decimal field.
-// Enforced at the character level in getWeightInputChange below (not just
-// validated on submit), so the field itself can never grow past either
-// shape -- which also means the only way a customer "overflows" one
-// unit's cap is by actually trying to type a number that belongs in the
-// OTHER unit (e.g. typing "750" while on the tons toggle, meant as kg);
-// that overflow is reported back as mismatchUnit so the UI can offer to
-// switch instead of just silently refusing the keystroke with no
-// explanation.
-// Hard ceiling on any weight a customer can enter: the biggest vehicle
-// category is 35 ton (owner rule, 2026-10-26: "don't take any number above
-// the 35 ton / 35000 kg mark"). Applied three ways so there is no gap --
-// a keystroke that would push the field past it is refused outright (the
-// field keeps its previous value and `capped` comes back true so the UI
-// can say why), isWeightValid rejects anything over it however the value
-// got there, and both forms' fleet-max check (exceedsFleetMax) still sits
-// on top of that for a fleet whose real biggest vehicle is smaller.
+// The biggest vehicle is 35 ton (owner rule 2026-10-26: "we have vehicles only up to 35 ton / 35000 kg"). The customer weight box and its input helpers were removed
+// (owner 2026-11-04), so this is now only the capacity the top vehicle category ("32t+ truck", above 32000 kg) is stored with -- see customerListCategoryOptions.
 const MAX_BOOKING_WEIGHT_KG = 35000;
-const MAX_BOOKING_WEIGHT_TON = MAX_BOOKING_WEIGHT_KG / 1000;
-const KG_WEIGHT_RE = /^\d{3,5}$/;
-const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,3})?$/;
-function getWeightInputChange(rawValue, unit, previous = "") {
-  if (unit === "kg") {
-    const digitsOnly = rawValue.replace(/[^0-9]/g, "");
-    const clean = digitsOnly.slice(0, 5);
-    if (Number(clean) > MAX_BOOKING_WEIGHT_KG) return { clean: previous, mismatchUnit: null, capped: true };
-    // A decimal point typed at all, or more than 5 digits, isn't a bigger
-    // kg value (kg is capped at 5 digits/99999kg on purpose) -- it's almost
-    // certainly a tons value (e.g. "2.5" or "12000" meant as 12 tons).
-    const mismatchUnit = (/\./.test(rawValue) || digitsOnly.length > 5) ? "ton" : null;
-    return { clean, mismatchUnit, capped: false };
-  }
-  // At most one decimal point (same filter as every other decimal input
-  // in this app), up to 2 integer digits and 3 decimal digits.
-  const noJunk = rawValue.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
-  const [intPart, decPart] = noJunk.split(".");
-  const clean = intPart.slice(0, 2) + (noJunk.includes(".") ? "." + (decPart || "").slice(0, 3) : "");
-  if (Number(clean) > MAX_BOOKING_WEIGHT_TON) return { clean: previous, mismatchUnit: null, capped: true };
-  // More than 2 integer digits before any decimal point -- almost
-  // certainly a kg-sized number (e.g. "750") typed while still on tons.
-  const mismatchUnit = intPart.length > 2 ? "kg" : null;
-  return { clean, mismatchUnit, capped: false };
-}
-function isWeightValid(weight, unit) {
-  return unit === "kg"
-    ? KG_WEIGHT_RE.test(weight) && Number(weight) <= MAX_BOOKING_WEIGHT_KG
-    : TON_WEIGHT_RE.test(weight) && Number(weight) > 0 && Number(weight) <= MAX_BOOKING_WEIGHT_TON;
-}
-// "kg"/"ton" label -- always the plain Latin abbreviation, same as "kg",
-// regardless of app language. Previously ton/टन switched to Devanagari in
-// hi/mr while kg stayed "kg" either way, so the toggle showed two
-// different scripts side by side ("kg" | "टन") instead of reading as one
-// consistent unit pair.
-function weightUnitLabel(unit) {
-  return unit === "kg" ? "kg" : "ton";
-}
 
 const CONFETTI_PIECES = [[97, -15, 235, 10, 12, "#FFCC00"], [105, 8, 281, 10, 4, "#0052CC"], [71, 23, -257, 10, 12, "#00A854"], [72, 60, 287, 10, 12, "#FF6B35"], [13, 65, -135, 6, 4, "#FFE066"], [-28, 62, 203, 8, 12, "#4C8DF6"], [-56, 48, 247, 6, 12, "#FFCC00"], [-69, 45, 261, 6, 12, "#0052CC"], [-97, 21, 127, 6, 12, "#00A854"], [-89, -20, 218, 6, 4, "#FF6B35"], [-63, -39, -133, 8, 6, "#FFE066"], [-59, -67, -264, 10, 4, "#4C8DF6"], [-35, -74, -199, 8, 4, "#FFCC00"], [-4, -99, -154, 6, 12, "#0052CC"], [4, -72, 165, 10, 12, "#00A854"], [39, -83, -227, 10, 6, "#FF6B35"], [62, -66, -120, 8, 12, "#FFE066"], [103, -50, -167, 8, 12, "#4C8DF6"]];
 
@@ -7396,134 +7065,6 @@ function SuccessBurst({ lang, onDone }) {
         <div className="text-xl font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Account created" : lang === "mr" ? "खाते तयार झाले" : "अकाउंट बन गया"}</div>
         <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Welcome to Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टमध्ये स्वागत आहे" : "अपना ट्रांसपोर्ट में आपका स्वागत है"}</div>
       </div>
-    </div>
-  );
-}
-
-// Step-by-step booking helpers (owner 2026-10-29).
-function StepSummary({ label, value, changeLabel, onChange, loading = false }) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm step-enter" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-bold uppercase" style={{ color: C.inkSoft }}>{label}</div>
-        <div className="text-[12.5px] font-bold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{value}</div>
-      </div>
-      {loading
-        ? <Loader2 size={20} color={C.navy} className="shrink-0 animate-spin" />
-        : <button type="button" onClick={onChange} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full" style={{ color: C.navy, border: `1.5px solid ${C.navy}` }}>{changeLabel}</button>}
-    </div>
-  );
-}
-function StepNextButton({ show, label, onClick }) {
-  if (!show) return null;
-  return (
-    <button type="button" onClick={onClick} className="w-full rounded-xl py-3 font-extrabold text-sm text-white shadow-md" style={{ background: C.navy }}>
-      {label} ›
-    </button>
-  );
-}
-// Past places the customer already used, listed right under the open step's box
-// so a repeat address is one tap.
-function RecentPlacesList({ items, title, onPick }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div>
-      <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{title}</div>
-      <div className="space-y-1.5">
-        {items.map((it) => (
-          <button key={it.name} type="button" onClick={() => onPick(it)} className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <MapPin size={14} color={C.inkSoft} className="shrink-0" />
-            <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Pill at the top right of the booking page: always shows where the pickup is
-// (the customer's current location unless they changed it); tap = Pickup page.
-function PickupPill({ pickup, lang, onClick }) {
-  const text = pickup.trim() || (lang === "en" ? "Set pickup" : lang === "mr" ? "पिकअप सेट करा" : "पिकअप सेट करें");
-  return (
-    <button type="button" onClick={onClick} className="flex items-center gap-1.5 rounded-full pl-2.5 pr-3.5 py-2 shadow-md min-w-0 max-w-full" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
-      <span className="text-[12.5px] font-bold truncate" style={{ color: C.ink }}>{text}</span>
-    </button>
-  );
-}
-// Full-screen Pickup page (owner 2026-10-29): search box with suggestions and the
-// customer's recent places, plus "Current Location" and "Locate on Map" at the
-// bottom. Choosing anything sets the pickup and closes the page.
-function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, customerLocation, locating, onUseCurrent, onSelect, onClose }) {
-  const [query, setQuery] = useState(initialQuery || "");
-  const [mapMode, setMapMode] = useState(false);
-  const [picked, setPicked] = useState(null); // {name, lat, lng} | null
-  const fieldRef = useRef(null);
-  useEffect(() => {
-    const t = setTimeout(() => { fieldRef.current?.focus(); fieldRef.current?.select?.(); }, 150);
-    return () => clearTimeout(t);
-  }, []);
-  const onMapPick = async (lat, lng) => {
-    setPicked({ name: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng });
-    const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    setPicked({ name, lat, lng });
-  };
-  const L = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: C.bg }}>
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <button type="button" onClick={mapMode ? () => setMapMode(false) : onClose} className="p-2 -ml-2 rounded-full" aria-label="Back">
-          <ChevronLeft size={26} color={C.ink} strokeWidth={2.5} />
-        </button>
-        <h2 className="text-lg font-extrabold" style={{ color: C.ink }}>{mapMode ? L("Locate on Map", "नकाशावर निवडा", "मैप पर चुनें") : L("Pick-up", "पिकअप", "पिकअप")}</h2>
-      </div>
-      {mapMode ? (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <NearbyVehiclesMap drivers={drivers} customerLocation={picked || customerLocation} height="58vh" lang={lang} onMapClick={onMapPick} />
-          <div className="px-5 pt-3 space-y-3">
-            <div className="text-[12.5px] font-bold leading-snug" style={{ color: picked ? C.ink : C.inkSoft }}>
-              {picked ? picked.name : L("Tap the map to place your pickup point", "पिकअप पॉइंट ठेवण्यासाठी नकाशावर टॅप करा", "पिकअप पॉइंट रखने के लिए मैप पर टैप करें")}
-            </div>
-            <button type="button" disabled={!picked} onClick={() => picked && onSelect(picked)} className="w-full rounded-xl py-3.5 font-extrabold text-sm text-white shadow-md"
-              style={{ background: picked ? C.navy : "#E5EAF2", color: picked ? "#fff" : "#9AA3B0" }}>
-              {L("Confirm pickup", "पिकअप निश्चित करा", "पिकअप पक्का करें")}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4 space-y-3">
-          <LocationField
-            lang={lang}
-            compact
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onPlaceSelected={(p) => onSelect(p)}
-            mapsReady={mapsReady}
-            placeholder={L("Search pickup location", "पिकअप लोकेशन शोधा", "पिकअप लोकेशन खोजें")}
-            ref={fieldRef}
-          />
-          {!mapsReady && query.trim() && (
-            <button type="button" onClick={() => onSelect({ name: query.trim(), lat: null, lng: null })} className="w-full rounded-xl px-3 py-2.5 text-left text-[12.5px] font-bold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.navy }}>
-              {L("Use", "वापरा", "उपयोग करें")} “{query.trim()}”
-            </button>
-          )}
-          <RecentPlacesList items={recentPlaces} title={L("Your recent places", "तुमची अलीकडील ठिकाणे", "आपकी पिछली जगहें")} onPick={(it) => onSelect(it)} />
-        </div>
-      )}
-      {!mapMode && (
-        <div className="flex items-stretch border-t" style={{ borderColor: C.line, background: C.paper, paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <button type="button" onClick={onUseCurrent} disabled={locating} className="flex-1 flex items-center justify-center gap-2 py-4 px-3 text-left">
-            {locating ? <Loader2 size={20} color={C.navy} className="animate-spin shrink-0" /> : <LocateFixed size={22} color={C.ink} className="shrink-0" />}
-            <span className="text-sm font-bold leading-tight" style={{ color: C.ink }}>{L("Current Location", "सध्याचे लोकेशन", "करंट लोकेशन")}</span>
-          </button>
-          <div style={{ width: 1, background: C.line, margin: "10px 0" }} />
-          <button type="button" onClick={() => { setPicked(null); setMapMode(true); }} className="flex-1 flex items-center justify-center gap-2 py-4 px-3 text-left">
-            <MapPin size={22} color={C.ink} className="shrink-0" />
-            <span className="text-sm font-bold leading-tight" style={{ color: C.ink }}>{L("Locate on Map", "नकाशावर निवडा", "मैप पर चुनें")}</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -8003,9 +7544,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     else { resetBookingForm(); setSendingKey(null); setBookedMsg(true); }
     }, 700);
   };
-
-  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
     <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
@@ -8693,11 +8231,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
-      {/* Kharch (hamali/extra-stop/other mutual-consent expenses, see
-          TripExtras) hidden for now on request -- not needed yet. Component
-          and its whole data layer (addExtra/respondExtra/buildBill in the
-          fare-engine section, bookingExtras Firestore collection/rules)
-          are untouched, just not rendered here. */}
+      {/* Kharch (hamali/extra-stop/other mutual-consent expenses): the screen
+          and the add/respond functions were removed in the 2026-11-09 audit
+          (nothing could create an extra). buildBill / bookingExtras still
+          read extras for the invoice; kept until the owner decides. */}
       {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
     </div>
@@ -9524,101 +9061,6 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
       </table>
       {trip.bill && (
         <div className="px-3 py-2.5 text-[11px]" style={{ background: C.bg, color: C.inkSoft, borderTop: `1.5px solid ${C.line}` }}>{trip.bill.note}</div>
-      )}
-    </div>
-  );
-}
-
-// Mutual-consent hamali/extra-stop/other proposals on an active trip
-// (guide section 10A/15) -- shared by the driver's and customer's own
-// active-trip screens. `extras` is the whole bookingExtras collection
-// (same broad-read-plus-client-filter pattern as bookings/routeFares
-// elsewhere), filtered here to this one booking. addExtra/respondExtra
-// are the module-level Firestore helpers near isReturnLoadFor above,
-// called directly rather than threaded down as extra props. The app never
-// prices or prefills any of these -- only type/amount/note the proposing
-// side actually typed in.
-function TripExtras({ booking, myRole, myMobile, extras, lang }) {
-  const [adding, setAdding] = useState(false);
-  const [type, setType] = useState("labour");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [busyId, setBusyId] = useState(null);
-  const mine = (extras || []).filter((e) => e.bookingId === booking.id);
-
-  const submit = async () => {
-    const amt = Number(amount);
-    if (!amt || amt <= 0) return;
-    try {
-      await addExtra(booking.id, { type, amount: amt, note: note.trim(), by: myRole, byMobile: myMobile });
-      setAdding(false); setAmount(""); setNote(""); setType("labour");
-    } catch (e) { console.error(e); }
-  };
-  const respond = async (extra, accept) => {
-    setBusyId(extra.id);
-    try { await respondExtra(extra, accept, myMobile); } catch (e) { console.error(e); }
-    setBusyId(null);
-  };
-
-  return (
-    <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Expenses" : lang === "mr" ? "खर्च" : "खर्च"}</div>
-        <button type="button" onClick={() => setAdding((v) => !v)} className="text-xs font-bold" style={{ color: C.navy }}>
-          {adding ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : `+ ${lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}`}
-        </button>
-      </div>
-      {adding && (
-        <div className="mt-2.5 grid gap-2">
-          <div className="grid grid-cols-3 gap-1.5">
-            {EXTRA_TYPES.map((t) => (
-              <button key={t.id} type="button" onClick={() => setType(t.id)} className="rounded-lg py-1.5 px-1 text-[11px] font-bold"
-                style={{ border: `1.5px solid ${C.line}`, background: type === t.id ? C.navy : C.bg, color: type === t.id ? "#fff" : C.ink }}>
-                {lang === "en" ? t.labelEn : t.label}
-              </button>
-            ))}
-          </div>
-          <input type="text" inputMode="numeric" value={amount} onChange={(e) => setAmount(digitsOnly(e.target.value, 7))}
-            placeholder={lang === "en" ? "Amount" : lang === "mr" ? "रक्कम" : "रकम"}
-            className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
-          <input value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder={lang === "en" ? "Short note" : lang === "mr" ? "छोटी नोंद" : "छोटा नोट"}
-            className="w-full rounded-lg p-2.5 text-sm font-semibold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
-          <button type="button" onClick={submit} disabled={!Number(amount)} className="w-full rounded-lg py-2.5 text-sm font-bold"
-            style={{ background: Number(amount) ? C.success : "#E5EAF2", color: Number(amount) ? "#fff" : "#9AA3B0" }}>
-            {lang === "en" ? "Send for approval" : lang === "mr" ? "मंजुरीसाठी पाठवा" : "मंज़ूरी के लिए भेजें"}
-          </button>
-        </div>
-      )}
-      {mine.length > 0 && (
-        <div className="mt-2.5 space-y-1.5">
-          {mine.map((e) => {
-            const meta = EXTRA_TYPES.find((t) => t.id === e.type);
-            const canRespond = e.status === "pending" && e.byMobile !== myMobile;
-            return (
-              <div key={e.id} className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{(lang === "en" ? meta?.labelEn : meta?.label) || e.type} · {fmt(e.amount)}</div>
-                  {e.note && <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{e.note}</div>}
-                </div>
-                {canRespond ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" disabled={busyId === e.id} onClick={() => respond(e, true)} className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: C.success, color: "#fff" }}>
-                      {lang === "en" ? "Accept" : lang === "mr" ? "मंजूर" : "मंज़ूर"}
-                    </button>
-                    <button type="button" disabled={busyId === e.id} onClick={() => respond(e, false)} className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: C.safety, color: "#fff" }}>
-                      {lang === "en" ? "Reject" : lang === "mr" ? "नकार" : "मना"}
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] font-bold shrink-0" style={{ color: e.status === "accepted" ? C.success : e.status === "rejected" ? C.safety : C.inkSoft }}>
-                    {e.status === "accepted" ? (lang === "en" ? "Accepted" : lang === "mr" ? "मंजूर" : "मंज़ूर") : e.status === "rejected" ? (lang === "en" ? "Rejected" : lang === "mr" ? "नकार" : "मना") : (lang === "en" ? "Waiting" : lang === "mr" ? "प्रतीक्षा" : "इंतज़ार")}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
       )}
     </div>
   );
@@ -12671,7 +12113,7 @@ export default function App() {
   // This per-device stuff stays in localStorage; everything shared between
   // testers (bookings, bids, driver profiles, admin settings...) now lives in
   // Firestore — see firestoreStore.js.
-  const [app, setApp] = usePersistedState("sarthi_app", "customer");
+  const [, setApp] = usePersistedState("sarthi_app", "customer");
   const [role, setRole] = usePersistedState("sarthi_role", null);
   // Every Firestore/Storage read or write below goes through whichever
   // role's own authenticated client is "active" (see setActiveRole in
@@ -13047,8 +12489,8 @@ export default function App() {
   const [fleetDispatch, setFleetDispatch] = useState(null); // { booking, priv, link, autoSent, working } after the claim
   const fleetPrivateById = useMemo(() => Object.fromEntries(fleetPrivate.map((p) => [p.id, p])), [fleetPrivate]);
   const driversForCustomer = useMemo(() => (fleetPseudo.length ? [...drivers, ...fleetPseudo] : drivers), [drivers, fleetPseudo]);
-  // Mutual-consent hamali/extra-stop/other proposals (see addExtra/
-  // respondExtra above) -- flat collection keyed by bookingId rather than
+  // Mutual-consent hamali/extra-stop/other proposals (nothing creates them
+  // any more) -- flat collection keyed by bookingId rather than
   // a trips/{id}/extras subcollection, matching this app's own existing
   // flat-collection convention (routeFares keyed by driverMobile, etc.)
   // instead of the guide's own demo schema. Sign-in-required read, same
@@ -13371,22 +12813,6 @@ export default function App() {
   // hold an optimistic local write from a rapid double-click before the
   // server confirms (or rejects) it, which was falsely tripping this check
   // even when nothing had actually been saved.
-  // Currently unwired on the Admin side — unlike addManualDriver below,
-  // nothing in AdminPanel.jsx calls this (no "Add Customer Manually" UI
-  // exists yet). Left in place rather than deleted in case that screen
-  // still gets built; not dead code to clean up without confirming first.
-  const addManualCustomer = async (fields) => {
-    const mobile = (fields.mobile || "").trim();
-    if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
-    const existing = await getDocOnce("customers", mobile);
-    if (existing) return Promise.reject(new Error("duplicate-or-missing-mobile"));
-    return replaceDoc("customers", mobile, {
-      mobile, name: fields.name.trim(), email: null, photo: null,
-      address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
-      referredBy: null, referralCredited: false,
-      createdAt: serverTimestamp(),
-    });
-  };
   const addManualDriver = async (fields) => {
     const mobile = (fields.mobile || "").trim();
     if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));

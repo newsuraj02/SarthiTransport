@@ -19,16 +19,16 @@ export const BLOCKS = {
     // availability / who may be shown or take a load
     "parseScheduledFor", "minAdvanceNoticeHours", "notificationLockHours", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "driverIsOnTrip",
     "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_EXTRA_RANGE_KG", "ringCategoryLimitKg", "ringCategoryInRange", "hasFreshLocation", "CUSTOMER_LIST_CATEGORY_KG", "CUSTOMER_LIST_CATEGORY_NAMES", "customerListCategoryName", "CUSTOMER_LIST_CATEGORY_DIM_MODELS", "CUSTOMER_LIST_3_WHEELER_DIMS", "CUSTOMER_LIST_DIM_LABELS", "formatDimFeet", "customerListCategoryDims", "customerListCategoryIndex", "customerListCategoryLabel", "groupByCustomerListCategory", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
-    "maxFleetVehicleCapacityKg", "CURRENT_BID_RADIUS_KM", "ADVANCE_BID_RADIUS_KM", "VEHICLE_HEADROOM_KG", "NEARBY_DRIVER_RADIUS_KM", "NEARBY_DRIVER_STALE_MS",
+    "CURRENT_BID_RADIUS_KM", "ADVANCE_BID_RADIUS_KM", "VEHICLE_HEADROOM_KG", "NEARBY_DRIVER_RADIUS_KM", "NEARBY_DRIVER_STALE_MS",
     "APP_OPEN_BEAT_MS",
     // fares
     "DEFAULT_FARE_TIERS", "DIESEL_BASELINE_PRICE_PER_LITRE", "DIESEL_MILEAGE_BY_TIER_MAX_KG", "calculateFare", "priceOutstation", "priceCorrectionFactor",
-    "findFareTier", "vehicleForWeight", "getAdminRouteOverride", "findExactAdminRoute", "getRouteScaleRatio", "resolveFareForCapacity", "resolveFareForTier",
+    "findFareTier", "getAdminRouteOverride", "findExactAdminRoute", "getRouteScaleRatio", "resolveFareForCapacity", "resolveFareForTier",
     "applyDieselToSavedRates", "enforceMonotonicFares", "findFareOutliers", "interpolateOutlierFare", "zoneFor", "routeMatchRadiusKm", "ROUTE_MATCH_RADIUS_KM",
     // trip money / return load
     "KM_PER_DAY", "haltPerDayFor", "includedDays", "daysUsed", "haltOf", "buildBill", "isReturnLoadFor", "markReturnModePatch", "RETURN_RULES", "RETURN_HOURS",
     // booking input rules
-    "MAX_BOOKING_WEIGHT_KG", "getWeightInputChange", "isWeightValid", "localDateKey", "isFutureAdvance", "isLikelyUninstalled", "DRIVER_KYC_FIELDS",
+    "MAX_BOOKING_WEIGHT_KG", "localDateKey", "isFutureAdvance", "isLikelyUninstalled", "DRIVER_KYC_FIELDS",
     "getKycMissingFromValues", "getDriverKycMissing", "isDriverKycComplete", "settlePendingRingAction",
   ],
   "functions/index.js": ["notificationLockHours", "parseScheduledFor", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "hasLoadConflict", "haversineKm", "pinAuthEmail",
