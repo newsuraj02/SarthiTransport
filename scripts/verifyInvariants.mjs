@@ -578,6 +578,13 @@ const checks = [
     const self = a.includes("priv.driverMobile === driver.mobile) return null;");
     return logic && server && client && ui && self;
   }],
+  ["CUSTOMER LIST SURVIVES A FLEET VEHICLE (bug 2026-11-09: 'Cannot read properties of null (reading lat)' on the Customer screen): a fleet owner's vehicle has NO location (fleetPseudoDrivers sets lastKnownLocation: null), isDriverListableForCustomer lists it on purpose, and the list read d.lastKnownLocation.lat for every listed vehicle -> the whole customer screen crashed as soon as one fleet vehicle was online. The distance now falls back to a large finite number when a vehicle has no location (it is never GPS-on, so it is never the 'N min' vehicle), and the fleet pseudo vehicle really has no location", () => {
+    const cb = app.slice(app.indexOf("function CustomerBooking("), app.indexOf("function CustomerAdvanceBooking("));
+    return /lastKnownLocation: null/.test(app.slice(app.indexOf("function fleetPseudoDrivers"), app.indexOf("function allFleetPseudoDrivers")))
+      && !/const km = haversineKm\(pickupCoords\.lat, pickupCoords\.lng, d\.lastKnownLocation\.lat, d\.lastKnownLocation\.lng\);/.test(cb)
+      && cb.includes("const km = d.lastKnownLocation && pickupCoords ? haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : NO_LOCATION_KM;")
+      && app.includes("const NO_LOCATION_KM = 99999;");
+  }],
   ["NAME BOXES TAKE LETTERS ONLY, NUMBER BOXES DIGITS ONLY (owner 2026-11-09: 'some of the users are putting a number in place of the name ... only letters accepted for it, and the same for the numbers part -- only numbers'): every name box (customer + driver sign-up, the name editors, both profile screens, the fleet driver's name) keeps letters of any language, vowel signs, spaces and . ' - and drops digits / symbols as they are typed or pasted; a name needs >= 2 letters to be accepted (a name that is just a number is not saved); every mobile / PIN / OTP / capacity / amount box keeps digits only (Hindi digits become 0-9)", async () => {
     const r = await import(pathToFileURL(join(root, "src", "inputRules.js")).href);
     const logic = r.cleanNameInput("Ramesh Patel") === "Ramesh Patel" && r.cleanNameInput("9876543210") === "" && r.cleanNameInput("Ra1mesh 2 Patel") === "Ramesh Patel" && r.cleanNameInput("रमेश पटेल") === "रमेश पटेल" && r.cleanNameInput("श्रीकांत") === "श्रीकांत" && r.cleanNameInput("D'Souza-Rao Jr.") === "D'Souza-Rao Jr." && r.cleanNameInput("A@#$b") === "Ab" && r.cleanNameInput("x".repeat(90)).length === 60

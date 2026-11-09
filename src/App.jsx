@@ -891,6 +891,7 @@ function allFleetPseudoDrivers(drivers, fleetVehicles) {
   return (drivers || []).filter((d) => d.fleetOwner).flatMap((o) => fleetPseudoDrivers(o, fleetVehicles));
 }
 
+const NO_LOCATION_KM = 99999;
 function isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi" }) {
   if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -7410,7 +7411,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         const tier = findFareTier(capacityKg, fareTiers);
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
         // km from Pickup is measured from the driver's last known location; gpsOn = that location is live (a fix under 5 min old).
-        const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+        // A fleet owner's vehicle has no phone / location of its own (lastKnownLocation null): it is listed, never GPS-on, so any large finite km keeps the sort safe.
+        const km = d.lastKnownLocation && pickupCoords ? haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : NO_LOCATION_KM;
         const gpsOn = hasFreshLocation(d);
         const id = d.mobile || d.id;
         const cat = categoryRouteFare(customerListCategoryIndex(capacityKg), fareTiers, fareTable);

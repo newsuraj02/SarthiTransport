@@ -338,3 +338,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-09 -- Owner 2026-11-09: dead-code audit follow-up -- SYSTEM_CONTRACTS B3 wording (TimeSlotModal deleted)
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-09 -- Owner bug report 2026-11-09: customer screen crash 'reading lat' -- CustomerBooking list km no longer reads a null lastKnownLocation (fleet vehicles have none)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+- added (1): code:src/App.jsx#NO_LOCATION_KM
