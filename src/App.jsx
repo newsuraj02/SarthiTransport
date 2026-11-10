@@ -1272,8 +1272,9 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   if (lCat !== -1 && !ringCategoryInRange(dCat, lCat, Number(b.escalatedTierIndex) || 0)) return false;
   if (b.pickupLat != null && b.pickupLng != null && !d.fleetVehicleId) {
     const loc = d.lastKnownLocation;
-    if (!loc || loc.lat == null || loc.lng == null) return false;
-    if (haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > (b.scheduledFor ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM)) return false;
+    if (!loc || loc.lat == null || loc.lng == null) {
+      if (!((Number(b.escalatedTierIndex) || 0) >= 1)) return false; // never-located: last resort, rung from escalation round 1 on (owner 2026-11-10)
+    } else if (haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > (b.scheduledFor ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM)) return false;
   }
   if (findDriverLoadConflict(d, b, bookings, vehicleTypes, lang)) return false;
   return true;

@@ -116,10 +116,14 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   // Radius from the pickup, by the driver's last known location (however old); skipped when the booking has no pickup coordinates.
   if (load.pickupLat != null && load.pickupLng != null) {
     const loc = driver.lastKnownLocation;
-    if (!loc || loc.lat == null || loc.lng == null) return { ok: false, reason: "no location on record -> cannot be placed within the radius" };
-    const radiusKm = load.scheduledFor ? RING_RADIUS_KM.advance : RING_RADIUS_KM.current;
-    const km = ctx.haversineKm(loc.lat, loc.lng, load.pickupLat, load.pickupLng);
-    if (km > radiusKm) return { ok: false, reason: `${km.toFixed(1)}km away (last known), outside the ${radiusKm}km radius` };
+    if (!loc || loc.lat == null || loc.lng == null) {
+      // A driver who NEVER reported a location cannot be placed (owner 2026-11-10: ring them as a LAST RESORT): skipped by the FIRST ring, rung from escalation round 1 on.
+      if (!(Number(ctx.extended) >= 1)) return { ok: false, reason: "no location on record -> cannot be placed within the radius (rung only from escalation round 1)" };
+    } else {
+      const radiusKm = load.scheduledFor ? RING_RADIUS_KM.advance : RING_RADIUS_KM.current;
+      const km = ctx.haversineKm(loc.lat, loc.lng, load.pickupLat, load.pickupLng);
+      if (km > radiusKm) return { ok: false, reason: `${km.toFixed(1)}km away (last known), outside the ${radiusKm}km radius` };
+    }
   }
   if (ctx.hasLoadConflict(load, ctx.mine || [], ctx.notificationLockHours(capacityKg))) return { ok: false, reason: "on a trip / conflicts with an existing commitment" };
   if (ctx.isAppOpen(driver)) return { ok: false, reason: "app is OPEN on screen -> in-app card + sound only, no ring" };
