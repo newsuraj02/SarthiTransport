@@ -378,3 +378,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Vehicle picker: removed the 'My model is not listed' option (owner 2026-11-10)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx
+
+## 2026-11-10 -- Weight category limits from the registered-vehicle sheet: 750->700, 3500->4000, 9000->10000; 701-750 kg counts as 700; fares unchanged via CATEGORY_FARE_LIMIT_KG (owner 2026-11-10, explicit change to the frozen category table)
+- changed (15): app:CUSTOMER_LIST_CATEGORY_KG, app:customerListCategoryIndex, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#RING_CATEGORY_MAX_KG, code:functions/tripLock.js#categoryIndexOfCapacity, code:scripts/auditDriverCapacities.js, code:scripts/criteria.mjs#BLOCKS, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#categoryTierBounds, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_KG, code:src/App.jsx#customerListCategoryIndex, code:src/vehicleModels.js
+- added (2): app:CATEGORY_FARE_LIMIT_KG, code:src/App.jsx#CATEGORY_FARE_LIMIT_KG

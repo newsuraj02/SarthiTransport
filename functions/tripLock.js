@@ -26,7 +26,8 @@
  * the vehicle's capacity does not exceed (above the last limit = index 12, "Above 32000 kg"), exactly like the app's customerListCategoryIndex.
  */
 
-const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+// Owner 2026-11-10: 750 -> 700, 3500 -> 4000, 9000 -> 10000 (same positions; a 701-750 kg vehicle counts as 700, see categoryIndexOfCapacity). MIRRORS CUSTOMER_LIST_CATEGORY_KG.
+const RING_CATEGORY_MAX_KG = [500, 700, 1200, 1700, 2500, 4000, 5000, 7500, 10000, 12000, 16000, 20000, 25000, 32000];
 // The category table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app carries only `listCategory` = an index into THIS
 // table, so it is translated through it (to a weight limit) rather than read against the new table, which would shift it by one or two categories.
 const LEGACY_RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
@@ -39,8 +40,9 @@ const RING_RADIUS_KM = { current: 30, advance: 50 };
 
 // Index of the category a vehicle of this capacity belongs to; -1 when the capacity is unknown.
 function categoryIndexOfCapacity(capacityKg) {
-  const kg = Number(capacityKg) || 0;
+  let kg = Number(capacityKg) || 0;
   if (kg <= 0) return -1;
+  if (kg > 700 && kg <= 750) kg = 700; // an old 750 kg registration sits in the 700 kg category (mirrors customerListCategoryIndex)
   const i = RING_CATEGORY_MAX_KG.findIndex((m) => kg <= m);
   return i === -1 ? RING_CATEGORY_MAX_KG.length : i;
 }

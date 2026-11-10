@@ -34,9 +34,9 @@ if (!keyPathArg) {
 admin.initializeApp({ credential: admin.credential.cert(require(path.resolve(keyPathArg))) });
 const db = admin.firestore();
 
-const CATEGORY_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+const CATEGORY_KG = [500, 700, 1200, 1700, 2500, 4000, 5000, 7500, 10000, 12000, 16000, 20000, 25000, 32000];
 const CATEGORY_NAMES = ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "14ft Eicher", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"];
-const categoryOf = (kg) => { const i = CATEGORY_KG.findIndex((m) => kg <= m); return i < 0 ? CATEGORY_KG.length : i; };
+const categoryOf = (kg) => { if (kg > 700 && kg <= 750) kg = 700; const i = CATEGORY_KG.findIndex((m) => kg <= m); return i < 0 ? CATEGORY_KG.length : i; };
 
 const MODELS = [
   { keys: ["tata ace gold"], kg: 850 }, { keys: ["tata ace", "chhota hathi", "chotta hathi", "chota hathi"], kg: 750 },

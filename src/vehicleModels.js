@@ -34,7 +34,8 @@ export const MAX_SANE_CAPACITY_KG = 35000;
 export const isSaneCapacityKg = (kg) => { const n = Number(kg); return n >= MIN_SANE_CAPACITY_KG && n <= MAX_SANE_CAPACITY_KG; };
 // The customer-list category index a weight belongs to (first category whose limit is >= the weight); `categoryOptions` = customerListCategoryOptions(lang).
 export function categoryIndexForKg(kg, categoryOptions = []) {
-  const i = categoryOptions.findIndex((o) => Number(kg) <= o.capacityKg);
+  const w = Number(kg) > 700 && Number(kg) <= 750 ? 700 : Number(kg); // an old 750 kg registration sits in the 700 kg category (mirrors customerListCategoryIndex)
+  const i = categoryOptions.findIndex((o) => w <= o.capacityKg);
   return i < 0 ? Math.max(categoryOptions.length - 1, 0) : categoryOptions[i].index;
 }
 

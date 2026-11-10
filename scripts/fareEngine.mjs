@@ -14,8 +14,8 @@ export function loadFareEngine(root) {
   const hav = extractBlock(app, "haversineKm").replace(/^export\s+/, "");
   // ONE FARE EVERYWHERE (2026-11-05): the shared table + category helpers, and the category limits they read.
   const sharedA = app.indexOf("// ONE FARE EVERYWHERE (owner 2026-11-05"), sharedB = app.indexOf("// Firestore document IDs can't contain");
-  const limitsLine = (app.match(/^const CUSTOMER_LIST_CATEGORY_KG = \[[^\]]*\];$/m) || [""])[0];
-  if (sharedA < 0 || sharedB < sharedA || !limitsLine) throw new Error("shared fare table markers not found");
+  const limitsLine = ["CUSTOMER_LIST_CATEGORY_KG", "CATEGORY_FARE_LIMIT_KG"].map((n) => (app.match(new RegExp("^const " + n + " = \\[[^\\]]*\\];$", "m")) || [""])[0]).join("\n");
+  if (sharedA < 0 || sharedB < sharedA || limitsLine.split("\n").some((l) => !l)) throw new Error("shared fare table markers not found");
   const shared = limitsLine + "\n" + app.slice(sharedA, sharedB).replace(/^export\s+/gm, "");
   return new Function(hav + "\n" + region + "\n" + shared + `; return { calculateFare, priceOutstation, DEFAULT_FARE_TIERS, zoneFor, findFareTier, enforceMonotonicFares, haltOf, includedDays,
     daysUsed, buildBill, getAdminRouteOverride, findExactAdminRoute, getRouteScaleRatio, resolveFareForTier, applyDieselToSavedRates, findFareOutliers,

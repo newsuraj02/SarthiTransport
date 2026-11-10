@@ -2017,7 +2017,7 @@ export function categoryRouteFare(categoryIndex, tiers, table) {
 }
 // The vehicle tiers (by maxKg) a capacity category can hold: from the tier of its lightest possible capacity up to the tier of its limit.
 function categoryTierBounds(categoryIndex, list) {
-  const limits = CUSTOMER_LIST_CATEGORY_KG;
+  const limits = CATEGORY_FARE_LIMIT_KG; // the FARE limits (unchanged by the 2026-11-10 weight relabel), index-aligned with CUSTOMER_LIST_CATEGORY_KG
   const prev = categoryIndex > 0 ? limits[Math.min(categoryIndex, limits.length) - 1] : 0;
   const topFinite = Math.max(...list.filter((t) => t.maxKg < FARE_TIER_MAX_KG_UNCAPPED).map((t) => t.maxKg));
   // The uncapped (multi-axle trailer) tier belongs to the final "above 32000 kg" category only -- it must not price the 16-wheeler (25-32 t) category.
@@ -4052,10 +4052,14 @@ function hasFreshLocation(d, now = Date.now()) {
   return !!l && l.lat != null && l.lng != null && !!l.updatedAt && now - l.updatedAt <= NEARBY_DRIVER_STALE_MS;
 }
 // CUSTOMER VEHICLE-LIST CATEGORIES (owner 2026-11-04): the list is shown in these twelve capacity groups (+ a final "Above 32000 kg"), light -> heavy. A vehicle belongs to the
-// FIRST group whose limit its capacity does not exceed (a 600 kg vehicle is in "750 kg"); anything above the last limit goes in a final
+// FIRST group whose limit its capacity does not exceed (a 600 kg vehicle is in "700 kg"); anything above the last limit goes in a final
 // "Above 32000 kg" group so no listed vehicle is ever hidden (owner 2026-11-04: 3500 and 25000 kg were added; 16000 was already there -> 14 limits + "above").
 // Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
-const CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+// Owner 2026-11-10 (vehicle weights from the sheet): the limits 750 -> 700, 3500 -> 4000 and 9000 -> 10000 (same positions, same names, same pictures; stored
+// `categoryIndex` / `listCategory` values stay valid). A vehicle of 701-750 kg (an old 750 kg registration) is treated as 700 (see customerListCategoryIndex).
+// FARES DO NOT MOVE: the fare of a category is still read from the fare tiers by CATEGORY_FARE_LIMIT_KG (the limits before this change).
+const CUSTOMER_LIST_CATEGORY_KG = [500, 700, 1200, 1700, 2500, 4000, 5000, 7500, 10000, 12000, 16000, 20000, 25000, 32000];
+const CATEGORY_FARE_LIMIT_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
 // The table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app stores only `listCategory` = an index into THIS table, so it is
 // translated through it (to a weight limit) instead of being read against the new table, which would shift it by a category or two.
 const LEGACY_CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
@@ -4064,7 +4068,8 @@ function customerListCategoryLimitKg(index) {
   return index >= 0 && index < CUSTOMER_LIST_CATEGORY_KG.length ? CUSTOMER_LIST_CATEGORY_KG[index] : 999999;
 }
 function customerListCategoryIndex(capacityKg) {
-  const kg = Number(capacityKg) || 0;
+  let kg = Number(capacityKg) || 0;
+  if (kg > 700 && kg <= 750) kg = 700; // a vehicle registered at 750 kg sits in the 700 kg category (owner 2026-11-10)
   const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
   return i === -1 ? CUSTOMER_LIST_CATEGORY_KG.length : i;
 }
