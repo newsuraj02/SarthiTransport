@@ -3,7 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
-const { evaluateNewLoadDriver } = require("./tripLock");
+const { evaluateNewLoadDriver, RING_EXTRA_CATEGORIES } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
 const { buildFleetDispatchText, newLinkToken, tokenMatches, cleanMobile: fleetCleanMobile } = require("./fleetDispatch");
@@ -564,7 +564,8 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
 // escalating several unmatched bookings in the same run.
 // How many later rounds a still-unmatched booking gets (owner 2026-11-04: the radius tiers are gone with the GPS condition -- each round
 // simply rings whoever has become eligible since the previous round and was not alerted yet).
-const ESCALATION_ROUNDS = 3;
+// Owner 2026-11-10: the ring climbs ONE category per round and stops at +2 (RING_EXTRA_CATEGORIES): round 1 rings the next category up, round 2 the one after, then no more.
+const ESCALATION_ROUNDS = RING_EXTRA_CATEGORIES;
 // How old (from createdAt) a still-unmatched booking must be before the
 // FIRST escalation nudge goes out -- matches the owner's "2 minutes"
 // spec. Subsequent tiers (10km, then 20km) fire on later scheduled passes
@@ -594,11 +595,11 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
     const driver = doc.data();
     const tag = `${doc.id} (${driver.name || "?"})`;
     if (alreadyAlerted.has(doc.id)) { skipLog.push(`${tag}: already alerted for this booking`); return; }
-    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category up to its limit + 5000 kg (owner 2026-11-05: escalation widens the range).
+    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category plus ONE more category above it per round, +2 at most (owner 2026-11-10: round 1 = next category, round 2 = the one after, then it stops).
     // Same radius as the first ring (owner 2026-11-04), so a later round reaches anyone who has become eligible since the first ring
     // (went on duty, came inside the radius, finished a trip) and was not alerted yet.
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-    const verdict = evaluateNewLoadDriver(driver, load, { extended: true, mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()), fleetVehicles: driver.fleetOwner ? fleet.vehiclesFor(doc.id) : [], fleetMine: fleet.mineFor });
+    const verdict = evaluateNewLoadDriver(driver, load, { extended: tierIndex + 1, mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()), fleetVehicles: driver.fleetOwner ? fleet.vehiclesFor(doc.id) : [], fleetMine: fleet.mineFor });
     if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
     if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
     skipLog.push(`${tag}: NUDGING (round ${tierIndex + 1})`);

@@ -1219,16 +1219,16 @@ export function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
 
 // WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
-// (escalated: up to the picked limit + RING_EXTRA_RANGE_KG), and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
+// (escalated: one more category per round, +2 at most -- RING_EXTRA_CATEGORIES), and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
 // of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
-// Owner 2026-11-05: the FIRST ring is the picked category only; once escalation has started (the booking has `escalatedTierIndex` > 0) the range widens to
-// the picked category's limit + RING_EXTRA_RANGE_KG. MIRRORS categoryInRingRange in functions/tripLock.js.
-const RING_EXTRA_RANGE_KG = 5000;
-function ringCategoryLimitKg(idx) { return idx < CUSTOMER_LIST_CATEGORY_KG.length ? CUSTOMER_LIST_CATEGORY_KG[idx] : Infinity; }
+// Owner 2026-11-10: the FIRST ring is the picked category only; each escalation round (the booking's `escalatedTierIndex` = rounds fired) adds ONE category above it, +2 at most
+// (RING_EXTRA_CATEGORIES). MIRRORS categoryInRingRange in functions/tripLock.js.
+const RING_EXTRA_CATEGORIES = 2; // MIRRORS functions/tripLock.js: the ring climbs ONE category per round and stops at +2
 function ringCategoryInRange(dCat, lCat, extended) {
-  if (!extended) return dCat === lCat;
-  return dCat >= lCat && ringCategoryLimitKg(dCat) <= ringCategoryLimitKg(lCat) + RING_EXTRA_RANGE_KG;
+  const steps = extended === true ? 1 : Math.max(0, Math.min(Math.floor(Number(extended) || 0), RING_EXTRA_CATEGORIES));
+  if (steps === 0) return dCat === lCat;
+  return dCat >= lCat && dCat <= lCat + steps;
 }
 // The ring categories ARE the customer's vehicle-list categories (CUSTOMER_LIST_CATEGORY_KG, owner 2026-11-04): the customer taps a category and
 // every vehicle in it (ONLY that category, owner 2026-11-05) is rung. Index of the category a vehicle of this capacity belongs to; -1 = unknown capacity.
@@ -1260,7 +1260,7 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   const dCat = ringCategoryIndexOfCapacity(d.vehicleSpec?.capacityKg);
   if (dCat === -1) return false;
   const lCat = ringCategoryIndexOfLoad(b);
-  if (lCat !== -1 && !ringCategoryInRange(dCat, lCat, (Number(b.escalatedTierIndex) || 0) > 0)) return false;
+  if (lCat !== -1 && !ringCategoryInRange(dCat, lCat, Number(b.escalatedTierIndex) || 0)) return false;
   if (b.pickupLat != null && b.pickupLng != null && !d.fleetVehicleId) {
     const loc = d.lastKnownLocation;
     if (!loc || loc.lat == null || loc.lng == null) return false;
@@ -2017,7 +2017,7 @@ export function categoryRouteFare(categoryIndex, tiers, table) {
 }
 // The vehicle tiers (by maxKg) a capacity category can hold: from the tier of its lightest possible capacity up to the tier of its limit.
 function categoryTierBounds(categoryIndex, list) {
-  const limits = CATEGORY_FARE_LIMIT_KG; // the FARE limits (unchanged by the 2026-11-10 weight relabel), index-aligned with CUSTOMER_LIST_CATEGORY_KG
+  const limits = CUSTOMER_LIST_CATEGORY_KG; // owner 2026-11-10: a category is priced at ITS OWN weight limit (the same formula, read at 700 / 1000 / 1700 / 2000 / 4000 / 10000 kg ...)
   const prev = categoryIndex > 0 ? limits[Math.min(categoryIndex, limits.length) - 1] : 0;
   const topFinite = Math.max(...list.filter((t) => t.maxKg < FARE_TIER_MAX_KG_UNCAPPED).map((t) => t.maxKg));
   // The uncapped (multi-axle trailer) tier belongs to the final "above 32000 kg" category only -- it must not price the 16-wheeler (25-32 t) category.
@@ -4057,13 +4057,13 @@ function hasFreshLocation(d, now = Date.now()) {
 // Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
 // Owner 2026-11-10 (vehicle weights from the sheet): 750 -> 700, 3500 -> 4000, 9000 -> 10000; then "1000 kg and 2000 kg are still missing" (added), "5000 kg vehicles go into
 // the 4000 kg category" and "12000 / 16000 kg vehicles go into the 10000 kg category" (those three categories are gone) -> 13 limits + "above 32000 kg" = 14 rows.
-// Three index-aligned tables (change them together; the server mirrors them in functions/tripLock.js):
+// Two index-aligned tables (change them together; the server mirrors them in functions/tripLock.js):
 //   CUSTOMER_LIST_CATEGORY_KG  = the limit shown on the row ("4000 kg") and stored on a booking (`listCategoryKg`);
 //   CATEGORY_MEMBER_MAX_KG     = the heaviest vehicle that is IN the category (4000 takes 2501-5000 kg, 10000 takes 7501-16000 kg, 700 takes 501-750 kg);
-//   CATEGORY_FARE_LIMIT_KG     = the weight whose fare tier prices the category (so NO existing category's price moved; the new 1000 / 2000 rows read the 1000 / 2000 kg tiers).
+// A category is PRICED at its own limit (`categoryTierBounds`): the SAME fare formula (calculateFare / the fare tiers, untouched) read at the category's weight -- 4000 kg reads the first tier that
+// holds 4000 kg, 10000 kg the 10000 kg tier, and so on (owner 2026-11-10: "sync the fare price according to the weight category we just created, the formula remains the same").
 const CUSTOMER_LIST_CATEGORY_KG = [500, 700, 1000, 1200, 1700, 2000, 2500, 4000, 7500, 10000, 20000, 25000, 32000];
 const CATEGORY_MEMBER_MAX_KG = [500, 750, 1000, 1200, 1700, 2000, 2500, 5000, 7500, 16000, 20000, 25000, 32000];
-const CATEGORY_FARE_LIMIT_KG = [500, 750, 1000, 1200, 1700, 2000, 2500, 3500, 7500, 9000, 20000, 25000, 32000];
 // The table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app stores only `listCategory` = an index into THIS table, so it is
 // translated through it (to a weight limit) instead of being read against the new table, which would shift it by a category or two.
 const LEGACY_CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
