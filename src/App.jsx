@@ -1089,9 +1089,13 @@ const DEFAULT_FARE_TIERS = [
   { maxKg: 1200, label: "बोलेरो पिकअप 1.2T / इंट्रा V30", weightLabel: "1.2 टन", heavy: false, innerFix: 370, innerPer: 26, outerMin: 550, outerPer: 24, tollPerKm: 1.5 },
   { maxKg: 1250, label: "सुपर ऐस / दोस्त", weightLabel: "1.25 टन", heavy: false, innerFix: 390, innerPer: 28, outerMin: 600, outerPer: 25, tollPerKm: 1.5 },
   { maxKg: 1500, label: "पिकअप 8 फीट / बोलेरो पिकअप", weightLabel: "1.5 टन", heavy: false, innerFix: 480, innerPer: 33, outerMin: 800, outerPer: 27, tollPerKm: 1.5 },
+  // 1700 kg (owner 2026-11-10, "go with C"): its OWN tier so "Pickup 8ft" (1700) is priced apart from "Pickup 9ft" (2000); every number sits 40 % of the way from the 1500 kg tier to the 2000 kg tier.
+  { maxKg: 1700, label: "पिकअप 8 फीट (1.7 टन)", weightLabel: "1.7 टन", heavy: false, innerFix: 544, innerPer: 33, outerMin: 880, outerPer: 28, tollPerKm: 1.5 },
   { maxKg: 2000, label: "बड़ा दोस्त / इंट्रा V50 (9.5 फीट)", weightLabel: "2 टन", heavy: false, innerFix: 640, innerPer: 34, outerMin: 1000, outerPer: 30, tollPerKm: 1.5 },
   { maxKg: 2500, label: "टाटा 407 (10 फीट)", weightLabel: "2.5 टन", heavy: false, innerFix: 780, innerPer: 37, outerMin: 1300, outerPer: 31, tollPerKm: 1.5 },
   { maxKg: 3500, label: "14 फीट आयशर ट्रक", weightLabel: "3.5 टन", heavy: false, innerFix: 1100, innerPer: 44, outerMin: 1800, outerPer: 32, tollPerKm: 1.5 },
+  // 4000 kg (owner 2026-11-10): its OWN tier so the "14ft truck · 4000 kg" category is priced at 4000 kg, not at the 5000 kg tier; one third of the way from the 3500 kg tier to the 5000 kg tier.
+  { maxKg: 4000, label: "14 फीट आयशर ट्रक (4 टन)", weightLabel: "4 टन", heavy: false, innerFix: 1330, innerPer: 47, outerMin: 2130, outerPer: 33, tollPerKm: 2 },
   // innerFix/innerPer/outerMin/outerPer/tollPerKm for 5000-12000 and
   // 18000/21000 were adjusted from their original guide-sourced values to
   // remove "heavier vehicle is cheaper than a lighter one" reversals that
@@ -1297,7 +1301,7 @@ export const DIESEL_BASELINE_PRICE_PER_LITRE = 98;
 // in one place, so the two mechanisms can never quietly drift apart.
 export const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
   500: 18, 750: 16.5, 800: 16, 900: 15.2, 1000: 14.5, 1200: 13, 1250: 12.5,
-  1500: 11, 2000: 9.8, 2500: 9, 3500: 7.2, 5000: 6, 7000: 5.4, 7500: 5.2,
+  1500: 11, 1700: 10.5, 2000: 9.8, 2500: 9, 3500: 7.2, 4000: 6.8, 5000: 6, 7000: 5.4, 7500: 5.2,
   9000: 4.8, 9500: 4.6, 10000: 4.5, 12000: 4.2, 16000: 3.8, 18000: 3.6,
   21000: 3.4, 25000: 3.2, 30000: 3,
   [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
@@ -1594,9 +1598,9 @@ export const KM_PER_DAY = 500;
 // Per-vehicle halting ₹/day, keyed by tier maxKg (guide section 5C's table).
 const HALT_PER_DAY_BY_MAXKG = {
   500: 300, 750: 500, 800: 500, 900: 500, 1000: 500,
-  1200: 700, 1250: 700, 1500: 700,
+  1200: 700, 1250: 700, 1500: 700, 1700: 700,
   2000: 800, 2500: 900,
-  3500: 1000, 5000: 1200,
+  3500: 1000, 4000: 1100, 5000: 1200,
   7000: 1300, 7500: 1200, 9000: 1300, 9500: 1500, 10000: 1200, 12000: 1300,
   16000: 1500, 18000: 2000, 21000: 1800, 25000: 1800, 30000: 2500,
   [FARE_TIER_MAX_KG_UNCAPPED]: 3000,

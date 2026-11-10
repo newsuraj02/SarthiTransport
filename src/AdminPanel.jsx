@@ -2160,8 +2160,9 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
 function savedRateCategoryText(r, fareTiers, lang) {
   const t = Number(r && r.tierMaxKg); if (!(t > 0)) return r && r.veh ? r.veh : "";
   const cats = customerCategoriesForTier(t, fareTiers);
-  const i = cats.find((c) => categoryTopTier(c, fareTiers).maxKg === t) ?? cats[0];
-  return i == null ? (r.veh || "") : `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
+  const i = cats.find((c) => categoryTopTier(c, fareTiers).maxKg === t);
+  // A rate saved on a tier that is no category's top any more (5000 / 12000 / 16000 kg ...) is NOT named after a category (owner 2026-11-10: the 4000 kg category must not show a 5000 kg vehicle): it is shown by its weight and marked unused.
+  return i == null ? `${formatKgLabel(t, lang)} \u00b7 ${lang === "en" ? "old rate, no category uses it" : lang === "mr" ? "जुना दर, कोणतीही श्रेणी वापरत नाही" : "पुराना रेट, किसी श्रेणी में उपयोग नहीं"}` : `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
 }
 function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, fareTiers, lang, onEditAdminRate, onClose }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
