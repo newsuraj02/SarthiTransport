@@ -22,7 +22,7 @@ import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
-  syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
+  syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, customerListCategoryOptions, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
@@ -1173,9 +1173,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
                               </label>
                               <label className="text-[11px]">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
-                                <input type="number" value={approvalEditDraft.capacityKg} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Weight category" : lang === "mr" ? "वजन वर्ग" : "वज़न वर्ग"}</span>
+                                <select data-admin-weight-category value={String(approvalEditDraft.capacityKg ?? "")} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                                  {!customerListCategoryOptions(lang).some((o) => String(o.capacityKg) === String(approvalEditDraft.capacityKg)) && <option value={String(approvalEditDraft.capacityKg ?? "")}>{approvalEditDraft.capacityKg ? `${lang === "en" ? "Current" : lang === "mr" ? "सध्याचे" : "मौजूदा"}: ${approvalEditDraft.capacityKg} kg` : "—"}</option>}
+                                  {customerListCategoryOptions(lang).map((o) => <option key={o.index} value={String(o.capacityKg)}>{o.label}</option>)}
+                                </select>
                               </label>
                               <label className="text-[11px]">
                                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
@@ -3263,9 +3266,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
               </label>
               <label className="text-[11px]">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
-                <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Weight category" : lang === "mr" ? "वजन वर्ग" : "वज़न वर्ग"}</span>
+                <select data-admin-weight-category value={String(editDraft.capacityKg ?? "")} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                                  {!customerListCategoryOptions(lang).some((o) => String(o.capacityKg) === String(editDraft.capacityKg)) && <option value={String(editDraft.capacityKg ?? "")}>{editDraft.capacityKg ? `${lang === "en" ? "Current" : lang === "mr" ? "सध्याचे" : "मौजूदा"}: ${editDraft.capacityKg} kg` : "—"}</option>}
+                                  {customerListCategoryOptions(lang).map((o) => <option key={o.index} value={String(o.capacityKg)}>{o.label}</option>)}
+                                </select>
               </label>
               <label className="text-[11px]">
                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>

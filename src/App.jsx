@@ -31,6 +31,8 @@ import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
+import VehicleModelPicker from "./VehicleModelPicker.jsx";
+import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
@@ -2784,9 +2786,9 @@ const PERMISSION_CARDS_ENABLED = false;
 const DRIVER_KYC_FIELDS = [
   { key: "photo", en: "Your photo", hi: "आपकी फोटो", mr: "तुमचा फोटो" },
   { key: "dl", en: "Driving license photo", hi: "ड्राइविंग लाइसेंस की फोटो", mr: "ड्रायव्हिंग लायसन्सचा फोटो" },
-  { key: "vehicleName", en: "Vehicle name", hi: "गाड़ी का नाम", mr: "गाडीचे नाव" },
+  { key: "vehicleName", en: "Vehicle company & model", hi: "गाड़ी की कंपनी और मॉडल", mr: "गाडीची कंपनी आणि मॉडेल" },
   { key: "vehicleNumber", en: "Vehicle registered number", hi: "गाड़ी रजिस्टर्ड नंबर", mr: "गाडी रजिस्टर्ड नंबर" },
-  { key: "capacityKg", en: "Vehicle capacity (kg)", hi: "गाड़ी की क्षमता (किलोग्राम)", mr: "गाडीची क्षमता (किलोग्राम)" },
+  { key: "capacityKg", en: "Vehicle weight (set from your model)", hi: "गाड़ी का वज़न (मॉडल से अपने आप)", mr: "गाडीचे वजन (मॉडेलवरून आपोआप)" },
   { key: "vehicleSide", en: "Vehicle photo (side view)", hi: "गाड़ी की फोटो (साइड से)", mr: "गाडीचा फोटो (बाजूने)" },
 ];
 const kycHasPhoto = (p) => !!(p && (typeof p === "string" ? p.trim() : p.url));
@@ -4028,9 +4030,9 @@ function customerListCategoryIndex(capacityKg) {
 // "Above 32000 kg" group, in the customer's language (hi / mr translated, same wording style as the rest of the app: चक्का / चाकी, फीट / फूट);
 // the weight limit is the small line under the name.
 const CUSTOMER_LIST_CATEGORY_NAMES = {
-  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "14ft Eicher", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
-  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "14 फीट आयशर", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "20 टन कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
-  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "14 फूट आयशर", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "20 टन कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
+  en: ["3 wheeler", "Mini truck", "Pickup", "Pickup 8ft", "10ft truck", "14ft truck", "17ft truck", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
+  hi: ["3 व्हीलर", "मिनी ट्रक", "पिकअप", "पिकअप 8 फीट", "10 फीट ट्रक", "14 फीट ट्रक", "17 फीट ट्रक", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "20 टन कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
+  mr: ["3 व्हीलर", "मिनी ट्रक", "पिकअप", "पिकअप 8 फूट", "10 फूट ट्रक", "14 फूट ट्रक", "17 फूट ट्रक", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "20 टन कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
 };
 export function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
@@ -5380,7 +5382,7 @@ async function runDriverSignupFinalize(pending, driver, deps) {
   save({
     ...driver, name: pending.name, referredBy: ref && ref !== mob ? ref : null, referralCredited: false,
     kyc: "Pending", photo, docs: { dl, photo },
-    vehicleSpec: { type: typeKey, photo: null, photoFront: null, photoSide: side, capacityKg: Number(pending.capacityKg) || null, vehicleNumber: String(pending.vehicleNumber || "").trim().toUpperCase() },
+    vehicleSpec: { type: typeKey, photo: null, photoFront: null, photoSide: side, capacityKg: Number(pending.capacityKg) || null, vehicleNumber: String(pending.vehicleNumber || "").trim().toUpperCase(), vehicleCompany: pending.vehicleCompany || null, vehicleModel: pending.vehicleModel || null },
   });
 }
 // END driver sign-up finalize
@@ -5612,7 +5614,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
           },
           setDriver, addVehicleType, vehicleTypes, slugify, ref,
         });
-        ["sarthi_driverKyc_vehicleTypeName", "sarthi_driverKyc_capacityKg", "sarthi_driverKyc_vehicleNumber", "sarthi_driverKyc_acceptedDocsTerms"].forEach((k) => { try { window.localStorage.removeItem(k); } catch { /* storage unavailable */ } });
+        ["sarthi_driverKyc_vehicleTypeName", "sarthi_driverKyc_capacityKg", "sarthi_driverKyc_vehicleChoice", "sarthi_driverKyc_vehicleCategory", "sarthi_driverKyc_vehicleNumber", "sarthi_driverKyc_acceptedDocsTerms"].forEach((k) => { try { window.localStorage.removeItem(k); } catch { /* storage unavailable */ } });
         setName("");
         setFinalizeState("applied");
         onFirstSignupComplete?.();
@@ -10701,33 +10703,19 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [acceptedTerms, setAcceptedTerms] = usePersistedState("sarthi_driverKyc_acceptedDocsTerms", false, !deferred);
 
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
-  // The driver just types their vehicle's name — no dropdown of preset
-  // types to pick from. Resolved to a vehicleTypes entry (reusing a
-  // matching one by name, or creating a new one) only at submit time.
-  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : (driver.vehicleSpec?.type || ""), !deferred);
+  // The driver picks COMPANY -> MODEL from the sheet (src/vehicleModels.js, owner 2026-11-10) and the weight is filled in from it -- there is NO weight box and no
+  // typed vehicle name. "My model is not listed" asks for a weight category instead. A driver who already has a vehicle saved can keep it ("saved"), so opening
+  // the form never rewrites a weight. Resolved to a vehicleTypes entry (reusing a matching one by name, or creating one) only at submit time.
+  const savedVehicle = { name: existingVehicleType ? (existingVehicleType.labelEn || existingVehicleType.label) : (driver.vehicleSpec?.type || ""), kg: Number(driver.vehicleSpec?.capacityKg) || 0 };
+  const [vehicleChoice, setVehicleChoice] = usePersistedState("sarthi_driverKyc_vehicleChoice", savedVehicle.name && savedVehicle.kg > 0 ? VEHICLE_CHOICE_SAVED : "", !deferred);
+  const [vehicleCategory, setVehicleCategory] = usePersistedState("sarthi_driverKyc_vehicleCategory", null, !deferred);
+  const categoryOptions = customerListCategoryOptions(lang);
+  const pickedVehicle = resolveVehicleChoice(vehicleChoice, { categoryOptions, categoryIndex: vehicleCategory, saved: savedVehicle });
+  const vehicleTypeName = pickedVehicle ? pickedVehicle.name : "";
+  const capacityKg = pickedVehicle ? String(pickedVehicle.kg) : "";
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null, !deferred);
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null, !deferred);
-  // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
-  // below) -- String(...) here so this always starts as a string, since
-  // canSubmit/kycStepCompleted below call .trim() on it. Skipping this cast
-  // crashed the whole KYC screen (capacityKg.trim is not a function) for
-  // any driver whose vehicleSpec already had a numeric capacityKg set --
-  // e.g. reopening the KYC & Vehicle settings screen after a first submission.
-  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "", !deferred);
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "", !deferred);
-
-  // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
-  // vehicle name matches a known model — but only if the driver hasn't
-  // already touched it, so it never clobbers a manual entry. Length/width/
-  // height used to be collected too; dropped from the visible KYC form per
-  // the profile-simplification pass — capacity alone is what bidding needs.
-  const matchedModelSpec = lookupVehicleModelSpec(vehicleTypeName);
-  useEffect(() => {
-    if (!matchedModelSpec) return;
-    if (capacityKg) return;
-    setCapacityKg(String(matchedModelSpec.capacityKg));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicleTypeName]);
 
   // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
   // typing the same vehicle name as another driver doesn't fragment the
@@ -10800,23 +10788,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     if (f) startPhotoUpload(setVal, key)(f);
   };
 
-  // Defensive re-coercion, not just at capacityKg's usePersistedState
-  // default above: a device that already has an OLDER saved draft for
-  // "sarthi_driverKyc_capacityKg" -- e.g. saved back when nothing called
-  // .trim() on it yet, if vehicleSpec.capacityKg (a number) was its
-  // starting value at the time -- has that raw number sitting in
-  // localStorage, and a saved draft always wins over the initial-value
-  // default on every future load. String(...) at the actual point of use
-  // means it can't crash regardless of what's already stored on a given
-  // device.
+  // The weight comes from the picked model / weight category (src/vehicleModels.js), never from typing, so it is always a real positive number once a vehicle is picked.
   const capacityKgStr = String(capacityKg ?? "");
-  // A non-empty string alone isn't enough — "0" (or "abc", or "-5") passes
-  // .trim() truthy but Number(capacityKg) || undefined at submit time below
-  // then silently discards it as undefined, so KYC "succeeds" with no
-  // capacity ever actually saved. Found via Admin Settings' fare-tier
-  // breakdown turning up drivers with no capacity set despite this field
-  // supposedly being required. Requiring a real positive number here closes
-  // that gap for every future submission.
   const capacityKgValid = Number(capacityKgStr.trim()) > 0;
   // Owner rule (2026-10-27): every KYC field is mandatory except vehicle
   // dimensions. Same list (getKycMissingFromValues) the sign-up checklist,
@@ -10831,7 +10804,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // the only vehicle photo that matters to a customer browsing bids, so
   // dropping Front halves the photo-upload burden on signup without losing
   // anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid && !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // A first-time submission within this driver's own 30-day trial used to
   // skip the admin approval wait entirely (straight to "Approved") --
@@ -10843,7 +10816,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const submit = () => {
     if (!canSubmit) return;
     if (deferred) {
-      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim() });
+      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim(), vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null });
       return;
     }
     setDriver({
@@ -10859,12 +10832,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         // silently vanishes from what gets saved).
         capacityKg: Number(capacityKg) || null,
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
+        // Which catalogue model was picked (null when "not listed" / kept as saved) -- for Admin; the weight above is what everything else reads.
+        vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null,
       },
     });
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
-    setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
-    setCapacityKg(""); setVehicleNumber(""); setAcceptedTerms(false);
+    setDl(null); setPhoto(null); setVehicleChoice(""); setVehicleCategory(null); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
+    setVehicleNumber(""); setAcceptedTerms(false);
     if (isFirstSubmission) onFirstSubmit?.();
   };
 
@@ -10883,7 +10858,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
       {/* Owner 2026-10-31: very first line of the KYC note. */}
       <p className="text-xs font-bold mb-1" style={{ color: C.safety }}>{lang === "en" ? "Without these documents you won't be able to get loads." : lang === "mr" ? "या कागदपत्रांशिवाय तुम्हाला लोड मिळू शकणार नाहीत." : "इन दस्तावेज़ों के बिना आपको लोड नहीं मिल पाएँगे।"}</p>
-      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, and enter your vehicle's name, number and capacity." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीचे नाव, नंबर व क्षमता टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी का नाम, नंबर व क्षमता डालें।"}</p>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, choose your vehicle's company and model, and enter its number." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीची कंपनी व मॉडेल निवडा, आणि नंबर टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी की कंपनी व मॉडल चुनें, और नंबर डालें।"}</p>
 
       {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved
           driver whose saved KYC lacks a mandatory field isn't verified yet.
@@ -10949,25 +10924,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           onChange={(e) => setVehicleNumber(e.target.value)} />
       </GuidedStep>
 
-      <GuidedStep {...kycStepProps(3)} lang={lang}>
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"} <span style={{ color: C.safety }}>*</span></label>
-        {matchedModelSpec && (
-          <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
-            {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
-          </p>
-        )}
-        <div className="mb-4">
-          <input type="text" inputMode="numeric" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKgStr} onChange={(e) => setCapacityKg(digitsOnly(e.target.value, 6))} />
-        </div>
-      </GuidedStep>
-
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
       <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.metallicGold }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : lang === "mr" ? "स्पष्ट भरा — कस्टमरला हीच दिसेल" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
-        <GuidedStep {...kycStepProps(4)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"} <span style={{ color: C.safety }}>*</span></label>
-          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
+        <GuidedStep {...kycStepProps(3)} lang={lang}>
+          <VehicleModelPicker lang={lang} choice={vehicleChoice} setChoice={setVehicleChoice} categoryIndex={vehicleCategory} setCategoryIndex={setVehicleCategory}
+            categoryOptions={categoryOptions} saved={savedVehicle} resolved={pickedVehicle} inputCls={inputCls} inputStyle={inputStyle}
+            labelColor={C.inkSoft} requiredColor={C.safety} okColor={C.success} />
         </GuidedStep>
 
         <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"} <span style={{ color: C.safety }}>*</span></label>
@@ -10977,7 +10941,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             to DriverProfileEdit's own document list. Halves the photo-upload
             burden a new driver faces during signup. */}
         <div className="max-w-[180px] mb-2">
-          <GuidedStep {...kycStepProps(5)} lang={lang}>
+          <GuidedStep {...kycStepProps(4)} lang={lang}>
             <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={startPhotoUpload(setVehiclePhotoSide, "vehicleSide")}>
               <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
                 {uploadingKeys.vehicleSide ? (
