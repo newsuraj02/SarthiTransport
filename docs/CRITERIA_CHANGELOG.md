@@ -389,3 +389,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Vehicle picker: first dropdown placeholder reads 'Select vehicle' (owner 2026-11-10)
 - changed (1): code:src/VehicleModelPicker.jsx
+
+## 2026-11-10 -- Drivers' Set Fare + Return Load use the category tier; Saved Routes show the category (owner 2026-11-10)
+- changed (7): app:markReturnModePatch, code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminRouteFares, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/App.jsx#markReturnModePatch, code:src/App.jsx#SetFareForm
+- added (1): code:src/AdminPanel.jsx#savedRateCategoryText

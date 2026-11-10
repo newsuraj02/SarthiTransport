@@ -2144,7 +2144,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
           prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
       )}
       {savedRoutesOpen && (
-        <AdminSavedRoutes adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} lang={lang}
+        <AdminSavedRoutes adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} lang={lang}
           onEditAdminRate={openCalculator} onClose={() => setSavedRoutesOpen(false)} />
       )}
     </div>
@@ -2155,7 +2155,15 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
 // route+tier+zone+return-state (see the guide's own route identity,
 // section 6/8). Tapping a card reopens the calculator pre-filled
 // ("रूट अपडेट करें" there); that's still the only place a save happens.
-function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditAdminRate, onClose }) {
+// A saved rate's vehicle, named as the CATEGORY it prices (owner 2026-11-10: one category system everywhere) instead of the free-text tier label stored at save time:
+// the category whose top tier is this rate's tier, else the first category that holds that tier (rates saved on a tier that is no longer a category top, e.g. 5000 / 12000 / 16000 kg).
+function savedRateCategoryText(r, fareTiers, lang) {
+  const t = Number(r && r.tierMaxKg); if (!(t > 0)) return r && r.veh ? r.veh : "";
+  const cats = customerCategoriesForTier(t, fareTiers);
+  const i = cats.find((c) => categoryTopTier(c, fareTiers).maxKg === t) ?? cats[0];
+  return i == null ? (r.veh || "") : `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
+}
+function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, fareTiers, lang, onEditAdminRate, onClose }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const deleteRate = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); };
   const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -2194,7 +2202,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
                   <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                    {r.veh ? `${r.veh} · ` : ""}{r.estimatedKm != null ? `${formatTripKm(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
+                    {savedRateCategoryText(r, fareTiers, lang) ? `${savedRateCategoryText(r, fareTiers, lang)} · ` : ""}{r.estimatedKm != null ? `${formatTripKm(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
                     {r.rateBasis === "ton" && r.tons && r.perTon ? ` · ${r.tons} ${lang === "en" ? "t" : "टन"} × ${fmt(r.perTon)}/${lang === "en" ? "t" : "टन"}` : ""}
                     {r.isReturn ? ` · ${lang === "en" ? "Return" : lang === "mr" ? "रिटर्न" : "रिटर्न"} −${r.returnPct || 15}%` : ""}
                     {r.manual ? ` · ${lang === "en" ? "Manual" : lang === "mr" ? "मॅन्युअल" : "मैनुअल"}` : ""}

@@ -1553,7 +1553,7 @@ function markReturnModePatch(driver, booking) {
     returnAtLng: booking.dropLng ?? null,
     returnHomeLat: driver.returnHomeLat ?? booking.pickupLat ?? null,
     returnHomeLng: driver.returnHomeLng ?? booking.pickupLng ?? null,
-    returnTierMaxKg: findFareTier(driver.vehicleSpec?.capacityKg, DEFAULT_FARE_TIERS).maxKg,
+    returnTierMaxKg: categoryTopTier(customerListCategoryIndex(driver.vehicleSpec?.capacityKg), DEFAULT_FARE_TIERS).maxKg, // the driver's CATEGORY tier (the one a booking in that category carries), not the raw tier of his weight
     returnUntil: Date.now() + RETURN_HOURS * 3600e3,
   };
 }
@@ -11336,7 +11336,8 @@ function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre,
   // (getRouteAverageFare) only ever blends quotes from similarly-sized
   // vehicles instead of mixing a mini-truck's number with a big truck's.
   const myCapacityKg = driver.vehicleSpec?.capacityKg || null;
-  const myTier = myCapacityKg != null ? findFareTier(myCapacityKg, fareTiers) : null;
+  // Owner 2026-11-10: the driver is in the SAME category as on the customer list / the ring / the Admin calculator, and Set Fare prices that category's tier (categoryTopTier), exactly the row Admin sets.
+  const myTier = myCapacityKg != null ? categoryTopTier(customerListCategoryIndex(myCapacityKg), fareTiers) : null;
 
   // Owner 2026-11-07 ("sync the Admin rate calculator and the drivers' Set Fare ... keep the rate 1-3 km consistent in both"): the SAME numbers the Admin Rate Calculator
   // shows for this vehicle on this route -- the 1-3 km Fixed Rate (Minimum charge outside the city; routeFixedRate: Admin's saved route rate -> scaled -> the tier's own),

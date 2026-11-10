@@ -686,6 +686,17 @@ const checks = [
       && fn.VEHICLE_MODEL_CATALOG.every((c) => c.models.every((mm) => fn.categoryIndexForKg(mm.kg, cats) === idx(mm.kg)));
     return same && tables && place && fareTiers && inflight && models;
   }],
+  ["DRIVER SIDE USES THE SAME CATEGORIES AS THE CUSTOMER LIST AND THE ADMIN CALCULATOR (owner 2026-11-10: 'make the Admin calculator categories consistent in the customer vehicle list and the categorization in Drivers too'): a driver's Set Fare prices HIS CATEGORY's tier (the very row Admin sets in the calculator and the tier a booking in that category carries), and his Return Load tier is that same category tier (so the Return Load badge matches the booking); a 5000 kg driver is therefore the 4000 / 14ft truck category (tier 3500), a 12000 / 16000 kg driver the 10000 / 6 wheeler category (tier 9000), a 750 kg driver the 700 / Mini truck category (tier 750); nothing on the driver side picks a vehicle's fare tier from its raw weight any more", () => {
+    const app0 = read("src/App.jsx");
+    const pre = ["CUSTOMER_LIST_CATEGORY_KG", "CATEGORY_MEMBER_MAX_KG", "customerListCategoryIndex"].map((n) => (extractBlock(app0, n) || "").replace(/^export\s+/, "")).join("\n");
+    const m = new Function(pre + "; return { customerListCategoryIndex };")();
+    const E = loadFareEngine(root); const T = E.DEFAULT_FARE_TIERS;
+    const tierOf = (kg) => E.categoryTopTier(m.customerListCategoryIndex(kg), T).maxKg;
+    const behaviour = tierOf(750) === 750 && tierOf(1000) === 1000 && tierOf(1700) === 2000 && tierOf(2000) === 2000 && tierOf(5000) === 3500 && tierOf(12000) === 9000 && tierOf(16000) === 9000 && tierOf(20000) === 21000 && tierOf(35000) === 999999;
+    const wired = app0.includes("const myTier = myCapacityKg != null ? categoryTopTier(customerListCategoryIndex(myCapacityKg), fareTiers) : null;") && app0.includes("returnTierMaxKg: categoryTopTier(customerListCategoryIndex(driver.vehicleSpec?.capacityKg), DEFAULT_FARE_TIERS).maxKg")
+      && !app0.includes("const myTier = myCapacityKg != null ? findFareTier(myCapacityKg, fareTiers) : null;") && !app0.includes("returnTierMaxKg: findFareTier(");
+    return behaviour && wired;
+  }],
   ["ONE VEHICLE PICKER EVERYWHERE (owner 2026-11-10: 'make this consistent throughout the Admin and Driver, in every form and section where category are entered'): the Driver KYC form, BOTH Admin driver edit forms (KYC approval + driver list) and the fleet Add-vehicle form use the ONE VehicleModelPicker (company -> model, weight from the sheet; 'not listed' -> a weight category; 'keep current vehicle' only while the saved weight is sane 300..35000); no free vehicle-type dropdown, no typed weight, no separate weight-category select; a saved weight outside 300..35000 (1.7, 250000) is never kept", () => {
     const adm = stripComments(read("src/AdminPanel.jsx"), "AdminPanel.jsx"), fo = stripComments(read("src/FleetOwner.jsx"), "FleetOwner.jsx"), a = stripComments(read("src/App.jsx"), "App.jsx");
     const forms = (adm.match(/<AdminVehiclePick /g) || []).length === 2 && !adm.includes("data-admin-weight-category") && !adm.includes('"Vehicle type" : lang === "mr"')
