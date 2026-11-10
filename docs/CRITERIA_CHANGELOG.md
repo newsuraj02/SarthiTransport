@@ -365,3 +365,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Stray-file invariant covers .txt/.csv output (drivers.txt incident)
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-10 -- Owner 2026-11-10: Admin dashboard Customers tile (how many customers installed the app)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet

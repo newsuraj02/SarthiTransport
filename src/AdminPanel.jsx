@@ -1485,6 +1485,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
 
+      {/* Customers -- how many have installed the app (owner 2026-11-10: "as there is a drivers section in the dashboard, add a customer section, just how many
+          people have installed the app"). A customer account only exists once someone has installed the app and signed up, so the count is every customer
+          account; customers are not tracked for inactivity the way drivers are (no last-seen stamp), so there is no uninstalled split here. Opens the Customers tab. */}
+      <button data-customers-installed-tile onClick={() => onNavigate("customers")} className="w-full rounded-xl p-4 mb-5 shadow-sm flex items-center justify-between gap-3 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div>
+          <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+            <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: C.success }} />
+            {lang === "en" ? "Customers" : lang === "mr" ? "ग्राहक" : "कस्टमर"}
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}><b data-customers-installed-count style={{ color: C.ink }}>{(customers || []).length}</b> {lang === "en" ? "customers have installed the app" : lang === "mr" ? "ग्राहकांनी अ‍ॅप इन्स्टॉल केले आहे" : "कस्टमर ने ऐप इंस्टॉल किया है"}</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+
       {/* Bookings by Status -- vertical columns, real counts from bookings
           over the selected window. Completed excluded (dwarfs the rest);
           still shown in full on the Bookings tab via View Details. */}
