@@ -23,7 +23,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
   syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, customerListCategoryOptions, vehicleTypeKeyForName, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
-  suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate,
+  suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate, categoryLoadCapacityKg,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText,
@@ -2314,6 +2314,9 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   }, [pickupCoords, dropCoords, mapsReady]);
 
   const tier = selectedMaxKg != null ? fareTiers.find((t) => t.maxKg === selectedMaxKg) : null;
+  // (hoisted 2026-11-10) the category rows + the picked row: the picked row's LIMIT is the load the By-ton boxes work with.
+  const categoryRows = Array.from({ length: customerListCategoryCount() }, (_, i) => ({ i, top: categoryTopTier(i, fareTiers) }));
+  const selectedCategoryRow = selectedMaxKg == null ? null : (categoryRows.find((r) => r.top.maxKg === selectedMaxKg) || categoryRows.find((r) => customerCategoriesForTier(selectedMaxKg, fareTiers).includes(r.i)) || null);
   // Zone is fully auto-detected now (guide section 5A's zoneFor, the same
   // city-list logic a real booking resolves with) -- no more manual
   // inside/outside toggle for Admin to get wrong or forget to flip.
@@ -2407,9 +2410,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     ? customerCategoriesForTier(tier.maxKg, fareTiers).map((i) => ({ name: customerListCategoryName(i, lang), fare: categoryRouteFare(i, fareTiers, fareTable).fare }))
     : [];
   // Per ton (owner 2026-11-05): tons default to the vehicle's full capacity, the per-ton rate to the system suggestion; the route rate is then per ton x tons.
-  const capacityTons = tier ? tier.maxKg / 1000 : 0;
+  const loadKg = tier ? categoryLoadCapacityKg(selectedCategoryRow ? selectedCategoryRow.i : -1, tier) : 0;
+  const capacityTons = loadKg / 1000;
   const tonsValue = rateBasis === "ton" ? (tonsTouched ? tons : (capacityTons > 0 && capacityTons < 1000 ? String(capacityTons) : "")) : "";
-  const perTonSuggested = tier ? suggestPerTonRate(suggestedTotal, tier.maxKg) : null;
+  const perTonSuggested = tier ? suggestPerTonRate(suggestedTotal, loadKg) : null;
   const perTonValue = rateBasis === "ton" ? (perTonTouched ? perTon : (perTonSuggested != null ? String(perTonSuggested) : "")) : "";
   const tonTotal = rateBasis === "ton" ? tonRouteTotal(perTonValue, tonsValue) : null;
   const effectiveTotal = rateBasis === "ton" ? tonTotal : suggestedTotal;
@@ -2567,10 +2571,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // The vehicle picker lists the CUSTOMER LIST'S weight categories, exactly (owner 2026-11-05: "match these vehicle weight categories with the customer vehicle weight
   // categories"): one row per category (limit + name), light -> heavy. A row stands for the category's TOP vehicle tier -- the tier whose fare the customer is quoted --
   // so what Admin sets here is what the customer sees. (A rate saved earlier on a lower tier still opens on that tier, labelled with its category.)
-  const categoryRows = Array.from({ length: customerListCategoryCount() }, (_, i) => ({ i, top: categoryTopTier(i, fareTiers) }));
   const lightTiers = categoryRows.filter((r) => !r.top.heavy);
   const heavyTiers = categoryRows.filter((r) => r.top.heavy);
-  const selectedCategoryRow = selectedMaxKg == null ? null : (categoryRows.find((r) => r.top.maxKg === selectedMaxKg) || categoryRows.find((r) => customerCategoriesForTier(selectedMaxKg, fareTiers).includes(r.i)) || null);
   const categoryRowTitle = (r) => `${customerListCategoryLabel(r.i, lang)} \u00b7 ${customerListCategoryName(r.i, lang)}`;
 
   const RETURN_PCTS = [5, 10, 15, 20, 25, 30, 35];
@@ -2744,7 +2746,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <div>
                 <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Load weight (tons)" : lang === "mr" ? "मालाचे वजन (टन)" : "माल का वजन (टन)"}</div>
                 <input type="number" inputMode="decimal" step="0.01" min="0" value={tonsValue} disabled={!tier}
-                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, tier?.maxKg)); setTonsTouched(true); setManual(false); setSavedFlash(false); setSaveError(""); }}
+                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, loadKg)); setTonsTouched(true); setManual(false); setSavedFlash(false); setSaveError(""); }}
                   className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 0.75" : "उदा. 0.75"} />
                 {tier && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `Not above the vehicle's ${capacityTons} t` : lang === "mr" ? `गाडीच्या ${capacityTons} टनांपेक्षा जास्त नाही` : `गाड़ी की ${capacityTons} टन कैपेसिटी से ज़्यादा नहीं`}</div>}
               </div>

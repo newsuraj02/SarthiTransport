@@ -11270,6 +11270,11 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
 // here now so both screens call the very same functions.
 // Per ton: the route rate = rate per ton x tons of load; the SYSTEM SUGGESTION for the per-ton rate is the km-based route rate divided by the vehicle's capacity in tons,
 // rounded UP to a whole rupee (a full load always earns at least the km-based rate). Example: 750 kg, route Rs 1,548 -> 2,065 / ton; 2,065 x 0.75 t = Rs 1,549.
+// The load a category carries = the weight limit the customer list shows for it ("700 kg", not the 750 kg fare tier it is priced at); the top category (no limit) keeps its tier's weight.
+export function categoryLoadCapacityKg(categoryIndex, tier) {
+  const lim = CUSTOMER_LIST_CATEGORY_KG[categoryIndex];
+  return Number.isFinite(lim) && lim < FARE_TIER_MAX_KG_UNCAPPED ? lim : (tier ? tier.maxKg : 0);
+}
 export function suggestPerTonRate(kmRouteRate, capacityKg) {
   const tons = (Number(capacityKg) || 0) / 1000;
   const rate = Number(kmRouteRate) || 0;
@@ -11353,9 +11358,10 @@ function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre,
     ? buildRouteFareTable({ tiers: fareTiers, pickup, drop, distance: km, pickupLat: pickupCoords?.lat, pickupLng: pickupCoords?.lng, dropLat: dropCoords?.lat, dropLng: dropCoords?.lng, adminRouteFares, dieselPricePerLitre })
     : null;
   const systemTotal = systemTable && myTier ? systemTable[myTier.maxKg] : null;
-  const capacityTons = myTier ? myTier.maxKg / 1000 : 0;
+  const myLoadKg = myTier ? categoryLoadCapacityKg(customerListCategoryIndex(myCapacityKg), myTier) : 0;
+  const capacityTons = myLoadKg / 1000;
   const tonsValue = rateBasis === "ton" ? (tonsTouched ? tons : (capacityTons > 0 && capacityTons < 1000 ? String(capacityTons) : "")) : "";
-  const perTonSuggested = myTier ? suggestPerTonRate(systemTotal, myTier.maxKg) : null;
+  const perTonSuggested = myTier ? suggestPerTonRate(systemTotal, myLoadKg) : null;
   const perTonValue = rateBasis === "ton" ? (perTonTouched ? perTon : (perTonSuggested != null ? String(perTonSuggested) : "")) : "";
   const tonTotal = rateBasis === "ton" ? tonRouteTotal(perTonValue, tonsValue) : null;
   const effectiveTotal = rateBasis === "ton" ? (tonTotal != null ? String(tonTotal) : "") : totalFare;
@@ -11506,7 +11512,7 @@ function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre,
               <div>
                 <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Load weight (tons)" : lang === "mr" ? "मालाचे वजन (टन)" : "माल का वजन (टन)"}</div>
                 <input type="number" inputMode="decimal" step="0.01" min="0" value={tonsValue} disabled={!myTier}
-                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, myTier?.maxKg)); setTonsTouched(true); setSavedFlash(false); }}
+                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, myLoadKg)); setTonsTouched(true); setSavedFlash(false); }}
                   className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "e.g. 0.75" : "उदा. 0.75"} />
                 {myTier && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `Not above your vehicle's ${capacityTons} t` : lang === "mr" ? `तुमच्या गाडीच्या ${capacityTons} टनांपेक्षा जास्त नाही` : `आपकी गाड़ी की ${capacityTons} टन क्षमता से ज़्यादा नहीं`}</div>}
               </div>
