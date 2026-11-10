@@ -1115,7 +1115,8 @@ const DEFAULT_FARE_TIERS = [
   { maxKg: 16000, label: "10-चक्का ट्रक (टॉरस)", weightLabel: "16 टन", heavy: true, innerFix: 3500, innerPer: 58, outerMin: 5100, outerPer: 44, tollPerKm: 4 },
   { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, innerFix: 4750, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
   { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, innerFix: 4750, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
-  { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, innerFix: 4800, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
+  // 25000 kg (owner 2026-11-10: "same price for 20000 kg and 25000 kg ... make a bit of difference"): it used to share the 18000 / 21000 kg outstation numbers, so the 20 ton container and the 12/14 wheeler quoted the same fare from about 30 km on; now ~7-8 % above the 21000 kg tier and still below the 30000 kg tier.
+  { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, innerFix: 5200, innerPer: 76, outerMin: 7400, outerPer: 60, tollPerKm: 5.5 },
   { maxKg: 30000, label: "16-चक्का / 40 फीट ट्रेलर", weightLabel: "30 टन", heavy: true, innerFix: 6000, innerPer: 84, outerMin: 8300, outerPer: 64, tollPerKm: 6 },
   { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "मल्टी-एक्सेल ट्रेलर (ODC, भारी मशीनें)", weightLabel: "35+ टन", heavy: true, innerFix: 8000, innerPer: 111, outerMin: 11000, outerPer: 85, tollPerKm: 7 },
 ];

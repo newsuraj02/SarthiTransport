@@ -408,3 +408,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Added own fare tiers for 1700 kg (priced apart from 2000) and 4000 kg (category no longer priced at the 5000 kg tier); Saved Routes no longer names a retired-tier rate after a category; golden grid regenerated
 - changed (9): app:DEFAULT_FARE_TIERS, app:DIESEL_MILEAGE_BY_TIER_MAX_KG, code:CLAUDE.md, code:scripts/golden/fares.json, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#savedRateCategoryText, code:src/App.jsx#DEFAULT_FARE_TIERS, code:src/App.jsx#DIESEL_MILEAGE_BY_TIER_MAX_KG, code:src/App.jsx#HALT_PER_DAY_BY_MAXKG
+
+## 2026-11-10 -- 25000 kg fare tier separated from 21000 kg (innerFix 5200, innerPer 76, outerMin 7400, outerPer 60) so 20 ton container and 12/14 wheeler no longer quote the same fare; KNOWN_DIP for 25000 scaled; golden regenerated
+- changed (5): app:DEFAULT_FARE_TIERS, code:CLAUDE.md, code:scripts/golden/fares.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DEFAULT_FARE_TIERS
