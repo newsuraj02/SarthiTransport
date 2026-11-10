@@ -345,3 +345,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-09 -- Owner 2026-11-09: dead-code audit part 2 -- removed unused materials rule from firestore.rules and the unused drivers prop of AdminAlerts
 - changed (6): file:firestore.rules, code:CLAUDE.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminAlerts, code:src/AdminPanel.jsx#AdminPanel
+
+## 2026-11-10 -- Owner 2026-11-10: added read-only scripts/auditDriverCapacities.js (lists drivers whose entered capacity looks wrong); no app behaviour changed
+- added (1): code:scripts/auditDriverCapacities.js
