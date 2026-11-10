@@ -359,3 +359,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-10 -- Owner 2026-11-10: Admin dashboard Installs vs Uninstalls card replaced by the four-way installs + KYC split (partitionDriversByInstallAndKyc)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet
 - added (4): code:src/App.jsx#SANE_CAPACITY_MIN_KG, code:src/App.jsx#driverKycDetailsProblem, code:src/App.jsx#kycProblemText, code:src/App.jsx#partitionDriversByInstallAndKyc
+
+## 2026-11-10 -- Deploy guard ignores .txt / .csv output files in scripts/ (the capacity audit's drivers.txt blocked a deploy); gitignore scripts/*.txt and *.csv
+- changed (2): code:.gitignore, code:scripts/criteria.mjs#listFiles
+
+## 2026-11-10 -- Stray-file invariant covers .txt/.csv output (drivers.txt incident)
+- changed (1): code:scripts/verifyInvariants.mjs#checks

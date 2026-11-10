@@ -89,8 +89,8 @@ function listFiles(root) {
   // Tracked files always count. A brand-new, not-yet-committed file counts only if it sits in a source folder: stray files in the project root
   // (a Windows `> 100m` redirect, firebase-debug.log, .firebase/ cache ...) must never fail someone's deploy (2026-11-03).
   const SOURCE_DIRS = /^(src|functions|scripts|android|public|docs|\.githooks|\.github)\//;
-  // Logs and the firebase cache are never code: a failed `firebase` command leaves functions/firebase-debug.log, which must not stop a deploy (2026-11-08).
-  const all = [...new Set([...tracked, ...fresh.filter((x) => SOURCE_DIRS.test(x) && !/\s/.test(x) && !/\.log$/.test(x) && !/(^|\/)\.firebase\//.test(x))])];
+  // Logs, text / csv output (e.g. `node auditDriverCapacities.js ... --all > drivers.txt`, which holds driver phone numbers) and the firebase cache are never code: a failed `firebase` command leaves functions/firebase-debug.log, which must not stop a deploy (2026-11-08).
+  const all = [...new Set([...tracked, ...fresh.filter((x) => SOURCE_DIRS.test(x) && !/\s/.test(x) && !/\.(log|txt|csv)$/.test(x) && !/(^|\/)\.firebase\//.test(x))])];
   return all.filter((x) => !SKIP_FILES.has(x) && !x.endsWith("package-lock.json") && existsSync(join(root, x)));
 }
 // Drops comment-only lines, block comments, JSX comment lines and blank lines; trims trailing whitespace. Code is untouched.

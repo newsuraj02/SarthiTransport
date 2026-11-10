@@ -521,7 +521,8 @@ const checks = [
   }],
   ["A STRAY LOG FILE CAN NEVER BLOCK A DEPLOY (owner 2026-11-08: `firebase deploy --only functions` stopped on 'criteria changed ... code:functions/firebase-debug.log' -- a failed firebase command had left that log inside functions/, and the guard counts brand-new files in source folders): the criteria inventory ignores *.log and the firebase cache, and .gitignore lists them", () => {
     const c = read("scripts/criteria.mjs"); const gi = read(".gitignore");
-    return /fresh\.filter\([^\n]*\.log/.test(c) && gi.includes("firebase-debug.log") && gi.includes("*.log");
+    // (2026-11-10: also .txt / .csv -- the capacity audit's `--all > drivers.txt` output, which holds driver phone numbers, blocked a deploy and must never be committed)
+    return /fresh\.filter\([^\n]*\\\.\(log\|txt\|csv\)/.test(c) && gi.includes("firebase-debug.log") && gi.includes("*.log") && gi.includes("scripts/*.txt") && gi.includes("scripts/*.csv");
   }],
   ["ONE DEVICE PER DRIVER (owner 2026-11-08: 'if the driver is already logged in on a device and tries to login in a different device, log out the previous device directly and log in the new one'): every explicit driver login (PIN, sign-up, forgot-PIN -- never the automatic restore of an existing session) makes a fresh session id and stamps it on drivers/{mobile}.activeSessionId once the profile exists; a device whose own id differs from the stored one signs out with a notice; no stored id (nobody has logged in since this shipped) leaves a session alone; a brand-new login never kicks itself while its claim is still being written", () => {
     const a = stripComments(app, "App.jsx"); const i = app.indexOf("export function shouldLogOutDriverSession"); const j = app.indexOf("export function usePersistedState");

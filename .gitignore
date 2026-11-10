@@ -22,3 +22,6 @@ functions/build.json
 firebase-debug.log
 firestore-debug.log
 *.log
+# output of the one-off driver scripts in scripts/ (contains driver phone numbers -- never commit)
+scripts/*.txt
+scripts/*.csv
