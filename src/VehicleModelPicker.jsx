@@ -26,7 +26,7 @@ export default function VehicleModelPicker({
     <div data-vehicle-picker>
       <label className={lbl} style={{ color: labelColor }}>{T(lang, "Vehicle company", "गाड़ी की कंपनी", "गाडीची कंपनी")}{req}</label>
       <select data-vehicle-company className={inputCls} style={{ ...inputStyle, marginBottom: 10 }} value={companyValue} onChange={onCompany}>
-        <option value="">{T(lang, "Select company", "कंपनी चुनें", "कंपनी निवडा")}</option>
+        <option value="">{T(lang, "Select vehicle", "गाड़ी चुनें", "गाडी निवडा")}</option>
         {hasSaved && <option value="saved">{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {saved.name}</option>}
         {VEHICLE_MODEL_CATALOG.map((c, i) => <option key={c.company} value={`c:${i}`}>{c.company}</option>)}
       </select>
