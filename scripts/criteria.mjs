@@ -18,7 +18,7 @@ export const BLOCKS = {
   "src/App.jsx": [
     // availability / who may be shown or take a load
     "parseScheduledFor", "minAdvanceNoticeHours", "notificationLockHours", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "driverIsOnTrip",
-    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_EXTRA_RANGE_KG", "ringCategoryLimitKg", "ringCategoryInRange", "hasFreshLocation", "CUSTOMER_LIST_CATEGORY_KG", "CATEGORY_FARE_LIMIT_KG", "CUSTOMER_LIST_CATEGORY_NAMES", "customerListCategoryName", "CUSTOMER_LIST_CATEGORY_DIM_MODELS", "CUSTOMER_LIST_3_WHEELER_DIMS", "CUSTOMER_LIST_DIM_LABELS", "formatDimFeet", "customerListCategoryDims", "customerListCategoryIndex", "customerListCategoryLabel", "groupByCustomerListCategory", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
+    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_EXTRA_RANGE_KG", "ringCategoryLimitKg", "ringCategoryInRange", "hasFreshLocation", "CUSTOMER_LIST_CATEGORY_KG", "CATEGORY_MEMBER_MAX_KG", "CATEGORY_FARE_LIMIT_KG", "CUSTOMER_LIST_CATEGORY_NAMES", "customerListCategoryName", "CUSTOMER_LIST_CATEGORY_DIM_MODELS", "CUSTOMER_LIST_3_WHEELER_DIMS", "CUSTOMER_LIST_DIM_LABELS", "formatDimFeet", "customerListCategoryDims", "customerListCategoryIndex", "customerListCategoryLabel", "groupByCustomerListCategory", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
     "CURRENT_BID_RADIUS_KM", "ADVANCE_BID_RADIUS_KM", "VEHICLE_HEADROOM_KG", "NEARBY_DRIVER_RADIUS_KM", "NEARBY_DRIVER_STALE_MS",
     "APP_OPEN_BEAT_MS",
     // fares

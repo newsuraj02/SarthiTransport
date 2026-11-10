@@ -1,6 +1,6 @@
 // Vehicle illustrations for the customer's category list (owner 2026-11-04: "create these kind of icons for each vehicle category and also
 // show these images once the customer clicks those categories", then "make it more mature and thick just like the reference").
-// ONE parametric drawing, so all fifteen share one style: a heavy, realistic commercial-vehicle look seen from the front-left and slightly
+// ONE parametric drawing, so all fourteen share one style: a heavy, realistic commercial-vehicle look seen from the front-left and slightly
 // above (the near side, the front face and the roof / open bed are visible), soft gradients, a white cab with a tinted windscreen and side
 // window, door seam and handle, mirror, grille, headlight and bumper, a deep-blue open bed or a white box / corrugated container, a dark
 // chassis and chunky tyres with rims. Realism details: the far-side tyres peek out below the body (so a truck never reads as having two tyres), the
@@ -9,21 +9,20 @@
 // fills its box). Original artwork, language-free, crisp at any size, bundled with the app (no image files, works offline).
 import React from "react";
 
-// Index-aligned with CUSTOMER_LIST_CATEGORY_NAMES in App.jsx (14 weight limits + "above 32000 kg" = 15 drawings).
+// Index-aligned with CUSTOMER_LIST_CATEGORY_NAMES in App.jsx (13 weight limits + "above 32000 kg" = 14 drawings).
 //   cw/ch = cab width/height, body = open | box | container, len = body length, bh = body height, gap = space between cab and body,
 //   wheels = x of each wheel from the vehicle's left edge (more wheels = more axles).
 export const VEHICLE_ART_SPECS = [
   { cw: 25, ch: 31, body: "open", len: 34, bh: 16, gap: 2, wheels: [8, 48, 48], special: "three-wheeler" }, // 3 wheeler (drawn by ThreeWheelerArt: ONE centre front wheel + two rear)
   { cw: 28, ch: 35, body: "open", len: 40, bh: 17, gap: 2, wheels: [11, 56] },                      // Tata Ace
+  { cw: 29, ch: 36, body: "open", len: 45, bh: 18, gap: 2, wheels: [11, 62] },                      // Mini pickup
   { cw: 30, ch: 37, body: "open", len: 50, bh: 19, gap: 2, wheels: [12, 68] },                      // Pickup
   { cw: 30, ch: 37, body: "open", len: 62, bh: 23, gap: 2, wheels: [12, 80] },                      // Pickup 8ft
+  { cw: 30, ch: 38, body: "open", len: 66, bh: 25, gap: 2, wheels: [12, 84] },                      // Pickup 9ft
   { cw: 32, ch: 41, body: "box", len: 70, bh: 35, gap: 2, wheels: [13, 88] },                       // Tata 407
   { cw: 33, ch: 42, body: "box", len: 76, bh: 36, gap: 2, wheels: [13, 94] },                       // 14ft Eicher
-  { cw: 34, ch: 43, body: "box", len: 82, bh: 38, gap: 2, wheels: [14, 102] },                      // 17ft Eicher
   { cw: 34, ch: 43, body: "container", len: 92, bh: 40, gap: 2, wheels: [14, 112] },                // 20ft container
   { cw: 34, ch: 43, body: "open", len: 100, bh: 30, gap: 2, wheels: [14, 102, 117] },               // 6 wheeler
-  { cw: 36, ch: 45, body: "box", len: 108, bh: 42, gap: 2, wheels: [15, 114, 130] },                // 22ft/24ft truck
-  { cw: 36, ch: 45, body: "open", len: 114, bh: 32, gap: 2, wheels: [13, 29, 122, 138] },           // 10 wheeler
   { cw: 36, ch: 46, body: "container", len: 116, bh: 44, gap: 2, wheels: [14, 30, 128, 144] },      // 20 ton container (was 32ft container)
   { cw: 38, ch: 47, body: "box", len: 116, bh: 43, gap: 2, wheels: [15, 31, 124, 140] },            // 12/14 wheeler
   { cw: 38, ch: 48, body: "box", len: 118, bh: 44, gap: 2, wheels: [15, 31, 124, 140, 156] },       // 16 wheeler

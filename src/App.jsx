@@ -4055,11 +4055,15 @@ function hasFreshLocation(d, now = Date.now()) {
 // FIRST group whose limit its capacity does not exceed (a 600 kg vehicle is in "700 kg"); anything above the last limit goes in a final
 // "Above 32000 kg" group so no listed vehicle is ever hidden (owner 2026-11-04: 3500 and 25000 kg were added; 16000 was already there -> 14 limits + "above").
 // Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
-// Owner 2026-11-10 (vehicle weights from the sheet): the limits 750 -> 700, 3500 -> 4000 and 9000 -> 10000 (same positions, same names, same pictures; stored
-// `categoryIndex` / `listCategory` values stay valid). A vehicle of 701-750 kg (an old 750 kg registration) is treated as 700 (see customerListCategoryIndex).
-// FARES DO NOT MOVE: the fare of a category is still read from the fare tiers by CATEGORY_FARE_LIMIT_KG (the limits before this change).
-const CUSTOMER_LIST_CATEGORY_KG = [500, 700, 1200, 1700, 2500, 4000, 5000, 7500, 10000, 12000, 16000, 20000, 25000, 32000];
-const CATEGORY_FARE_LIMIT_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+// Owner 2026-11-10 (vehicle weights from the sheet): 750 -> 700, 3500 -> 4000, 9000 -> 10000; then "1000 kg and 2000 kg are still missing" (added), "5000 kg vehicles go into
+// the 4000 kg category" and "12000 / 16000 kg vehicles go into the 10000 kg category" (those three categories are gone) -> 13 limits + "above 32000 kg" = 14 rows.
+// Three index-aligned tables (change them together; the server mirrors them in functions/tripLock.js):
+//   CUSTOMER_LIST_CATEGORY_KG  = the limit shown on the row ("4000 kg") and stored on a booking (`listCategoryKg`);
+//   CATEGORY_MEMBER_MAX_KG     = the heaviest vehicle that is IN the category (4000 takes 2501-5000 kg, 10000 takes 7501-16000 kg, 700 takes 501-750 kg);
+//   CATEGORY_FARE_LIMIT_KG     = the weight whose fare tier prices the category (so NO existing category's price moved; the new 1000 / 2000 rows read the 1000 / 2000 kg tiers).
+const CUSTOMER_LIST_CATEGORY_KG = [500, 700, 1000, 1200, 1700, 2000, 2500, 4000, 7500, 10000, 20000, 25000, 32000];
+const CATEGORY_MEMBER_MAX_KG = [500, 750, 1000, 1200, 1700, 2000, 2500, 5000, 7500, 16000, 20000, 25000, 32000];
+const CATEGORY_FARE_LIMIT_KG = [500, 750, 1000, 1200, 1700, 2000, 2500, 3500, 7500, 9000, 20000, 25000, 32000];
 // The table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app stores only `listCategory` = an index into THIS table, so it is
 // translated through it (to a weight limit) instead of being read against the new table, which would shift it by a category or two.
 const LEGACY_CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
@@ -4068,18 +4072,17 @@ function customerListCategoryLimitKg(index) {
   return index >= 0 && index < CUSTOMER_LIST_CATEGORY_KG.length ? CUSTOMER_LIST_CATEGORY_KG[index] : 999999;
 }
 function customerListCategoryIndex(capacityKg) {
-  let kg = Number(capacityKg) || 0;
-  if (kg > 700 && kg <= 750) kg = 700; // a vehicle registered at 750 kg sits in the 700 kg category (owner 2026-11-10)
-  const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
+  const kg = Number(capacityKg) || 0;
+  const i = CATEGORY_MEMBER_MAX_KG.findIndex((m) => kg <= m); // first category whose heaviest member is not below this vehicle
   return i === -1 ? CUSTOMER_LIST_CATEGORY_KG.length : i;
 }
 // The category NAMES the customer sees as each row's title (owner 2026-11-04), index-aligned with CUSTOMER_LIST_CATEGORY_KG plus the final
 // "Above 32000 kg" group, in the customer's language (hi / mr translated, same wording style as the rest of the app: चक्का / चाकी, फीट / फूट);
 // the weight limit is the small line under the name.
 const CUSTOMER_LIST_CATEGORY_NAMES = {
-  en: ["3 wheeler", "Mini truck", "Pickup", "Pickup 8ft", "10ft truck", "14ft truck", "17ft truck", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
-  hi: ["3 व्हीलर", "मिनी ट्रक", "पिकअप", "पिकअप 8 फीट", "10 फीट ट्रक", "14 फीट ट्रक", "17 फीट ट्रक", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "20 टन कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
-  mr: ["3 व्हीलर", "मिनी ट्रक", "पिकअप", "पिकअप 8 फूट", "10 फूट ट्रक", "14 फूट ट्रक", "17 फूट ट्रक", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "20 टन कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
+  en: ["3 wheeler", "Mini truck", "Mini pickup", "Pickup", "Pickup 8ft", "Pickup 9ft", "10ft truck", "14ft truck", "20ft container", "6 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
+  hi: ["3 व्हीलर", "मिनी ट्रक", "मिनी पिकअप", "पिकअप", "पिकअप 8 फीट", "पिकअप 9 फीट", "10 फीट ट्रक", "14 फीट ट्रक", "20 फीट कंटेनर", "6 चक्का", "20 टन कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
+  mr: ["3 व्हीलर", "मिनी ट्रक", "मिनी पिकअप", "पिकअप", "पिकअप 8 फूट", "पिकअप 9 फूट", "10 फूट ट्रक", "14 फूट ट्रक", "20 फूट कंटेनर", "6 चाकी", "20 टन कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
 };
 export function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
@@ -4090,16 +4093,15 @@ export function customerListCategoryName(index, lang) {
 // shows the range ("22-24"). Index-aligned with CUSTOMER_LIST_CATEGORY_NAMES. The 3 wheeler is not in that table, so it uses a standard loading-auto figure.
 const CUSTOMER_LIST_CATEGORY_DIM_MODELS = [
   null,                                          // 3 wheeler -> CUSTOMER_LIST_3_WHEELER_DIMS
-  ["tata ace"],                                  // Tata Ace
+  ["tata ace"],                                  // Mini truck
+  ["tata ace", "tata ace gold"],                 // Mini pickup
   ["tata ace gold"],                             // Pickup
   ["dost"],                                      // Pickup 8ft
-  ["tata 407"],                                  // Tata 407
-  ["eicher 14"],                                 // 14ft Eicher
-  ["eicher 17"],                                 // 17ft Eicher
+  ["bolero maxitruck"],                          // Pickup 9ft
+  ["tata 407"],                                  // 10ft truck
+  ["eicher 14"],                                 // 14ft truck
   ["20 ft container"],                           // 20ft container
   ["6 wheeler"],                                 // 6 wheeler
-  ["22 ft", "24 ft"],                            // 22ft/24ft truck
-  ["10 wheeler"],                                // 10 wheeler
   ["mxl"],                                       // 20 ton container
   ["12 wheeler", "14 wheeler"],                  // 12/14 wheeler
   ["16 wheeler"],                                // 16 wheeler
@@ -4142,7 +4144,8 @@ export function vehicleCategoryText(capacityKg, lang) {
 // is listed and rung in exactly that category); the last category ("32t+ truck", above 32000 kg) uses the 35 ton maximum the app accepts.
 export function customerListCategoryOptions(lang) {
   const kgs = [...CUSTOMER_LIST_CATEGORY_KG, MAX_BOOKING_WEIGHT_KG];
-  return kgs.map((capacityKg, index) => ({ index, capacityKg, name: customerListCategoryName(index, lang), nameEn: customerListCategoryName(index, "en"), label: `${customerListCategoryName(index, lang)} \u00b7 ${customerListCategoryLabel(index, lang)}` }));
+  const members = [...CATEGORY_MEMBER_MAX_KG, MAX_BOOKING_WEIGHT_KG];
+  return kgs.map((capacityKg, index) => ({ index, capacityKg, memberMaxKg: members[index], name: customerListCategoryName(index, lang), nameEn: customerListCategoryName(index, "en"), label: `${customerListCategoryName(index, lang)} \u00b7 ${customerListCategoryLabel(index, lang)}` }));
 }
 // The category index a BOOKING was made for: its `listCategoryKg` (the picked category's limit), else an old booking's `listCategory` (an index into the previous
 // table), else the vehicle tier it asked for; null when none is known.
