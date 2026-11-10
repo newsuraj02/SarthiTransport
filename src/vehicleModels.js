@@ -28,6 +28,16 @@ export const VEHICLE_MODEL_CATALOG = [
   { company: "Bajaj", models: [{ name: "Maxima C (3-wheeler)", kg: 500 }] },
 ];
 
+// A weight that can really be a truck's payload: 300 kg (a small 3-wheeler) up to the 35 ton maximum. Anything else (1.7, 12, 250000) is a typing mistake and is never kept.
+export const MIN_SANE_CAPACITY_KG = 300;
+export const MAX_SANE_CAPACITY_KG = 35000;
+export const isSaneCapacityKg = (kg) => { const n = Number(kg); return n >= MIN_SANE_CAPACITY_KG && n <= MAX_SANE_CAPACITY_KG; };
+// The customer-list category index a weight belongs to (first category whose limit is >= the weight); `categoryOptions` = customerListCategoryOptions(lang).
+export function categoryIndexForKg(kg, categoryOptions = []) {
+  const i = categoryOptions.findIndex((o) => Number(kg) <= o.capacityKg);
+  return i < 0 ? Math.max(categoryOptions.length - 1, 0) : categoryOptions[i].index;
+}
+
 export const VEHICLE_CHOICE_SAVED = "saved";   // "keep my current vehicle" (a driver who already has one saved)
 export const VEHICLE_CHOICE_OTHER = "other";   // "my model is not listed" -> a weight category is picked
 export const vehicleModelChoice = (ci, mi) => `m:${ci}:${mi}`;
@@ -47,7 +57,7 @@ export function parseVehicleModelChoice(choice) {
 export function resolveVehicleChoice(choice, { categoryOptions = [], categoryIndex = null, saved = null } = {}) {
   if (choice === VEHICLE_CHOICE_SAVED) {
     const kg = Number(saved && saved.kg);
-    return saved && String(saved.name || "").trim() && kg > 0 ? { name: String(saved.name).trim(), kg, company: null, model: null } : null;
+    return saved && String(saved.name || "").trim() && isSaneCapacityKg(kg) ? { name: String(saved.name).trim(), kg, company: null, model: null } : null;
   }
   if (choice === VEHICLE_CHOICE_OTHER) {
     if (categoryIndex == null || categoryIndex === "") return null; // Number(null) is 0 -- nothing picked must not become the first category

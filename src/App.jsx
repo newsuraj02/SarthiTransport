@@ -32,7 +32,7 @@ import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
-import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice } from "./vehicleModels.js";
+import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
@@ -10693,6 +10693,16 @@ function KycReminderBanner({ lang, missing, onComplete, onDismiss }) {
   );
 }
 
+// ONE way to turn a picked vehicle (src/vehicleModels.js resolveVehicleChoice) into the `vehicleTypes` key stored on a driver (owner 2026-11-10: the same picker everywhere):
+// reuses an entry with the same name (case-insensitive), otherwise creates one. Used by the Driver KYC form and by Admin's driver edit forms.
+export function vehicleTypeKeyForName(name, kg, vehicleTypes, addVehicleType) {
+  const n = String(name || "").trim();
+  const match = (vehicleTypes || []).find((v) => (v.label || "").toLowerCase() === n.toLowerCase() || (v.labelEn || "").toLowerCase() === n.toLowerCase());
+  if (match) return match.key;
+  const key = slugify(n);
+  addVehicleType?.({ key, label: n, rate: 25, capacity: "", capacityKg: Number(kg) || 0 });
+  return key;
+}
 function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit, deferred = false, onDeferredSubmit, submitting = false, submitError = "" }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
@@ -10749,7 +10759,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // typed vehicle name. "My model is not listed" asks for a weight category instead. A driver who already has a vehicle saved can keep it ("saved"), so opening
   // the form never rewrites a weight. Resolved to a vehicleTypes entry (reusing a matching one by name, or creating one) only at submit time.
   const savedVehicle = { name: existingVehicleType ? (existingVehicleType.labelEn || existingVehicleType.label) : (driver.vehicleSpec?.type || ""), kg: Number(driver.vehicleSpec?.capacityKg) || 0 };
-  const [vehicleChoice, setVehicleChoice] = usePersistedState("sarthi_driverKyc_vehicleChoice", savedVehicle.name && savedVehicle.kg > 0 ? VEHICLE_CHOICE_SAVED : "", !deferred);
+  const [vehicleChoice, setVehicleChoice] = usePersistedState("sarthi_driverKyc_vehicleChoice", savedVehicle.name && isSaneCapacityKg(savedVehicle.kg) ? VEHICLE_CHOICE_SAVED : "", !deferred);
   const [vehicleCategory, setVehicleCategory] = usePersistedState("sarthi_driverKyc_vehicleCategory", null, !deferred);
   const categoryOptions = customerListCategoryOptions(lang);
   const pickedVehicle = resolveVehicleChoice(vehicleChoice, { categoryOptions, categoryIndex: vehicleCategory, saved: savedVehicle });
@@ -10759,17 +10769,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null, !deferred);
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "", !deferred);
 
-  // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
-  // typing the same vehicle name as another driver doesn't fragment the
-  // shared type list; otherwise creates a new one from what's typed here.
-  const resolveVehicleTypeKey = () => {
-    const name = vehicleTypeName.trim();
-    const match = VEHICLES.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
-    if (match) return match.key;
-    const key = slugify(name);
-    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: Number(capacityKg) || 0 });
-    return key;
-  };
+  const resolveVehicleTypeKey = () => vehicleTypeKeyForName(vehicleTypeName, capacityKg, VEHICLES, addVehicleType);
 
   // Shared by all three KYC photo tiles (driver photo, DL, vehicle side) —
   // onDoc/onVehiclePhoto used to be separate, identical copies of this same

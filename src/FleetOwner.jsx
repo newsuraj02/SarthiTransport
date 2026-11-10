@@ -7,6 +7,8 @@ import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
+import VehicleModelPicker from "./VehicleModelPicker.jsx";
+import { resolveVehicleChoice, categoryIndexForKg } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const digits = (v, n) => digitsOnly(v, n);
@@ -31,7 +33,7 @@ const fieldStyle = { background: C.bg, border: `1px solid ${C.line}`, color: C.i
 
 // One vehicle + its driver. Everything the owner types lands in the PRIVATE doc; only capacity / name / kyc / active are public.
 function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
-  const [v, setV] = useState({ driverName: "", driverMobile: "", vehicleNumber: "", categoryIndex: "" });
+  const [v, setV] = useState({ driverName: "", driverMobile: "", vehicleNumber: "", vehicleChoice: "", categoryIndex: null });
   const [files, setFiles] = useState({ driverPhoto: null, dl: null, vehicleSide: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -40,12 +42,14 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   if (!isValidPersonName(v.driverName)) missing.push(T(lang, "driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव"));
   if (digits(v.driverMobile, 10).length !== 10) missing.push(T(lang, "driver's 10-digit mobile", "ड्राइवर का 10 अंकों का मोबाइल", "ड्रायव्हरचा 10 अंकी मोबाइल"));
   if (!v.vehicleNumber.trim()) missing.push(T(lang, "vehicle number", "गाड़ी नंबर", "गाडी नंबर"));
-  // Vehicle category (owner 2026-11-09): the app's 15 categories as a dropdown; the name and the capacity come from the pick (the category's limit), so a vehicle is always listed in the category it was chosen as.
+  // Vehicle (owner 2026-11-10: the SAME company -> model picker as the driver KYC and Admin's edit forms; "not listed" -> a weight category). The weight comes from the pick, never typed;
+  // the vehicle is listed / rung in the category its weight falls in (categoryIndexForKg).
   const categories = customerListCategoryOptions(lang);
-  const picked = v.categoryIndex === "" ? null : categories[Number(v.categoryIndex)];
-  const vehicleName = picked ? picked.nameEn : "";
-  const capacityKg = picked ? picked.capacityKg : 0;
-  if (!picked) missing.push(T(lang, "vehicle category", "गाड़ी की कैटेगरी", "गाडीची कॅटेगरी"));
+  const picked = resolveVehicleChoice(v.vehicleChoice, { categoryOptions: customerListCategoryOptions("en"), categoryIndex: v.categoryIndex });
+  const vehicleName = picked ? picked.name : "";
+  const capacityKg = picked ? picked.kg : 0;
+  const pickedCategoryIndex = picked ? categoryIndexForKg(picked.kg, categories) : null;
+  if (!picked) missing.push(T(lang, "vehicle (company + model, or weight category)", "गाड़ी (कंपनी + मॉडल, या वज़न वर्ग)", "गाडी (कंपनी + मॉडेल, किंवा वजन वर्ग)"));
   if (!files.driverPhoto) missing.push(T(lang, "driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो"));
   if (!files.dl) missing.push(T(lang, "driving licence photo", "ड्राइविंग लाइसेंस की फोटो", "ड्रायव्हिंग लायसन्स फोटो"));
 
@@ -62,10 +66,10 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
         return done.url;
       };
       const [driverPhotoUrl, dlPhotoUrl, vehicleSideUrl] = await Promise.all([up(files.driverPhoto, "driver"), up(files.dl, "dl"), up(files.vehicleSide, "vehicle")]);
-      await createDoc("fleetVehicles", id, { ownerMobile, vehicleName, capacityKg, categoryIndex: picked.index, kyc: "Pending", active: true });
+      await createDoc("fleetVehicles", id, { ownerMobile, vehicleName, capacityKg, categoryIndex: pickedCategoryIndex, vehicleCompany: picked.company || null, vehicleModel: picked.model || null, kyc: "Pending", active: true });
       await createDoc("fleetVehiclePrivate", id, {
         ownerMobile, driverName: v.driverName.trim(), driverMobile: digits(v.driverMobile, 10), vehicleNumber: v.vehicleNumber.trim().toUpperCase(),
-        vehicleName, capacityKg, categoryIndex: picked.index, driverPhotoUrl, dlPhotoUrl, vehicleSideUrl,
+        vehicleName, capacityKg, categoryIndex: pickedCategoryIndex, driverPhotoUrl, dlPhotoUrl, vehicleSideUrl,
       });
       onSaved(id);
     } catch (e) {
@@ -82,10 +86,11 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
       <input value={v.driverMobile} onChange={(e) => set("driverMobile", digits(e.target.value, 10))} inputMode="numeric" className={field} style={fieldStyle}
         placeholder={T(lang, "Driver's mobile number (gets the trip on WhatsApp)", "ड्राइवर का मोबाइल नंबर (ट्रिप WhatsApp पर मिलेगी)", "ड्रायव्हरचा मोबाइल (ट्रिप WhatsApp वर मिळेल)")} />
       <input value={v.vehicleNumber} onChange={(e) => set("vehicleNumber", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Vehicle number (e.g. MH12AB1234)", "गाड़ी नंबर (जैसे MH12AB1234)", "गाडी नंबर (उदा. MH12AB1234)")} />
-      <select data-fleet-category value={v.categoryIndex} onChange={(e) => set("categoryIndex", e.target.value)} className={field} style={{ ...fieldStyle, color: v.categoryIndex === "" ? C.inkSoft : C.ink }}>
-        <option value="">{T(lang, "Select vehicle category", "गाड़ी की कैटेगरी चुनें", "गाडीची कॅटेगरी निवडा")}</option>
-        {categories.map((c) => <option key={c.index} value={c.index}>{c.label}</option>)}
-      </select>
+<div data-fleet-vehicle-picker>
+        <VehicleModelPicker lang={lang} choice={v.vehicleChoice} setChoice={(c) => set("vehicleChoice", c)} categoryIndex={v.categoryIndex} setCategoryIndex={(i) => set("categoryIndex", i)}
+          categoryOptions={customerListCategoryOptions("en").map((o, i) => ({ ...o, label: categories[i].label }))} saved={null} resolved={picked}
+          inputCls={field} inputStyle={fieldStyle} labelColor={C.inkSoft} requiredColor={C.safety} okColor={C.success} />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <PhotoPick lang={lang} required label={T(lang, "Driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो")} file={files.driverPhoto} onFile={(f) => setFiles((p) => ({ ...p, driverPhoto: f }))} />
         <PhotoPick lang={lang} required label={T(lang, "Driving licence", "ड्राइविंग लाइसेंस", "ड्रायव्हिंग लायसन्स")} file={files.dl} onFile={(f) => setFiles((p) => ({ ...p, dl: f }))} />

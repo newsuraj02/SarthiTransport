@@ -2,7 +2,7 @@
 // (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. "My model is not listed" shows the customer-list weight
 // categories instead. It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
 import React, { useState } from "react";
-import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, VEHICLE_CHOICE_OTHER, vehicleModelChoice, parseVehicleModelChoice } from "./vehicleModels.js";
+import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, VEHICLE_CHOICE_OTHER, vehicleModelChoice, parseVehicleModelChoice, isSaneCapacityKg } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 
@@ -12,7 +12,7 @@ export default function VehicleModelPicker({
 }) {
   const parsed = parseVehicleModelChoice(choice);
   const [companyIdx, setCompanyIdx] = useState(parsed ? parsed.ci : "");
-  const hasSaved = !!(saved && String(saved.name || "").trim() && Number(saved.kg) > 0);
+  const hasSaved = !!(saved && String(saved.name || "").trim() && isSaneCapacityKg(saved.kg));
   const companyValue = choice === VEHICLE_CHOICE_SAVED ? "saved" : choice === VEHICLE_CHOICE_OTHER ? "other" : (companyIdx !== "" ? `c:${companyIdx}` : "");
   const onCompany = (e) => {
     const v = e.target.value;

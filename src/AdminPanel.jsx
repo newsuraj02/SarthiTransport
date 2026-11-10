@@ -22,7 +22,7 @@ import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
-  syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, customerListCategoryOptions, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
+  syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, customerListCategoryOptions, vehicleTypeKeyForName, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
@@ -30,6 +30,35 @@ import {
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
+import VehicleModelPicker from "./VehicleModelPicker.jsx";
+import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg } from "./vehicleModels.js";
+
+// ADMIN'S DRIVER EDIT FORMS USE THE SAME VEHICLE PICKER AS THE DRIVER KYC FORM (owner 2026-11-10: "make this consistent throughout the Admin and Driver, in every form where category is
+// entered"): company -> model (weight from the sheet), or "my model is not listed" + a weight category, or "keep the current vehicle" (only offered while the saved weight is sane).
+// No free vehicle-type dropdown and no typed weight. adminVehiclePatch turns the pick into what is saved (null = nothing valid picked yet; { keep: true } = leave type + weight as they are).
+function adminVehicleDraft(d, vehicleTypes) {
+  const t = (vehicleTypes || []).find((v) => v.key === d.vehicleSpec?.type);
+  const savedName = t ? (t.labelEn || t.label) : (d.vehicleSpec?.type || "");
+  const savedKg = Number(d.vehicleSpec?.capacityKg) || 0;
+  return { savedName, savedKg, vehicleChoice: savedName && isSaneCapacityKg(savedKg) ? VEHICLE_CHOICE_SAVED : "", vehicleCategory: null };
+}
+function adminPickedVehicle(draft) {
+  return resolveVehicleChoice(draft.vehicleChoice || "", { categoryOptions: customerListCategoryOptions("en"), categoryIndex: draft.vehicleCategory, saved: { name: draft.savedName, kg: draft.savedKg } });
+}
+function adminVehiclePatch(draft, vehicleTypes, addVehicleType) {
+  const picked = adminPickedVehicle(draft);
+  if (!picked) return null;
+  if (draft.vehicleChoice === VEHICLE_CHOICE_SAVED) return { keep: true };
+  return { type: vehicleTypeKeyForName(picked.name, picked.kg, vehicleTypes, addVehicleType), capacityKg: picked.kg, vehicleCompany: picked.company || null, vehicleModel: picked.model || null };
+}
+function AdminVehiclePick({ draft, setDraft, lang }) {
+  return (
+    <VehicleModelPicker lang={lang} choice={draft.vehicleChoice} setChoice={(v) => setDraft((p) => ({ ...p, vehicleChoice: v }))} categoryIndex={draft.vehicleCategory} setCategoryIndex={(i) => setDraft((p) => ({ ...p, vehicleCategory: i }))}
+      categoryOptions={customerListCategoryOptions(lang)} saved={{ name: draft.savedName, kg: draft.savedKg }} resolved={adminPickedVehicle(draft)}
+      inputCls="w-full rounded-lg px-2.5 py-2 text-sm outline-none" inputStyle={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
+      labelColor={C.inkSoft} requiredColor={C.safety} okColor={C.success} />
+  );
+}
 
 // Owner rule (2026-10-13): every vehicle's current status shows directly
 // on the live map -- colour of the truck + a legend with counts.
@@ -556,7 +585,7 @@ function ScanStatusTile({ systemHealth, lang }) {
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, addVehicleType, bugs, systemHealth }) {
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   // Single partition, used for every installed/uninstalled/blacklisted
   // count on this dashboard (see partitionDriversByInstallStatus) -- these
@@ -669,9 +698,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const startApprovalEdit = (d) => {
     setApprovalEditingId(d.id);
     setApprovalEditDraft({
-      type: d.vehicleSpec?.type || "",
+      ...adminVehicleDraft(d, vehicleTypes),
       vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
-      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
       length: d.vehicleSpec?.length || "",
       width: d.vehicleSpec?.width || "",
       height: d.vehicleSpec?.height || "",
@@ -680,15 +708,14 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   };
   const cancelApprovalEdit = () => { setApprovalEditingId(null); setApprovalEditDraft(null); setApprovalEditError(""); };
   const saveApprovalEdit = async (d) => {
-    const capacityKg = Number(approvalEditDraft.capacityKg);
-    if (!approvalEditDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
-      setApprovalEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
+    const vehiclePatch = adminVehiclePatch(approvalEditDraft, vehicleTypes, addVehicleType);
+    if (!approvalEditDraft.vehicleNumber.trim() || !vehiclePatch) {
+      setApprovalEditError(lang === "en" ? "Vehicle number and the vehicle (company + model, or weight category) are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
       return;
     }
     await updateDriverVehicleSpec(d.id, {
-      type: approvalEditDraft.type,
+      ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: approvalEditDraft.vehicleNumber.trim().toUpperCase(),
-      capacityKg,
       length: approvalEditDraft.length.trim(), width: approvalEditDraft.width.trim(), height: approvalEditDraft.height.trim(),
     });
     cancelApprovalEdit();
@@ -1195,27 +1222,13 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                         {expanded && editing && approvalEditDraft && (
                           <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                             <div className="grid grid-cols-2 gap-2 mb-2">
-                              <label className="text-[11px] col-span-2">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
-                                <select value={approvalEditDraft.type} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, type: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                                  {!vehicleTypes.some((v) => v.key === approvalEditDraft.type) && <option value={approvalEditDraft.type}>{approvalEditDraft.type || "—"}</option>}
-                                  {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
-                                </select>
-                              </label>
+                              <div className="col-span-2" data-admin-vehicle-picker><AdminVehiclePick draft={approvalEditDraft} setDraft={setApprovalEditDraft} lang={lang} /></div>
                               <label className="text-[11px]">
                                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
                                 <input value={approvalEditDraft.vehicleNumber} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
                                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
                               </label>
-                              <label className="text-[11px]">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Weight category" : lang === "mr" ? "वजन वर्ग" : "वज़न वर्ग"}</span>
-                                <select data-admin-weight-category value={String(approvalEditDraft.capacityKg ?? "")} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                                  {!customerListCategoryOptions(lang).some((o) => String(o.capacityKg) === String(approvalEditDraft.capacityKg)) && <option value={String(approvalEditDraft.capacityKg ?? "")}>{approvalEditDraft.capacityKg ? `${lang === "en" ? "Current" : lang === "mr" ? "सध्याचे" : "मौजूदा"}: ${approvalEditDraft.capacityKg} kg` : "—"}</option>}
-                                  {customerListCategoryOptions(lang).map((o) => <option key={o.index} value={String(o.capacityKg)}>{o.label}</option>)}
-                                </select>
-                              </label>
+                              
                               <label className="text-[11px]">
                                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
                                 <input value={approvalEditDraft.length} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, length: e.target.value }))}
@@ -3107,7 +3120,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, minWallet, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, addVehicleType, minWallet, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -3120,9 +3133,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const startEdit = (d) => {
     setEditingId(d.id);
     setEditDraft({
-      type: d.vehicleSpec?.type || "",
+      ...adminVehicleDraft(d, vehicleTypes),
       vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
-      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
       length: d.vehicleSpec?.length || "",
       width: d.vehicleSpec?.width || "",
       height: d.vehicleSpec?.height || "",
@@ -3131,15 +3143,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   };
   const cancelEdit = () => { setEditingId(null); setEditDraft(null); setEditError(""); };
   const saveEdit = async (d) => {
-    const capacityKg = Number(editDraft.capacityKg);
-    if (!editDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
-      setEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
+    const vehiclePatch = adminVehiclePatch(editDraft, vehicleTypes, addVehicleType);
+    if (!editDraft.vehicleNumber.trim() || !vehiclePatch) {
+      setEditError(lang === "en" ? "Vehicle number and the vehicle (company + model, or weight category) are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
       return;
     }
     await updateDriverVehicleSpec(d.id, {
-      type: editDraft.type,
+      ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
-      capacityKg,
       length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
     });
     cancelEdit();
@@ -3299,27 +3310,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
         {editing ? (
           <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="grid grid-cols-2 gap-2 mb-2">
-              <label className="text-[11px] col-span-2">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
-                <select value={editDraft.type} onChange={(e) => setEditDraft((p) => ({ ...p, type: e.target.value }))}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                  {!vehicleTypes.some((v) => v.key === editDraft.type) && <option value={editDraft.type}>{editDraft.type || "—"}</option>}
-                  {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
-                </select>
-              </label>
+              <div className="col-span-2" data-admin-vehicle-picker><AdminVehiclePick draft={editDraft} setDraft={setEditDraft} lang={lang} /></div>
               <label className="text-[11px]">
                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
                 <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
               </label>
-              <label className="text-[11px]">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Weight category" : lang === "mr" ? "वजन वर्ग" : "वज़न वर्ग"}</span>
-                <select data-admin-weight-category value={String(editDraft.capacityKg ?? "")} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                                  {!customerListCategoryOptions(lang).some((o) => String(o.capacityKg) === String(editDraft.capacityKg)) && <option value={String(editDraft.capacityKg ?? "")}>{editDraft.capacityKg ? `${lang === "en" ? "Current" : lang === "mr" ? "सध्याचे" : "मौजूदा"}: ${editDraft.capacityKg} kg` : "—"}</option>}
-                                  {customerListCategoryOptions(lang).map((o) => <option key={o.index} value={String(o.capacityKg)}>{o.label}</option>)}
-                                </select>
-              </label>
+              
               <label className="text-[11px]">
                 <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
                 <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
@@ -4561,7 +4558,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
       {tab === "drivers" && (<><AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />
         <AdminFleetVehicles fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} drivers={drivers} lang={lang} setKyc={setFleetKyc} /></>)}
