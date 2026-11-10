@@ -26,7 +26,7 @@ import {
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
-  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
+  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
@@ -567,6 +567,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // Total Drivers/tabs/Live Map/uninstalled-tile numbers to disagree
   // before.
   const { installed: installedDriversList, uninstalled: uninstalledDrivers, blacklisted: blacklistedDrivers } = partitionDriversByInstallStatus(drivers);
+  // The dashboard's four-way install + KYC split (owner 2026-11-10): installed + KYC done / installed + KYC not done / uninstalled / installed with wrong details.
+  const instKyc = partitionDriversByInstallAndKyc(drivers);
   // Owner rule (2026-10-27): the Uninstalled page holds ONLY the drivers
   // inactive 14+ days (uninstalledDrivers); Blocked drivers have their own
   // tile + page ("blocked" in detailPages) -- they used to be folded into
@@ -810,6 +812,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 
   // Each drill-down tile's dedicated detail page: title, empty-state
   // message, the live items array, and how to render one row.
+  // One row of the three install + KYC lists (owner 2026-11-10): number, name, mobile, vehicle, the reason line, and a Call button.
+  const kycBucketRow = (d, i, reasonText, reasonColor = C.inkSoft) => (
+    <div key={d.id} data-kyc-bucket-row className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
+          <div className="text-xs font-bold truncate min-w-0" style={{ color: C.ink }}>{d.name}</div>
+        </div>
+        <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}{driverPlateText(d, lang) && driverPlateText(d, lang) !== "—" ? ` · ${driverPlateText(d, lang)}` : ""}</div>
+        {reasonText ? <div className="text-[10px] font-bold mt-0.5" style={{ color: reasonColor }}>{reasonText}</div> : null}
+      </div>
+      {d.mobile && <a href={`tel:${d.mobile}`} className="shrink-0 p-2 rounded-full" style={{ background: C.navy }} aria-label="Call"><Phone size={14} color="#FFFFFF" /></a>}
+    </div>
+  );
   const detailPages = {
     online: {
       title: lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार",
@@ -873,6 +889,26 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
         </div>
       ),
+    },
+    installKycDone: {
+      title: lang === "en" ? "Installed - KYC done" : lang === "mr" ? "इन्स्टॉल - KYC पूर्ण" : "इंस्टॉल - KYC पूरा",
+      emptyMsg: lang === "en" ? "No driver is in this group yet." : lang === "mr" ? "या गटात अजून कोणीही नाही." : "इस समूह में अभी कोई नहीं है।",
+      items: instKyc.kycDone,
+      renderItem: (d, i) => kycBucketRow(d, i, ""),
+    },
+    installKycNotDone: {
+      title: lang === "en" ? "Installed - KYC not done" : lang === "mr" ? "इन्स्टॉल - KYC बाकी" : "इंस्टॉल - KYC बाकी",
+      emptyMsg: lang === "en" ? "No driver is in this group." : lang === "mr" ? "या गटात कोणीही नाही." : "इस समूह में कोई नहीं है।",
+      headerExtra: <p className="text-[11px] font-semibold mb-3 -mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Has not filled the KYC form yet, or filled it correctly and is waiting for your approval." : lang === "mr" ? "KYC फॉर्म अजून भरला नाही, किंवा योग्य भरला असून तुमच्या अप्रूव्हलची वाट पाहत आहे." : "KYC फॉर्म अभी नहीं भरा, या सही भरकर आपके अप्रूवल का इंतज़ार है।"}</p>,
+      items: instKyc.kycNotDone,
+      renderItem: (d, i) => kycBucketRow(d, i, d.vehicleSpec ? (lang === "en" ? "Filled - waiting for approval" : lang === "mr" ? "भरले - अप्रूव्हलची वाट" : "भरा हुआ - अप्रूवल बाकी") : (lang === "en" ? "Form not filled" : lang === "mr" ? "फॉर्म भरला नाही" : "फॉर्म नहीं भरा"), d.vehicleSpec ? C.marigoldDeep : C.safety),
+    },
+    installWrongDetails: {
+      title: lang === "en" ? "Installed - wrong details" : lang === "mr" ? "इन्स्टॉल - चुकीची माहिती" : "इंस्टॉल - गलत जानकारी",
+      emptyMsg: lang === "en" ? "Nobody has wrong details." : lang === "mr" ? "कोणाचीही माहिती चुकीची नाही." : "किसी की जानकारी गलत नहीं है।",
+      headerExtra: <p className="text-[11px] font-semibold mb-3 -mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Filled the form but wrongly: rejected, a mandatory item missing, or a vehicle weight that cannot be real (under 300 kg or over 35 ton). Call them to correct it." : lang === "mr" ? "फॉर्म भरला पण चुकीचा: नाकारलेला, आवश्यक माहिती राहिलेली, किंवा अशक्य वजन (300 किग्रॅ पेक्षा कमी / 35 टनांपेक्षा जास्त). त्यांना कॉल करून दुरुस्त करायला सांगा." : "फॉर्म भरा पर गलत: रिजेक्ट, ज़रूरी चीज़ बाकी, या असंभव वज़न (300 किग्रा से कम / 35 टन से ज़्यादा)। उन्हें कॉल करके सुधरवाएँ।"}</p>,
+      items: instKyc.wrongDetails,
+      renderItem: (d, i) => kycBucketRow(d, i, kycProblemText(instKyc.problems[d.mobile || d.id], lang), C.safety),
     },
     uninstalled: {
       title: lang === "en" ? "Uninstalled" : lang === "mr" ? "अनइन्स्टॉल्ड" : "अनइंस्टॉल्ड",
@@ -1274,14 +1310,22 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 
   // (The always-visible morning/evening scan tile is ScanStatusTile below -- it reads systemHealth/* directly.)
 
-  // --- Install vs Uninstall (horizontal bars) -- real installed/uninstalled
-  // driver counts, same partitionDriversByInstallStatus split the stat
-  // tiles above already use (installedDriversList/uninstalledDrivers).
-  const installCount = installedDriversList.length;
-  const uninstallCount = uninstalledDrivers.length;
-  const installUninstallMax = Math.max(installCount, uninstallCount, 1);
-  const installPct = Math.round((installCount / installUninstallMax) * 100);
-  const uninstallPct = Math.round((uninstallCount / installUninstallMax) * 100);
+  // --- Installs + KYC (four horizontal bars, owner 2026-11-10) -- one bar per bucket of partitionDriversByInstallAndKyc.
+  const installKycMax = Math.max(instKyc.kycDone.length, instKyc.kycNotDone.length, instKyc.uninstalled.length, instKyc.wrongDetails.length, 1);
+  const installKycBars = [
+    { key: "kycDone", view: "installKycDone", list: instKyc.kycDone, color: "#1f9d55",
+      label: lang === "en" ? "Installed · KYC done" : lang === "mr" ? "इन्स्टॉल · KYC पूर्ण" : "इंस्टॉल · KYC पूरा",
+      sub: lang === "en" ? "Approved, all details present" : lang === "mr" ? "अप्रूव्ह्ड, सर्व माहिती आहे" : "अप्रूव्ड, पूरी जानकारी" },
+    { key: "kycNotDone", view: "installKycNotDone", list: instKyc.kycNotDone, color: "#2a78d6",
+      label: lang === "en" ? "Installed · KYC not done" : lang === "mr" ? "इन्स्टॉल · KYC बाकी" : "इंस्टॉल · KYC बाकी",
+      sub: lang === "en" ? "Form not filled / waiting approval" : lang === "mr" ? "फॉर्म नाही / अप्रूव्हल बाकी" : "फॉर्म नहीं / अप्रूवल बाकी" },
+    { key: "uninstalled", view: "uninstalled", list: instKyc.uninstalled, color: "#eb6834",
+      label: lang === "en" ? "Uninstalled" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल",
+      sub: lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय" },
+    { key: "wrongDetails", view: "installWrongDetails", list: instKyc.wrongDetails, color: "#c0392b",
+      label: lang === "en" ? "Installed · wrong details" : lang === "mr" ? "इन्स्टॉल · चुकीची माहिती" : "इंस्टॉल · गलत जानकारी",
+      sub: lang === "en" ? "Rejected, incomplete or impossible weight" : lang === "mr" ? "नाकारलेले, अपूर्ण किंवा अशक्य वजन" : "रिजेक्ट, अधूरा या असंभव वज़न" },
+  ].map((b) => ({ ...b, count: b.list.length, pct: Math.round((b.list.length / installKycMax) * 100) }));
 
   // --- Bookings by Status (vertical columns) -- real counts over the
   // selected window, scoped by createdAt like every other "today/this
@@ -1403,39 +1447,28 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
 
-      {/* Installs vs Uninstalls -- horizontal bars, real counts from
-          partitionDriversByInstallStatus (same split the stat tiles above
-          already use). */}
-      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Installs vs Uninstalls" : lang === "mr" ? "इन्स्टॉल्स वि अनइन्स्टॉल्स" : "इंस्टॉल्स बनाम अनइंस्टॉल्स"}</div>
+      {/* Installs + KYC -- four horizontal bars (owner 2026-11-10: replaces the old two-bar install / uninstall card): installed + KYC done, installed + KYC not done,
+          uninstalled, installed with wrong details. Real counts from partitionDriversByInstallAndKyc; blocked drivers have their own tile below. */}
+      <div data-install-kyc-card className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Drivers: installs and KYC" : lang === "mr" ? "ड्रायव्हर्स: इन्स्टॉल्स आणि KYC" : "ड्राइवर: इंस्टॉल और KYC"}</div>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 flex flex-col" style={{ width: 92, color: C.inkSoft }}>
-              <span className="text-[10.5px] font-bold">{lang === "en" ? "Install" : lang === "mr" ? "इन्स्टॉल" : "इंस्टॉल"}</span>
-              <span className="text-[9px] font-semibold leading-tight">{lang === "en" ? "Active in last 14 days" : lang === "mr" ? "गेल्या 14 दिवसांत सक्रिय" : "पिछले 14 दिन में सक्रिय"}</span>
-            </span>
-            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
-              <div className="rounded-full" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
+          {installKycBars.map((b) => (
+            <div key={b.key} data-install-kyc-bar={b.key} className="flex items-center gap-2">
+              <span className="shrink-0 flex flex-col" style={{ width: 112, color: C.inkSoft }}>
+                <span className="text-[10.5px] font-bold leading-tight">{b.label}</span>
+                <span className="text-[9px] font-semibold leading-tight">{b.sub}</span>
+              </span>
+              <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
+                <div className="rounded-full" style={{ height: "100%", width: `${b.pct}%`, background: b.color }} title={`${b.count}`} />
+              </div>
+              <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{b.count}</span>
+              <button onClick={() => setDetailView(b.view)} className="shrink-0 text-[10px] font-bold underline">
+                <span style={{ color: b.color }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
+              </button>
             </div>
-            <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{installCount}</span>
-            <button onClick={() => setDetailView("newRegistrations")} className="shrink-0 text-[10px] font-bold underline">
-              <span style={{ color: "#2a78d6" }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 flex flex-col" style={{ width: 92, color: C.inkSoft }}>
-              <span className="text-[10.5px] font-bold">{lang === "en" ? "Uninstall" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल"}</span>
-              <span className="text-[9px] font-semibold leading-tight">{lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}</span>
-            </span>
-            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
-              <div className="rounded-full" style={{ height: "100%", width: `${uninstallPct}%`, background: "#eb6834" }} title={`${uninstallCount}`} />
-            </div>
-            <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{uninstallCount}</span>
-            <button onClick={() => setDetailView("uninstalled")} className="shrink-0 text-[10px] font-bold underline">
-              <span style={{ color: "#eb6834" }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
-            </button>
-          </div>
+          ))}
         </div>
+        <button onClick={() => setDetailView("newRegistrations")} className="mt-3 text-[10px] font-bold underline" style={{ color: C.inkSoft }}>{lang === "en" ? "New registrations" : lang === "mr" ? "नवीन नोंदणी" : "नई रजिस्ट्रेशन"}</button>
       </div>
 
       {/* Blocked -- same full-width horizontal tile as Live Map; opens the

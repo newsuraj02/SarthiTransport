@@ -355,3 +355,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-10 -- Owner 2026-11-10: KYC vehicle model picker from Apna_Transport_Vehicle_Weights.xlsx (no weight box), 4 customer-list category names made generic (no company/model words), Admin weight-category dropdown, capacity fix/audit scripts
 - changed (14): app:CUSTOMER_LIST_CATEGORY_NAMES, app:DRIVER_KYC_FIELDS, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/App.jsx#imports, code:src/App.jsx#DRIVER_KYC_FIELDS, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_NAMES, code:src/App.jsx#runDriverSignupFinalize, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#DriverKyc
 - added (3): code:scripts/fixDriverCapacities.js, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
+
+## 2026-11-10 -- Owner 2026-11-10: Admin dashboard Installs vs Uninstalls card replaced by the four-way installs + KYC split (partitionDriversByInstallAndKyc)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet
+- added (4): code:src/App.jsx#SANE_CAPACITY_MIN_KG, code:src/App.jsx#driverKycDetailsProblem, code:src/App.jsx#kycProblemText, code:src/App.jsx#partitionDriversByInstallAndKyc

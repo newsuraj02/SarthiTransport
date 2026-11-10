@@ -609,6 +609,30 @@ const checks = [
     const stored = a.includes("vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null") && a.includes("vehicleCompany: pending.vehicleCompany || null");
     return sheet && resolver && form && generic && stored;
   }],
+  ["ADMIN DASHBOARD: INSTALLS + KYC FOUR-WAY SPLIT (owner 2026-11-10: 'instead of install vs uninstall, 4 categories: installed + KYC done, installed + KYC not done, uninstalled, and installed but details not filled correctly'): every driver who is not blocked is in EXACTLY ONE of the four (they add up to all drivers minus blocked); KYC done = Approved + every mandatory item; not done = never filled the form, or complete and waiting for approval; wrong details = Rejected, a form missing a mandatory item, or a weight under 300 kg / over 35 ton (tons typed into the kg box); a fleet owner is judged by the fleet setup; the dashboard shows the four bars and no longer the old two", () => {
+    const start = app.indexOf("const SANE_CAPACITY_MIN_KG"), end = app.indexOf("// The base population for every \"how many drivers\" count across Admin");
+    const kycCode = app.slice(app.indexOf("const DRIVER_KYC_FIELDS"), app.indexOf("// END driver KYC completeness helpers")).replace(/\bexport /g, "");
+    const unCode = app.slice(app.indexOf("const UNINSTALL_INACTIVE_DAYS"), app.indexOf("// Single source of truth for \"which of the three buckets")).replace(/\bexport /g, "");
+    const dsStart = app.indexOf("function driverInstallStatus(driver) {"); const dsCode = app.slice(dsStart, app.indexOf("\n}\n", dsStart) + 3);
+    const fns = new Function("DAY_MS", "MAX_BOOKING_WEIGHT_KG", kycCode + "\n" + unCode + "\n" + dsCode + "\n" + app.slice(start, end).replace(/\bexport /g, "") + "; return { partitionDriversByInstallAndKyc, driverKycDetailsProblem, kycProblemText };")(86400000, 35000);
+    const now = Date.now(); const photo = { url: "u" };
+    const good = (o = {}) => ({ mobile: "m" + Math.random(), name: "x", kyc: "Approved", photo, docs: { dl: photo, photo }, vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1500, photoSide: photo }, lastActiveAt: now, ...o });
+    const D = {
+      done: good(), pending: good({ kyc: "Pending" }), never: { mobile: "n", name: "x", lastActiveAt: now }, rejected: good({ kyc: "Rejected" }),
+      noDl: good({ docs: { photo } }), tons: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1.7, photoSide: photo } }), huge: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 250000, photoSide: photo } }),
+      old: good({ lastActiveAt: now - 40 * 86400000 }), blocked: good({ blacklisted: true }), fleetOk: { mobile: "f", name: "f", kyc: "Approved", fleetOwner: true, fleetSetupDone: true, fleetVehicleCount: 2, vehicleSpec: { type: "fleet", capacityKg: null }, lastActiveAt: now },
+      fleetNew: { mobile: "g", name: "g", kyc: "Approved", fleetOwner: true, fleetSetupDone: false, fleetVehicleCount: 0, vehicleSpec: { type: "fleet", capacityKg: null }, lastActiveAt: now },
+    };
+    const all = Object.values(D); const r = fns.partitionDriversByInstallAndKyc(all);
+    const has = (list, d) => list.includes(d);
+    const placed = r.kycDone.length + r.kycNotDone.length + r.wrongDetails.length + r.uninstalled.length === all.length - r.blocked.length && r.blocked.length === 1;
+    const exact = all.every((d) => [r.kycDone, r.kycNotDone, r.wrongDetails, r.uninstalled, r.blocked].filter((l) => has(l, d)).length === 1);
+    const where = has(r.kycDone, D.done) && has(r.kycDone, D.fleetOk) && has(r.kycNotDone, D.pending) && has(r.kycNotDone, D.never) && has(r.kycNotDone, D.fleetNew) && has(r.wrongDetails, D.rejected) && has(r.wrongDetails, D.noDl) && has(r.wrongDetails, D.tons) && has(r.wrongDetails, D.huge) && has(r.uninstalled, D.old) && has(r.blocked, D.blocked);
+    const text = fns.kycProblemText(r.problems[D.tons.mobile], "en").includes("1.7 kg") && fns.kycProblemText(r.problems[D.noDl.mobile], "en").includes("Driving license photo") && fns.kycProblemText(r.problems[D.rejected.mobile], "en").includes("rejected");
+    const a = stripComments(admin, "AdminPanel.jsx");
+    const ui = a.includes("data-install-kyc-card") && ["kycDone", "kycNotDone", "uninstalled", "wrongDetails"].every((k) => a.includes(`key: "${k}"`)) && a.includes("partitionDriversByInstallAndKyc(drivers)") && !a.includes("installPct") && !a.includes('"Installs vs Uninstalls"') && a.includes("installKycDone:") && a.includes("installKycNotDone:") && a.includes("installWrongDetails:");
+    return placed && exact && where && text && ui;
+  }],
   ["NAME BOXES TAKE LETTERS ONLY, NUMBER BOXES DIGITS ONLY (owner 2026-11-09: 'some of the users are putting a number in place of the name ... only letters accepted for it, and the same for the numbers part -- only numbers'): every name box (customer + driver sign-up, the name editors, both profile screens, the fleet driver's name) keeps letters of any language, vowel signs, spaces and . ' - and drops digits / symbols as they are typed or pasted; a name needs >= 2 letters to be accepted (a name that is just a number is not saved); every mobile / PIN / OTP / capacity / amount box keeps digits only (Hindi digits become 0-9)", async () => {
     const r = await import(pathToFileURL(join(root, "src", "inputRules.js")).href);
     const logic = r.cleanNameInput("Ramesh Patel") === "Ramesh Patel" && r.cleanNameInput("9876543210") === "" && r.cleanNameInput("Ra1mesh 2 Patel") === "Ramesh Patel" && r.cleanNameInput("रमेश पटेल") === "रमेश पटेल" && r.cleanNameInput("श्रीकांत") === "श्रीकांत" && r.cleanNameInput("D'Souza-Rao Jr.") === "D'Souza-Rao Jr." && r.cleanNameInput("A@#$b") === "Ab" && r.cleanNameInput("x".repeat(90)).length === 60

@@ -3548,6 +3548,48 @@ function driverInstallStatus(driver) {
   return "installed";
 }
 
+// ADMIN DASHBOARD FOUR-WAY SPLIT (owner 2026-11-10: "instead of install vs uninstall, 4 categories: installed + KYC done, installed + KYC not done, uninstalled, and
+// installed but details not filled correctly"). Every driver who is not blocked lands in EXACTLY ONE of:
+//   uninstalled   -- no sign of life for 14 days (driverInstallStatus, unchanged)
+//   wrongDetails  -- installed and the form WAS filled in, but wrongly: KYC Rejected, a form that is missing a mandatory item (getDriverKycMissing), or a vehicle weight
+//                    that cannot be a real truck (under 300 kg, or over the 35 ton maximum -- e.g. tons typed into the kilogram box). Fleet owners are judged by their fleet setup only.
+//   kycDone       -- installed, KYC Approved and every mandatory item present and sane
+//   kycNotDone    -- the rest of the installed drivers: nobody filled the form yet, or it is complete and waiting for Admin's approval
+// Blocked drivers keep their own tile and are in none of the four. Pure; the four lists always add up to (all drivers - blocked).
+const SANE_CAPACITY_MIN_KG = 300;
+export function driverKycDetailsProblem(d) {
+  if (!d || d.fleetOwner) return null;
+  if (!d.vehicleSpec && d.kyc == null) return null; // never filled the form: "not done", not "wrong"
+  if (d.kyc === "Rejected") return { kind: "rejected" };
+  if (d.vehicleSpec) {
+    const missing = getDriverKycMissing(d);
+    if (missing.length) return { kind: "form", missing };
+    const kg = Number(d.vehicleSpec.capacityKg);
+    if (!(kg >= SANE_CAPACITY_MIN_KG && kg <= MAX_BOOKING_WEIGHT_KG)) return { kind: "weight", kg: d.vehicleSpec.capacityKg };
+  }
+  return null;
+}
+export function kycProblemText(problem, lang) {
+  if (!problem) return "";
+  if (problem.kind === "rejected") return lang === "en" ? "KYC was rejected - needs to resubmit" : lang === "mr" ? "KYC नाकारले - पुन्हा सबमिट करावे" : "KYC रिजेक्ट हुआ - दोबारा भरना है";
+  if (problem.kind === "weight") return lang === "en" ? `Vehicle weight ${problem.kg} kg is not possible` : lang === "mr" ? `गाडीचे वजन ${problem.kg} किग्रॅ शक्य नाही` : `गाड़ी का वज़न ${problem.kg} किग्रा संभव नहीं`;
+  const names = (problem.missing || []).map((k) => kycFieldLabel(k, lang)).join(", ");
+  return lang === "en" ? `Form incomplete - missing: ${names}` : lang === "mr" ? `फॉर्म अपूर्ण - राहिलेले: ${names}` : `फॉर्म अधूरा - बाकी: ${names}`;
+}
+export function partitionDriversByInstallAndKyc(drivers) {
+  const out = { kycDone: [], kycNotDone: [], wrongDetails: [], uninstalled: [], blocked: [], problems: {} };
+  (drivers || []).forEach((d) => {
+    const status = driverInstallStatus(d);
+    if (status === "blacklisted") { out.blocked.push(d); return; }
+    if (status === "uninstalled") { out.uninstalled.push(d); return; }
+    const problem = driverKycDetailsProblem(d);
+    if (problem) { out.wrongDetails.push(d); out.problems[d.mobile || d.id] = problem; return; }
+    if (d.kyc === "Approved" && isDriverKycComplete(d)) out.kycDone.push(d);
+    else out.kycNotDone.push(d);
+  });
+  return out;
+}
+
 // The base population for every "how many drivers" count across Admin
 // (AdminDriverList's total, its GPS-status split, AdminFleet's Live Map
 // tile and the map itself) -- "has the app installed" (the inverse of
