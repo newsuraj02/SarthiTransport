@@ -4,7 +4,9 @@
 // Usage:
 //   cd scripts
 //   npm install
-//   node auditDriverCapacities.js /path/to/serviceAccountKey.json
+//   node auditDriverCapacities.js /path/to/serviceAccountKey.json            (flagged drivers + category counts)
+//   node auditDriverCapacities.js /path/to/serviceAccountKey.json --all      (ALSO one line per driver: the weight each one entered)
+//   node auditDriverCapacities.js /path/to/serviceAccountKey.json --all > drivers.txt   (save the list to a file)
 //
 // Flags it raises (one driver can have several):
 //   MISSING      no capacity saved (or 0 / not a number)
@@ -23,9 +25,10 @@
 const admin = require("firebase-admin");
 const path = require("path");
 
-const [, , keyPathArg] = process.argv;
+const [, , keyPathArg, ...flagArgs] = process.argv;
+const SHOW_ALL = flagArgs.includes("--all");
 if (!keyPathArg) {
-  console.error("Usage: node auditDriverCapacities.js <serviceAccountKey.json>");
+  console.error("Usage: node auditDriverCapacities.js <serviceAccountKey.json> [--all]");
   process.exit(1);
 }
 admin.initializeApp({ credential: admin.credential.cert(require(path.resolve(keyPathArg))) });
@@ -97,6 +100,14 @@ function modelFor(name) {
   for (const r of bad) {
     const cat = r.kg > 0 ? CATEGORY_NAMES[categoryOf(r.kg)] : "-";
     console.log(`${r.mobile} | ${r.name} | KYC ${r.kyc} | vehicle "${r.vehicleName}" | capacity ${JSON.stringify(r.raw)} | lands in "${cat}" | ${r.flags.join("; ")}`);
+  }
+  if (SHOW_ALL) {
+    console.log("\nEVERY DRIVER, smallest entered weight first (mobile | name | KYC | vehicle name | entered capacity kg | category it lands in | flags):");
+    const sorted = [...rows].sort((a, b) => (a.kg > 0 ? a.kg : Infinity) - (b.kg > 0 ? b.kg : Infinity) || a.mobile.localeCompare(b.mobile));
+    sorted.forEach((r, i) => {
+      const cat = r.kg > 0 ? CATEGORY_NAMES[categoryOf(r.kg)] : "-";
+      console.log(`${String(i + 1).padStart(3)}. ${r.mobile} | ${r.name} | ${r.kyc} | ${r.vehicleName} | ${r.kg > 0 ? r.kg : JSON.stringify(r.raw)} kg | ${cat}${r.flags.length ? " | " + r.flags.join("; ") : ""}`);
+    });
   }
   console.log("\nHow many drivers sit in each customer-list category (for a sanity check of the spread):");
   const counts = new Map();

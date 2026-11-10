@@ -348,3 +348,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Owner 2026-11-10: added read-only scripts/auditDriverCapacities.js (lists drivers whose entered capacity looks wrong); no app behaviour changed
 - added (1): code:scripts/auditDriverCapacities.js
+
+## 2026-11-10 -- Owner 2026-11-10: auditDriverCapacities.js gets an --all option (one line per driver with the weight entered); read-only script, no app behaviour changed
+- changed (1): code:scripts/auditDriverCapacities.js
