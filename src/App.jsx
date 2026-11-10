@@ -1481,8 +1481,8 @@ function priceOutstation(tierMaxKg, km, tiers) {
 }
 // MARKET RATE CHANGE (owner 2026-11-05, "Market rate change button as shown in the demo"): ONE admin-set percentage (settings/main.marketAdjustPct, -50 .. +100, steps of 5)
 // that moves the SYSTEM (formula) rate of EVERY vehicle at once -- fixed and per-km together -- when diesel / the market moves. 0 (the default, and what a settings doc without
-// the field means) changes nothing at all. It scales the formula result BEFORE the live-diesel term and the return discount, so diesel stays separate. Admin-SAVED route rates are
-// Admin's own numbers and do not move (saved rates stand; derived tiers cancel the factor because their ratio divides by the same formula). Kept as module state (set once at the
+// the field means) changes nothing at all. It scales the formula result BEFORE the live-diesel term and the return discount, so diesel stays separate. Admin-SAVED route rates MOVE
+// WITH IT TOO (owner 2026-11-10, applyMarketToSavedRates: each stores the % it was saved at; derived tiers follow because their ratio divides by the same formula). Kept as module state (set once at the
 // App root from the settings, like the other app-wide rules) so the ~30 calculateFare callers need no new argument.
 export const MARKET_ADJUST_MIN_PCT = -50;
 export const MARKET_ADJUST_MAX_PCT = 100;
@@ -1955,6 +1955,21 @@ export function applyDieselToSavedRates(rates, live, legacyBase) {
     if (!(km > 0) || !Number.isFinite(base) || base === live) return r;
     const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
     return { ...r, totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + km * (live - base) / mileage)) };
+  });
+}
+// SAVED RATES FOLLOW THE MARKET RATE CHANGE TOO (owner 2026-11-10: "move saved rates according to the market rate changes too"): each saved rate stores the market % it was
+// saved at (`marketAtSave`); every quote scales its stored fare (and its per-km extension) by factor(live %) / factor(saved %). A rate with no stamp stands at `legacyBasePct`
+// (settings/main.ratesMarketBase, written once with the first market change after this shipped; until then = the live %, so NOTHING moves on deploy). Applied BEFORE the diesel
+// term (the market change scales the formula, diesel is added after it), so the Admin calculator, the customer list and the booking read one number.
+export function applyMarketToSavedRates(rates, livePct, legacyBasePct) {
+  if (!Array.isArray(rates)) return rates;
+  const live = 1 + clampMarketAdjustPct(livePct ?? 0) / 100;
+  return rates.map((r) => {
+    const basePct = r.marketAtSave != null ? Number(r.marketAtSave) : (legacyBasePct != null ? Number(legacyBasePct) : clampMarketAdjustPct(livePct ?? 0));
+    if (!Number.isFinite(basePct)) return r;
+    const factor = live / (1 + clampMarketAdjustPct(basePct) / 100);
+    if (Math.abs(factor - 1) < 1e-9) return r;
+    return { ...r, totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) * factor)), ...(r.per != null ? { per: Number(r.per) * factor } : {}) };
   });
 }
 // ---- saved rates follow diesel (end) ----
@@ -12459,7 +12474,8 @@ export default function App() {
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
   const setReturnPct = (v) => patchDoc("settings", "main", { returnPct: typeof v === "function" ? v(returnPct) : v }).catch((e) => console.error(e));
-  const setMarketAdjustPct = (v) => patchDoc("settings", "main", { marketAdjustPct: clampMarketAdjustPct(typeof v === "function" ? v(marketAdjustPct) : v) }).catch((e) => console.error(e));
+  // ratesMarketBase: the market % rates saved BEFORE they carried a stamp stand at -- written once, with the first change (so nothing moves the day this ships).
+  const setMarketAdjustPct = (v) => patchDoc("settings", "main", { marketAdjustPct: clampMarketAdjustPct(typeof v === "function" ? v(marketAdjustPct) : v), ...(settings.ratesMarketBase == null ? { ratesMarketBase: marketAdjustPct } : {}) }).catch((e) => console.error(e));
   // Bumped by hand in Admin Settings each time a new Production release
   // actually goes out on the Play Console — there's no client-reachable API
   // that tells the app "what's live in Production" on its own, so this
@@ -12549,7 +12565,7 @@ export default function App() {
   // permission error here previously just vanished into the console with
   // adminRouteFares silently stuck at its initial [].
   const [adminRouteFaresError, setAdminRouteFaresError] = useState(null);
-  const adminRouteFares = useMemo(() => applyDieselToSavedRates(adminRouteFaresRaw, dieselPricePerLitre, settings.ratesDieselBase), [adminRouteFaresRaw, dieselPricePerLitre, settings.ratesDieselBase]);
+  const adminRouteFares = useMemo(() => applyDieselToSavedRates(applyMarketToSavedRates(adminRouteFaresRaw, marketAdjustPct, settings.ratesMarketBase), dieselPricePerLitre, settings.ratesDieselBase), [adminRouteFaresRaw, marketAdjustPct, settings.ratesMarketBase, dieselPricePerLitre, settings.ratesDieselBase]);
   useEffect(() => {
     if (!firestoreReady) return undefined;
     let timer = null;

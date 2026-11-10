@@ -411,3 +411,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- 25000 kg fare tier separated from 21000 kg (innerFix 5200, innerPer 76, outerMin 7400, outerPer 60) so 20 ton container and 12/14 wheeler no longer quote the same fare; KNOWN_DIP for 25000 scaled; golden regenerated
 - changed (5): app:DEFAULT_FARE_TIERS, code:CLAUDE.md, code:scripts/golden/fares.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DEFAULT_FARE_TIERS
+
+## 2026-11-10 -- Saved Admin rates now follow the Market rate change (marketAtSave stamp, applyMarketToSavedRates before the diesel term, ratesMarketBase for unstamped rates); card text updated; fare engine exposes the helper to tests
+- changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#App
+- added (1): code:src/App.jsx#applyMarketToSavedRates

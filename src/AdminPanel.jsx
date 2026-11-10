@@ -2528,6 +2528,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
         returnPct: isReturn ? returnPct : null,
         driverEntry: comparingEntry ? { mobile: comparingEntry.driverMobile, quote: comparingEntry.totalFare } : null,
         dieselAtSave: dieselPricePerLitre ?? null,
+        marketAtSave: marketAdjustPct ?? 0,
         updatedAt: Date.now(),
       });
       // docId is derived fresh from the CURRENT route/tier/zone/return --
@@ -2704,7 +2705,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Market rate change" : lang === "mr" ? "बाजार दर बदल" : "बाज़ार रेट बदलाव"}</div>
-                <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "On the system rate of all vehicles" : lang === "mr" ? "सर्व गाड्यांच्या सिस्टम दरावर" : "सभी गाड़ियों के सिस्टम रेट पर"}</div>
+                <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "On the system rate and saved rates of all vehicles" : lang === "mr" ? "सर्व गाड्यांच्या सिस्टम व सेव्ह केलेल्या दरांवर" : "सभी गाड़ियों के सिस्टम और सेव किए रेट पर"}</div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button type="button" data-market-minus aria-label="-5%" disabled={marketDraft <= MARKET_ADJUST_MIN_PCT} onClick={() => setMarketDraft((v) => clampMarketAdjustPct(v - MARKET_ADJUST_STEP_PCT))}
@@ -2717,7 +2718,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
             {marketDraft !== marketAdjustPct && (
               <div data-market-confirm className="grid gap-2 mt-2 pt-2" style={{ borderTop: `1.5px dashed ${C.line}` }}>
                 <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>
-                  {lang === "en" ? `Now ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. This changes the system fare every customer is quoted.` : lang === "mr" ? `आता ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. यामुळे प्रत्येक ग्राहकाला दाखवले जाणारे सिस्टम भाडे बदलते.` : `अभी ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. इससे हर ग्राहक को दिखने वाला सिस्टम भाड़ा बदलेगा।`}
+                  {lang === "en" ? `Now ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. This changes the fare every customer is quoted, saved rates included.` : lang === "mr" ? `आता ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. यामुळे प्रत्येक ग्राहकाला दाखवले जाणारे भाडे (सेव्ह केलेले दर धरून) बदलते.` : `अभी ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. इससे हर ग्राहक को दिखने वाला भाड़ा (सेव किए रेट समेत) बदलेगा।`}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" data-market-cancel onClick={() => setMarketDraft(marketAdjustPct)} className="rounded-lg py-1.5 text-xs font-bold" style={{ border: `1.5px solid ${C.line}`, color: C.inkSoft, background: C.paper }}>
