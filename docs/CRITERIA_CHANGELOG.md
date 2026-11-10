@@ -372,3 +372,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-10 -- One vehicle picker everywhere: Admin driver edit forms + fleet add-vehicle form use VehicleModelPicker (owner 2026-11-10)
 - changed (13): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#DriverKyc, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#FleetVehicleForm, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
 - added (5): code:src/AdminPanel.jsx#adminVehicleDraft, code:src/AdminPanel.jsx#adminPickedVehicle, code:src/AdminPanel.jsx#adminVehiclePatch, code:src/AdminPanel.jsx#AdminVehiclePick, code:src/App.jsx#vehicleTypeKeyForName
+
+## 2026-11-10 -- Vehicle picker: models listed under the company with weight chips instead of a second dropdown (owner 2026-11-10)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx
