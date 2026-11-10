@@ -402,3 +402,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-10 -- By-ton capacity/clamp/per-ton suggestion use the category's limit (700 kg = 0.7 t) instead of the fare tier's weight (0.75 t) in the Admin calculator and driver Set Fare; owner asked to check 750 vs 700
 - changed (4): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#SetFareForm
 - added (1): code:src/App.jsx#categoryLoadCapacityKg
+
+## 2026-11-10 -- CLAUDE.md: documented the By-ton load = category limit rule (docs only)
+- changed (1): code:CLAUDE.md
