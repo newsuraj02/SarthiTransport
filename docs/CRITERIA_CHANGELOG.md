@@ -375,3 +375,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-10 -- Vehicle picker: models listed under the company with weight chips instead of a second dropdown (owner 2026-11-10)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx
+
+## 2026-11-10 -- Vehicle picker: removed the 'My model is not listed' option (owner 2026-11-10)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx

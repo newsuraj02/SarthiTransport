@@ -1,8 +1,7 @@
 // "Which vehicle do you drive?" -- (the company's models show as a list with their weights below the company box, not a second dropdown) -- the ONE picker used by the Driver KYC form and by Admin's driver edit forms (owner 2026-11-10). Company -> Model, from the sheet
-// (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. "My model is not listed" shows the customer-list weight
-// categories instead. It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
+// (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. (owner 2026-11-10: the "My model is not listed" option was removed -- a vehicle must be picked from the list.) It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
 import React, { useState } from "react";
-import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, VEHICLE_CHOICE_OTHER, vehicleModelChoice, parseVehicleModelChoice, isSaneCapacityKg } from "./vehicleModels.js";
+import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, vehicleModelChoice, parseVehicleModelChoice, isSaneCapacityKg } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 
@@ -13,11 +12,10 @@ export default function VehicleModelPicker({
   const parsed = parseVehicleModelChoice(choice);
   const [companyIdx, setCompanyIdx] = useState(parsed ? parsed.ci : "");
   const hasSaved = !!(saved && String(saved.name || "").trim() && isSaneCapacityKg(saved.kg));
-  const companyValue = choice === VEHICLE_CHOICE_SAVED ? "saved" : choice === VEHICLE_CHOICE_OTHER ? "other" : (companyIdx !== "" ? `c:${companyIdx}` : "");
+  const companyValue = choice === VEHICLE_CHOICE_SAVED ? "saved" : (companyIdx !== "" ? `c:${companyIdx}` : "");
   const onCompany = (e) => {
     const v = e.target.value;
     if (v === "saved") { setChoice(VEHICLE_CHOICE_SAVED); return; }
-    if (v === "other") { setChoice(VEHICLE_CHOICE_OTHER); return; }
     if (v.startsWith("c:")) { setCompanyIdx(Number(v.slice(2))); setChoice(""); return; }
     setCompanyIdx(""); setChoice("");
   };
@@ -31,10 +29,9 @@ export default function VehicleModelPicker({
         <option value="">{T(lang, "Select company", "कंपनी चुनें", "कंपनी निवडा")}</option>
         {hasSaved && <option value="saved">{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {saved.name}</option>}
         {VEHICLE_MODEL_CATALOG.map((c, i) => <option key={c.company} value={`c:${i}`}>{c.company}</option>)}
-        <option value="other">{T(lang, "My model is not listed", "मेरा मॉडल लिस्ट में नहीं है", "माझे मॉडेल यादीत नाही")}</option>
       </select>
 
-      {company && choice !== VEHICLE_CHOICE_SAVED && choice !== VEHICLE_CHOICE_OTHER && (
+      {company && choice !== VEHICLE_CHOICE_SAVED && (
         <>
           <label className={lbl} style={{ color: labelColor }}>{T(lang, "Vehicle model", "गाड़ी का मॉडल", "गाडीचे मॉडेल")}{req}</label>
           {/* Owner 2026-11-10: pick the company, and ITS models show right below as a list with the weight each carries -- no second dropdown. */}
@@ -54,16 +51,6 @@ export default function VehicleModelPicker({
               );
             })}
           </div>
-        </>
-      )}
-
-      {choice === VEHICLE_CHOICE_OTHER && (
-        <>
-          <label className={lbl} style={{ color: labelColor }}>{T(lang, "Vehicle weight category", "गाड़ी का वज़न वर्ग", "गाडीचा वजन वर्ग")}{req}</label>
-          <select data-vehicle-category className={inputCls} style={{ ...inputStyle, marginBottom: 10 }} value={categoryIndex == null ? "" : String(categoryIndex)} onChange={(e) => setCategoryIndex(e.target.value === "" ? null : Number(e.target.value))}>
-            <option value="">{T(lang, "Select weight category", "वज़न वर्ग चुनें", "वजन वर्ग निवडा")}</option>
-            {categoryOptions.map((o) => <option key={o.index} value={o.index}>{o.label}</option>)}
-          </select>
         </>
       )}
 
