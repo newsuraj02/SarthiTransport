@@ -12887,6 +12887,11 @@ export default function App() {
     const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
     return bulkDeleteDocs("bookings", ids);
   };
+  // Admin's "select what to delete" (owner 2026-11-11): only the picked ids, and only if they are still finished rides -- a live trip is never deleted, even if its id is passed in.
+  const deleteSelectedRides = (ids) => {
+    const finished = new Set(bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id));
+    return bulkDeleteDocs("bookings", (ids || []).filter((id) => finished.has(id)));
+  };
 
   // Money taps are guarded against a double tap (deep-clean 2026-11-02): the wallet/status the button reads only refreshes after
   // the Firestore round trip, so two quick taps used to take the bonus out twice (two withdrawals) or credit a recharge twice.
@@ -13591,7 +13596,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}

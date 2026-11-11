@@ -4113,7 +4113,7 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   );
 }
 
-function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, tripLog, bookings, deleteAllRideHistory, expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
+function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, tripLog, bookings, deleteAllRideHistory, deleteSelectedRides, expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
   // Commission/Bonus/Min-wallet System Settings form -- moved here from
   // AdminSettings (see that component's own comment) with its own
   // independent draft/dirty/Save, same fields/validation/setters as
@@ -4176,6 +4176,39 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       setDeleteError(lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // OPTION 1 of the Danger Zone (owner 2026-11-11: "two options: 1st select what you want to erase or delete, 2nd delete the whole ride history"):
+  // pick finished rides one by one (or everything the Status / date filters show) and delete only those. Same blast radius as "delete all" for the rides picked
+  // (they vanish from every customer's and driver's Ride History too), so it needs the same typed DELETE. Only Completed / Cancelled rides are ever listed.
+  const [pickMode, setPickMode] = useState(false);
+  const [pickStatus, setPickStatus] = useState("all");
+  const [pickFrom, setPickFrom] = useState("");
+  const [pickTo, setPickTo] = useState("");
+  const [picked, setPicked] = useState({});
+  const [pickConfirmText, setPickConfirmText] = useState("");
+  const [pickDeleting, setPickDeleting] = useState(false);
+  const [pickError, setPickError] = useState("");
+  const [pickJustDeleted, setPickJustDeleted] = useState(0);
+  const rideMs = (b) => { const c = b && b.createdAt; if (c && c.toMillis) return c.toMillis(); if (c && c.seconds) return c.seconds * 1000; return Number(c) || 0; };
+  const finishedRides = (bookings || []).filter((b) => b.status === "Completed" || b.status === "Cancelled").slice().sort((a, b) => rideMs(b) - rideMs(a));
+  const shownRides = finishedRides.filter((b) => (pickStatus === "all" || b.status === pickStatus) && (!pickFrom || (rideMs(b) && localDateKey(new Date(rideMs(b))) >= pickFrom)) && (!pickTo || (rideMs(b) && localDateKey(new Date(rideMs(b))) <= pickTo)));
+  const pickedIds = shownRides.filter((b) => picked[b.id]).map((b) => b.id);
+  const closePick = () => { setPickMode(false); setPicked({}); setPickConfirmText(""); setPickError(""); setPickStatus("all"); setPickFrom(""); setPickTo(""); };
+  const runPickDelete = async () => {
+    if (pickedIds.length === 0) return;
+    setPickDeleting(true);
+    setPickError("");
+    try {
+      await deleteSelectedRides(pickedIds);
+      setPickJustDeleted(pickedIds.length);
+      closePick();
+    } catch (e) {
+      console.error("[deleteSelectedRides]", e);
+      setPickError(lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।");
+    } finally {
+      setPickDeleting(false);
     }
   };
 
@@ -4291,12 +4324,81 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
           {lang === "en" ? `Deleted ${justDeleted} ride record(s).` : lang === "mr" ? `${justDeleted} राइड रेकॉर्ड डिलीट केले.` : `${justDeleted} राइड रिकॉर्ड डिलीट किए गए।`}
         </p>
       )}
-      {!confirmingDelete ? (
-        <button onClick={() => { setConfirmingDelete(true); setJustDeleted(0); }} disabled={deletableCount === 0}
-          className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: deletableCount ? C.safety : "#E2E8F0", color: deletableCount ? "#FFFFFF" : C.inkSoft }}>
-          {lang === "en" ? `Delete All Ride History (${deletableCount})` : lang === "mr" ? `सर्व राइड हिस्टरी डिलीट करा (${deletableCount})` : `सभी राइड हिस्ट्री डिलीट करें (${deletableCount})`}
+      {pickJustDeleted > 0 && (
+        <p data-pick-deleted className="text-xs font-bold mb-2" style={{ color: C.success }}>
+          {lang === "en" ? `Deleted ${pickJustDeleted} selected ride record(s).` : lang === "mr" ? `निवडलेले ${pickJustDeleted} राइड रेकॉर्ड डिलीट केले.` : `चुने हुए ${pickJustDeleted} राइड रिकॉर्ड डिलीट किए गए।`}
+        </p>
+      )}
+      {!confirmingDelete && !pickMode && (
+        <button data-danger-option-select onClick={() => { setPickMode(true); setPickJustDeleted(0); setJustDeleted(0); }} disabled={deletableCount === 0}
+          className="w-full rounded-lg py-3 text-sm font-bold mb-2" style={{ background: C.paper, border: `1.5px solid ${deletableCount ? C.safety : C.line}`, color: deletableCount ? C.safety : C.inkSoft }}>
+          {lang === "en" ? "Option 1 · Select what to delete" : lang === "mr" ? "पर्याय 1 · काय डिलीट करायचे ते निवडा" : "विकल्प 1 · चुनें क्या डिलीट करना है"}
         </button>
-      ) : (
+      )}
+      {pickMode && (
+        <div data-danger-select-panel className="space-y-2 mb-2">
+          <div className="text-xs font-bold" style={{ color: C.safety }}>
+            {lang === "en" ? "Tick the rides to delete. Only finished (Completed / Cancelled) rides are listed." : lang === "mr" ? "डिलीट करायच्या राइड्सवर टिक करा. फक्त पूर्ण झालेल्या (Completed / Cancelled) राइड्स दिसतात." : "जिन राइड्स को डिलीट करना है उन पर टिक करें। सिर्फ़ पूरी हो चुकी (Completed / Cancelled) राइड्स दिखती हैं।"}
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {[["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी"], ["Completed", lang === "en" ? "Completed" : lang === "mr" ? "पूर्ण" : "पूरी हुई"], ["Cancelled", lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द"]].map(([k, label]) => (
+              <button key={k} type="button" data-pick-status={k} onClick={() => setPickStatus(k)} className="rounded-full px-3 py-1 text-[11px] font-bold"
+                style={{ background: pickStatus === k ? C.navy : C.bg, color: pickStatus === k ? "#FFFFFF" : C.inkSoft, border: `1px solid ${pickStatus === k ? C.navy : C.line}` }}>{label}</button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "From date" : lang === "mr" ? "या तारखेपासून" : "इस तारीख से"}
+              <input type="date" data-pick-from value={pickFrom} max={pickTo || undefined} onChange={(e) => setPickFrom(e.target.value)} className="w-full rounded-lg px-2 py-1.5 text-xs font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} /></label>
+            <label className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "To date" : lang === "mr" ? "या तारखेपर्यंत" : "इस तारीख तक"}
+              <input type="date" data-pick-to value={pickTo} min={pickFrom || undefined} onChange={(e) => setPickTo(e.target.value)} className="w-full rounded-lg px-2 py-1.5 text-xs font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} /></label>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? `${pickedIds.length} of ${shownRides.length} selected` : lang === "mr" ? `${shownRides.length} पैकी ${pickedIds.length} निवडले` : `${shownRides.length} में से ${pickedIds.length} चुने`}</div>
+            <div className="flex gap-1.5">
+              <button type="button" data-pick-all onClick={() => setPicked((p) => { const n = { ...p }; shownRides.forEach((b) => { n[b.id] = true; }); return n; })} className="rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>{lang === "en" ? "Select all shown" : lang === "mr" ? "दिसणारे सर्व निवडा" : "दिख रहे सभी चुनें"}</button>
+              <button type="button" data-pick-none onClick={() => setPicked({})} className="rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>{lang === "en" ? "Clear" : lang === "mr" ? "काढा" : "हटाएँ"}</button>
+            </div>
+          </div>
+          <div className="rounded-lg overflow-y-auto" style={{ maxHeight: 288, border: `1px solid ${C.line}` }}>
+            {shownRides.length === 0 && <div className="p-3 text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No finished rides match these filters." : lang === "mr" ? "या फिल्टरशी जुळणारी कोणतीही पूर्ण राइड नाही." : "इन फ़िल्टर से कोई पूरी हुई राइड नहीं मिली।"}</div>}
+            {shownRides.map((b) => (
+              <label key={b.id} data-pick-row className="flex items-start gap-2 px-3 py-2 cursor-pointer" style={{ borderBottom: `1px solid ${C.line}`, background: picked[b.id] ? "#FEF2F2" : C.paper }}>
+                <input type="checkbox" data-pick-box checked={!!picked[b.id]} onChange={(e) => setPicked((p) => ({ ...p, [b.id]: e.target.checked }))} className="mt-0.5 shrink-0" style={{ width: 18, height: 18, accentColor: C.safety }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
+                  <span className="block text-[11px] font-semibold" style={{ color: C.inkSoft }}>{rideMs(b) ? localDateKey(new Date(rideMs(b))) : "—"} · {b.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : (lang === "en" ? "Completed" : lang === "mr" ? "पूर्ण" : "पूरी हुई")}{b.customerName ? ` · ${b.customerName}` : ""}{b.driverName ? ` · ${b.driverName}` : ""}</span>
+                </span>
+                <span className="text-xs font-bold shrink-0" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(b.fare)}</span>
+              </label>
+            ))}
+          </div>
+          {pickedIds.length > 0 && (
+            <>
+              <p className="text-xs font-bold" style={{ color: C.safety }}>
+                {lang === "en" ? `This will permanently delete ${pickedIds.length} selected ride record(s). Type DELETE below to confirm.` : lang === "mr" ? `यामुळे निवडलेले ${pickedIds.length} राइड रेकॉर्ड कायमचे डिलीट होतील. पुष्टीसाठी खाली DELETE टाका.` : `इससे चुने हुए ${pickedIds.length} राइड रिकॉर्ड स्थायी रूप से डिलीट हो जाएंगे। पुष्टि के लिए नीचे DELETE टाइप करें।`}
+              </p>
+              <input data-pick-confirm value={pickConfirmText} onChange={(e) => setPickConfirmText(e.target.value)} placeholder={CONFIRM_WORD}
+                className="w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none" style={{ border: `1.5px solid ${C.safety}`, color: C.ink }} />
+            </>
+          )}
+          {pickError && <p className="text-xs font-bold" style={{ color: C.safety }}>{pickError}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={closePick} disabled={pickDeleting} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+            </button>
+            <button type="button" data-pick-delete onClick={runPickDelete} disabled={pickedIds.length === 0 || pickConfirmText !== CONFIRM_WORD || pickDeleting}
+              className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: pickedIds.length > 0 && pickConfirmText === CONFIRM_WORD ? C.safety : "#E2E8F0", color: pickedIds.length > 0 && pickConfirmText === CONFIRM_WORD ? "#FFFFFF" : C.inkSoft }}>
+              {pickDeleting ? (lang === "en" ? "Deleting…" : lang === "mr" ? "डिलीट होत आहे…" : "डिलीट हो रहा है…") : (lang === "en" ? `Delete selected (${pickedIds.length})` : lang === "mr" ? `निवडलेले डिलीट करा (${pickedIds.length})` : `चुने हुए डिलीट करें (${pickedIds.length})`)}
+            </button>
+          </div>
+        </div>
+      )}
+      {!confirmingDelete && !pickMode ? (
+        <button data-danger-option-all onClick={() => { setConfirmingDelete(true); setJustDeleted(0); setPickJustDeleted(0); }} disabled={deletableCount === 0}
+          className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: deletableCount ? C.safety : "#E2E8F0", color: deletableCount ? "#FFFFFF" : C.inkSoft }}>
+          {lang === "en" ? `Option 2 · Delete whole ride history (${deletableCount})` : lang === "mr" ? `पर्याय 2 · संपूर्ण राइड हिस्टरी डिलीट करा (${deletableCount})` : `विकल्प 2 · पूरी राइड हिस्ट्री डिलीट करें (${deletableCount})`}
+        </button>
+      ) : pickMode ? null : (
         <div className="space-y-2">
           <p className="text-xs font-bold" style={{ color: C.safety }}>
             {lang === "en"
@@ -4547,7 +4649,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -4575,7 +4677,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "drivers" && (<><AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />
         <AdminFleetVehicles fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} drivers={drivers} lang={lang} setKyc={setFleetKyc} /></>)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
-      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
+      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {/* Alerts now live INSIDE the Notify tab (owner 2026-11-03, handwritten note: "shift Alerts into the Notifications column"):

@@ -418,3 +418,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-11 -- Admin System Settings trial note reworded: the 30-day trial for new drivers begins after the 1st trip (text only; see the open question about the actual trial start)
 - changed (1): code:src/AdminPanel.jsx#AdminFinance
+
+## 2026-11-11 -- Admin Danger Zone: added 'select what to delete' option beside 'delete whole ride history'; deleteSelectedRides only deletes finished rides
+- changed (5): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
