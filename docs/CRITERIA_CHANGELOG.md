@@ -433,3 +433,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-11 -- New read-only admin script scripts/listCustomerBookingAttempts.js (lists customers who tried to book / booked / cancelled, with phone numbers); no app or rule change
 - added (1): code:scripts/listCustomerBookingAttempts.js
+
+## 2026-11-11 -- New read-only admin scripts whyNoDriver.js and driverSupplyReport.js (replay the ring rule against live drivers; supply funnel per hub); no app/rule change
+- changed (1): code:CLAUDE.md
+- added (2): code:scripts/driverSupplyReport.js, code:scripts/whyNoDriver.js

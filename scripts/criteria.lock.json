@@ -151,7 +151,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "b3f4d6d1193cf63e",
+  "code:CLAUDE.md": "c416c5d93d8f8ebd",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -570,6 +570,7 @@
   "code:scripts/importMaharashtraDefaults.mjs#main": "532620aa87836aff",
   "code:scripts/installHooks.mjs": "4f6c66b7c9e3e600",
   "code:scripts/knownIssues.json": "eea8e8616254c563",
+  "code:scripts/listCustomerBookingAttempts.js": "f0a3916fa99be325",
   "code:scripts/listDriverCustomerOverlap.js": "95247c7afc8cf9f8",
   "code:scripts/migrateFareTierBoundaries.mjs#imports": "9ca872c44a2d5f92",
   "code:scripts/migrateFareTierBoundaries.mjs#__dirname": "369dbf352aaefa60",
@@ -1170,6 +1171,7 @@
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
   "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:scripts/listCustomerBookingAttempts.js": "f0a3916fa99be325"
+  "code:scripts/driverSupplyReport.js": "f076adad1793f3a7",
+  "code:scripts/whyNoDriver.js": "41941451dc841b4e"
  }
 }
