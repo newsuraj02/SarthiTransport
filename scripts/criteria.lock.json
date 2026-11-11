@@ -1169,6 +1169,7 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117"
+  "code:vite.config.js": "9cfe2ea5f53d0117",
+  "code:scripts/listCustomerBookingAttempts.js": "f0a3916fa99be325"
  }
 }
