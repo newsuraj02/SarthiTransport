@@ -3,6 +3,7 @@
 // phone, vehicle number, document photos -- owner + Admin only). Rules: firestore.rules. Logic of who is rung / listed: functions/tripLock.js + fleetPseudoDrivers (App.jsx).
 // Loaded lazily from App.jsx / AdminPanel.jsx (they import from here, this imports from App.jsx -- lazy keeps the cycle harmless).
 import React, { useState } from "react";
+import { ChevronDown, Phone } from "lucide-react";
 import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
@@ -240,31 +241,67 @@ export function FleetDispatchSheet({ booking, priv, owner, link, autoSent, worki
   );
 }
 
-// Admin: every fleet vehicle with the owner's details, Approve / Reject (the owner can only ever write kyc "Pending").
+// Admin: TRANSPORTERS (owner 2026-11-11: "create the owner section and in sub category of that owner section the vehicle details and driver details, include the drivers' phone numbers").
+// One card per owner (name, mobile, call, vehicle count, pending badge); tapping it opens that owner's vehicles -- vehicle details (number, category, status) and driver details
+// (name, linked phone number, call) with the documents and Approve / Reject (the owner can only ever write kyc "Pending"). One owner open at a time.
 export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang, setKyc }) {
+  const [openOwner, setOpenOwner] = useState(null);
   const privById = Object.fromEntries((fleetPrivate || []).map((p) => [p.id, p]));
-  const rows = [...(fleetVehicles || [])].sort((a, b) => (a.kyc === "Pending" ? -1 : 1) - (b.kyc === "Pending" ? -1 : 1));
   const ownerName = (m) => (drivers || []).find((d) => d.mobile === m)?.name || m;
+  const byOwner = {};
+  (fleetVehicles || []).forEach((v) => { (byOwner[v.ownerMobile] = byOwner[v.ownerMobile] || []).push(v); });
+  const owners = Object.entries(byOwner).map(([mobile, vs]) => ({
+    mobile, name: ownerName(mobile), pending: vs.filter((v) => v.kyc === "Pending").length,
+    vehicles: [...vs].sort((a, b) => (a.kyc === "Pending" ? -1 : 1) - (b.kyc === "Pending" ? -1 : 1)),
+  })).sort((a, b) => (b.pending > 0) - (a.pending > 0) || String(a.name).localeCompare(String(b.name)));
   return (
     <div className="p-4 space-y-2" data-admin-fleet>
-      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `Transporter (${rows.length})`, `ट्रांसपोर्टर (${rows.length})`, `ट्रान्सपोर्टर (${rows.length})`)}</div>
-      {rows.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
-      {rows.map((x) => {
-        const p = privById[x.id] || {};
+      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `Transporter (${owners.length})`, `ट्रांसपोर्टर (${owners.length})`, `ट्रान्सपोर्टर (${owners.length})`)}</div>
+      {owners.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
+      {owners.map((o) => {
+        const open = openOwner === o.mobile;
         return (
-          <div key={x.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`} · <span style={{ color: x.kyc === "Approved" ? C.success : x.kyc === "Rejected" ? C.safety : C.marigoldDeep }}>{x.kyc}</span></div>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "Owner", "ओनर", "ओनर")}: {ownerName(x.ownerMobile)} ({x.ownerMobile}) · {T(lang, "Driver", "ड्राइवर", "ड्रायव्हर")}: {p.driverName || "-"} {p.driverMobile || ""}</div>
-            <div className="flex gap-2 mt-2 items-center">
-              {[p.driverPhotoUrl, p.dlPhotoUrl, p.vehicleSideUrl].filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} /></a>)}
-              <div className="flex-1" />
-              <button onClick={() => setKyc(x.id, "Approved")} disabled={x.kyc === "Approved"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Approved" ? "#9AA3B0" : C.success }}>{T(lang, "Approve", "स्वीकृत", "मंजूर")}</button>
-              <button onClick={() => setKyc(x.id, "Rejected")} disabled={x.kyc === "Rejected"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Rejected" ? "#9AA3B0" : C.safety }}>{T(lang, "Reject", "अस्वीकृत", "नाकार")}</button>
+          <div key={o.mobile} data-fleet-owner-card className="rounded-xl" style={{ background: C.paper, border: `2px solid ${C.line}` }}>
+            <div className="flex items-center gap-2 p-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{o.name}</div>
+                <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.mobile} · {T(lang, `${o.vehicles.length} vehicle(s)`, `${o.vehicles.length} गाड़ी`, `${o.vehicles.length} गाडी`)}{o.pending > 0 && <span className="font-bold" style={{ color: C.marigoldDeep }}> · {T(lang, `${o.pending} pending`, `${o.pending} लंबित`, `${o.pending} प्रलंबित`)}</span>}</div>
+              </div>
+              <a href={`tel:+91${o.mobile}`} aria-label="Call" className="shrink-0 p-2 rounded-full" style={{ background: C.navy }}><Phone size={14} color="#FFFFFF" /></a>
+              <button type="button" data-fleet-owner-toggle aria-expanded={open} aria-label={T(lang, "Show vehicles", "गाड़ियाँ दिखाएँ", "गाड्या दाखवा")} onClick={() => setOpenOwner(open ? null : o.mobile)} className="shrink-0 p-2 rounded-full" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                <ChevronDown size={16} color={C.ink} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+              </button>
             </div>
+            {open && (
+              <div data-fleet-owner-vehicles className="px-3 pb-3 space-y-2">
+                {o.vehicles.map((x) => {
+                  const p = privById[x.id] || {};
+                  return (
+                    <div key={x.id} data-fleet-vehicle className="rounded-lg p-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                      <div className="text-[10px] font-extrabold uppercase" style={{ color: C.inkSoft }}>{T(lang, "Vehicle details", "गाड़ी की जानकारी", "गाडीची माहिती")}</div>
+                      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`} · <span style={{ color: x.kyc === "Approved" ? C.success : x.kyc === "Rejected" ? C.safety : C.marigoldDeep }}>{x.kyc}</span></div>
+                      <div className="text-[10px] font-extrabold uppercase mt-2" style={{ color: C.inkSoft }}>{T(lang, "Driver details", "ड्राइवर की जानकारी", "ड्रायव्हरची माहिती")}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{p.driverName || "-"}</div>
+                          <div data-fleet-driver-phone className="text-xs font-semibold" style={{ color: C.inkSoft }}>{p.driverMobile || "-"}</div>
+                        </div>
+                        {p.driverMobile && <a href={`tel:+91${p.driverMobile}`} aria-label="Call driver" className="shrink-0 p-2 rounded-full" style={{ background: C.navy }}><Phone size={14} color="#FFFFFF" /></a>}
+                      </div>
+                      <div className="flex gap-2 mt-2 items-center">
+                        {[p.driverPhotoUrl, p.dlPhotoUrl, p.vehicleSideUrl].filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} /></a>)}
+                        <div className="flex-1" />
+                        <button onClick={() => setKyc(x.id, "Approved")} disabled={x.kyc === "Approved"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Approved" ? "#9AA3B0" : C.success }}>{T(lang, "Approve", "स्वीकृत", "मंजूर")}</button>
+                        <button onClick={() => setKyc(x.id, "Rejected")} disabled={x.kyc === "Rejected"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Rejected" ? "#9AA3B0" : C.safety }}>{T(lang, "Reject", "अस्वीकृत", "नाकार")}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
     </div>
   );
 }
-

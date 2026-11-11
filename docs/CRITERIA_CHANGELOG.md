@@ -424,3 +424,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-11 -- Admin fleet list heading renamed from 'Fleet vehicles' to 'Transporter' (text only)
 - changed (1): code:src/FleetOwner.jsx#AdminFleetVehicles
+
+## 2026-11-11 -- Admin Transporter list grouped by owner: owner cards with vehicle details and driver details (incl. driver phone) underneath
+- changed (4): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#AdminFleetVehicles
