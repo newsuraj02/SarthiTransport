@@ -415,3 +415,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-10 -- Saved Admin rates now follow the Market rate change (marketAtSave stamp, applyMarketToSavedRates before the diesel term, ratesMarketBase for unstamped rates); card text updated; fare engine exposes the helper to tests
 - changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#App
 - added (1): code:src/App.jsx#applyMarketToSavedRates
+
+## 2026-11-11 -- Admin System Settings trial note reworded: the 30-day trial for new drivers begins after the 1st trip (text only; see the open question about the actual trial start)
+- changed (1): code:src/AdminPanel.jsx#AdminFinance

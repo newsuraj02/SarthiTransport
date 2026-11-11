@@ -4185,7 +4185,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : lang === "mr" ? "सिस्टम सेटिंग्स" : "सिस्टम सेटिंग्स"}</div>
 
       <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
-        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : lang === "mr" ? "लॉगिनच्या तारखेपासून, नवीन ड्रायव्हर आणि कस्टमरसाठी 30 दिवसांचा ट्रायल मोड आपोआप सुरू होतो" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "For new drivers, the 30-day trial period begins after they complete their 1st trip." : lang === "mr" ? "नवीन ड्रायव्हरसाठी, पहिली ट्रिप पूर्ण केल्यानंतर 30 दिवसांचा ट्रायल कालावधी सुरू होईल." : "नए ड्राइवर के लिए, पहली ट्रिप पूरी करने के बाद 30 दिन का ट्रायल पीरियड शुरू होगा।"}</div>
         <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : lang === "mr" ? "त्या ड्रायव्हरच्या ट्रायल दरम्यान कोणतेही कमिशन किंवा किमान बॅलन्स लागू होत नाही. ट्रायल संपल्यावर खाली दिलेले दर आपोआप लागू होतील." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
       </div>
 
