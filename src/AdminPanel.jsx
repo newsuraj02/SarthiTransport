@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
-  MessageCircle, Phone, Plus, Settings2, Siren, UserCircle2, Users,
+  MessageCircle, Phone, Plus, Settings2, Siren, Truck, UserCircle2, Users,
   Wallet, XCircle,
 } from "lucide-react";
 import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
@@ -3132,7 +3132,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, addVehicleType, minWallet, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, addVehicleType, minWallet, lang, topExtra = null }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -3512,7 +3512,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2 flex-wrap mb-3">
         {/* One single, complete button (not a plain label plus a separate
             reset button) -- with sections replacing tabs below, its job is
             now to open or close every section at once, in place of the old
@@ -3521,6 +3521,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
         </button>
+        {topExtra}
       </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       {q.trim() ? (
@@ -4651,6 +4652,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
 export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
+  const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
   // a separate "Pending KYC approvals" tile.
@@ -4674,8 +4676,17 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
-      {tab === "drivers" && (<><AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />
-        <AdminFleetVehicles fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} drivers={drivers} lang={lang} setKyc={setFleetKyc} /></>)}
+      {tab === "drivers" && (showTransporters
+        ? (<div data-transporters-screen className="p-4">
+            <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+            <AdminFleetVehicles fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} drivers={drivers} lang={lang} setKyc={setFleetKyc} />
+          </div>)
+        : <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet}
+            topExtra={<button data-all-transporters-btn onClick={() => setShowTransporters(true)} className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
+              <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
+            </button>} />)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}

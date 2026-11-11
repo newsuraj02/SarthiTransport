@@ -256,7 +256,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
   })).sort((a, b) => (b.pending > 0) - (a.pending > 0) || String(a.name).localeCompare(String(b.name)));
   return (
     <div className="p-4 space-y-2" data-admin-fleet>
-      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `Transporter (${owners.length})`, `ट्रांसपोर्टर (${owners.length})`, `ट्रान्सपोर्टर (${owners.length})`)}</div>
+      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `All Transporters (${owners.length})`, `सभी ट्रांसपोर्टर (${owners.length})`, `सर्व ट्रान्सपोर्टर (${owners.length})`)}</div>
       {owners.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
       {owners.map((o) => {
         const open = openOwner === o.mobile;
