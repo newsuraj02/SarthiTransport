@@ -247,8 +247,8 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
   const ownerName = (m) => (drivers || []).find((d) => d.mobile === m)?.name || m;
   return (
     <div className="p-4 space-y-2" data-admin-fleet>
-      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `Fleet vehicles (${rows.length})`, `फ्लीट गाड़ियाँ (${rows.length})`, `फ्लीट गाड्या (${rows.length})`)}</div>
-      {rows.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No fleet vehicles yet.", "अभी कोई फ्लीट गाड़ी नहीं।", "अजून फ्लीट गाडी नाही.")}</div>}
+      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `Transporter (${rows.length})`, `ट्रांसपोर्टर (${rows.length})`, `ट्रान्सपोर्टर (${rows.length})`)}</div>
+      {rows.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
       {rows.map((x) => {
         const p = privById[x.id] || {};
         return (

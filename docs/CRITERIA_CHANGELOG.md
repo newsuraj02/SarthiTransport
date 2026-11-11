@@ -421,3 +421,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-11 -- Admin Danger Zone: added 'select what to delete' option beside 'delete whole ride history'; deleteSelectedRides only deletes finished rides
 - changed (5): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-11 -- Admin fleet list heading renamed from 'Fleet vehicles' to 'Transporter' (text only)
+- changed (1): code:src/FleetOwner.jsx#AdminFleetVehicles
