@@ -124,7 +124,10 @@ service cloud.firestore {
       // privately (WhatsApp/push to that driver), never posted publicly.
       allow get: if isSignedIn() || resource.data.vehicleSpec == null;
       allow list: if isSignedIn();
-      allow create: if isOwnPhone(mobile) || isAdmin();
+      // ONE ROLE PER MOBILE NUMBER (owner 2026-11-12): a number that already has a customers/{mobile} profile can't CREATE a driver profile (Admin may).
+      // This is the server-side backstop behind the app's own check (functions checkMobileRegistered), so an older or hand-made client can't slip a second role in.
+      // Only CREATE is limited: numbers that already hold both profiles keep working (updates / deletes are unchanged).
+      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/customers/$(mobile))) || isAdmin();
       // The KYC-portal branch (vehicleSpec == null) stays unconditional --
       // it's the one legitimate place kyc/wallet/etc. get set for the
       // first time. Everywhere else, a driver's own session can change
@@ -156,7 +159,10 @@ service cloud.firestore {
     match /customers/{mobile} {
       allow get: if isOwnPhone(mobile) || isAdmin();
       allow list: if isAdmin();
-      allow write: if isOwnPhone(mobile) || isAdmin();
+      // ONE ROLE PER MOBILE NUMBER (owner 2026-11-12): mirror of the drivers rule -- a number that already has a drivers/{mobile} profile can't CREATE a customer profile
+      // (Admin may). Updates and deletes stay as before, so numbers that already hold both profiles keep working.
+      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/drivers/$(mobile))) || isAdmin();
+      allow update, delete: if isOwnPhone(mobile) || isAdmin();
     }
 
     match /bookings/{id} {

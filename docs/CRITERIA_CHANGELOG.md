@@ -462,3 +462,14 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-12 -- One role per mobile number (re-fingerprint on the pushed base)
 - changed (10): fn:resetPinAfterPhoneVerify, fn:checkMobileRegistered, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:functions/index.js#fn:checkMobileRegistered, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding
 - added (4): code:functions/index.js#mobileHasRoleAccount, code:src/App.jsx#numberBelongsToOtherRole, code:src/App.jsx#numberOtherRoleMsg, code:functions/roleLock.js
+
+## 2026-11-12 -- Rebase merge: re-fingerprint after combining the one-role change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- One role per number also enforced by firestore.rules (create drivers/customers refused when the other profile exists), read-only dual-role script, rules emulator test (owner 2026-11-12)
+- changed (5): file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks
+- added (2): code:scripts/listDualRoleNumbers.js, code:scripts/rulesTest/roleLock.mjs
+
+## 2026-11-12 -- One role per number also enforced by firestore.rules, read-only dual-role script, rules emulator test (re-fingerprint on the pushed base)
+- changed (5): file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks
+- added (2): code:scripts/listDualRoleNumbers.js, code:scripts/rulesTest/roleLock.mjs
