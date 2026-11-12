@@ -63,8 +63,8 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
   const [pickup, setPickup] = useState(pf.pickup || ""); const [pickupCoords, setPickupCoords] = useState(null); const [pickupPlaceId, setPickupPlaceId] = useState(null);
   const [drop, setDrop] = useState(pf.drop || ""); const [dropCoords, setDropCoords] = useState(null); const [dropPlaceId, setDropPlaceId] = useState(null);
   const [distance, setDistance] = useState(null);
-  const [when, setWhen] = useState(pf.advance ? "advance" : "now"); // "now" | "advance"
-  const [returnTrip, setReturnTrip] = useState(!!pf.returnTrip);
+  const [when] = useState(pf.advance ? "advance" : "now"); // "now" | "advance"
+  const [returnTrip] = useState(!!pf.returnTrip);
   const [advanceDate, setAdvanceDate] = useState(() => (pf.advance && pf.scheduledFor && advanceDays(lang).some((d) => d.key === String(pf.scheduledFor).slice(0, 10)) ? String(pf.scheduledFor).slice(0, 10) : ""));
   const [categoryIndex, setCategoryIndex] = useState(() => (pf.categoryKg ? categoryIndexForKg(Number(pf.categoryKg), customerListCategoryOptions(lang)) : null));
   const [showAll, setShowAll] = useState(false);
@@ -215,9 +215,17 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
               {prefill && (
                 <div data-admin-book-entered-weight className="rounded-lg px-3 py-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
                   <div className={label} style={{ color: C.inkSoft }}>{T(lang, "Weight entered by the customer", "ग्राहक द्वारा भरा गया वज़न", "ग्राहकाने भरलेले वजन")}</div>
-                  <div data-admin-book-entered-weight-value className="text-sm font-extrabold" style={{ color: pf.categoryKg ? C.ink : C.inkSoft }}>
-                    {pf.categoryKg ? vehicleCategoryText(Math.min(Number(pf.categoryKg), 35000), lang) : T(lang, "Not entered", "भरा नहीं गया", "भरले नाही")}
+                  <div className="flex items-center justify-between gap-2">
+                    <div data-admin-book-entered-weight-value className="text-sm font-extrabold min-w-0" style={{ color: pf.categoryKg ? C.ink : C.inkSoft }}>
+                      {pf.categoryKg ? vehicleCategoryText(Math.min(Number(pf.categoryKg), 35000), lang) : T(lang, "Not entered", "भरा नहीं गया", "भरले नाही")}
+                    </div>
+                    {chosenFare && chosenFare.fare > 0 && <div data-admin-book-entered-fare className="text-sm font-extrabold shrink-0" style={{ color: C.ink }}>{fmt(chosenFare.fare)}</div>}
                   </div>
+                  {(returnTrip || when === "advance") && (
+                    <div className="text-[10px] font-bold mt-0.5" style={{ color: C.inkSoft }}>
+                      {returnTrip ? `↔ ${T(lang, "Round trip", "राउंड ट्रिप", "राउंड ट्रिप")}` : ""}{returnTrip && when === "advance" ? " · " : ""}{when === "advance" ? T(lang, "Advance booking", "एडवांस बुकिंग", "अ‍ॅडव्हान्स बुकिंग") : ""}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="space-y-2">
@@ -231,16 +239,6 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   mapsReady={mapsReady} placeholder={T(lang, "Drop", "ड्रॉप", "ड्रॉप")} />
                 {km > 0 && <div className="text-xs font-extrabold" style={{ color: C.ink }}>{formatTripKm(km, lang)}</div>}
               </div>
-              <div className="flex gap-2">
-                {[["now", T(lang, "Now", "अभी", "आत्ता")], ["advance", T(lang, "Advance", "एडवांस", "अ‍ॅडव्हान्स")]].map(([k, text]) => (
-                  <button key={k} type="button" data-admin-book-when={k} onClick={() => setWhen(k)} className="flex-1 rounded-lg py-2 text-xs font-extrabold"
-                    style={{ background: when === k ? C.navy : C.bg, color: when === k ? "#fff" : C.ink, border: `1px solid ${C.line}` }}>{text}</button>
-                ))}
-              </div>
-              <label data-admin-book-round-trip className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 cursor-pointer select-none" style={{ background: C.bg, border: `1px solid ${returnTrip ? C.success : C.line}` }}>
-                <span className="text-xs font-bold" style={{ color: C.ink }}>↔ {T(lang, "Round trip (one-way + return)", "राउंड ट्रिप (जाना + वापसी)", "राउंड ट्रिप (जाणे + परत)")}</span>
-                <input type="checkbox" checked={returnTrip} onChange={(e) => { setReturnTrip(e.target.checked); setConfirming(null); setError(""); }} className="w-5 h-5 shrink-0 rounded" style={{ accentColor: C.navy }} />
-              </label>
               {when === "advance" && (
                 <div className="grid grid-cols-1 gap-1.5" data-admin-book-days>
                   {days.map((d) => (
@@ -249,7 +247,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   ))}
                 </div>
               )}
-              {(
+              {!pf.categoryKg && (
                 <div data-admin-book-categories className="space-y-1">
                   <div className={label} style={{ color: C.inkSoft }}>{T(lang, "Vehicle category (the fare the customer sees)", "गाड़ी की श्रेणी (ग्राहक को दिखने वाला भाड़ा)", "वाहन श्रेणी (ग्राहकाला दिसणारे भाडे)")}</div>
                   {!placesReady && <div data-admin-book-fares-wait className="text-[10px]" style={{ color: C.inkSoft }}>{T(lang, "Fares show once Pickup and Drop are found on the map.", "पिकअप और ड्रॉप मैप पर मिलते ही भाड़ा दिखेगा।", "पिकअप आणि ड्रॉप नकाशावर मिळताच भाडे दिसेल.")}</div>}

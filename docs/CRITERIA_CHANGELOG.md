@@ -574,3 +574,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Book for this customer: 'Weight entered by the customer' box under mobile/name
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer
+
+## 2026-11-12 -- Book for this customer: category list, Now/Advance toggle and Round trip box removed from the sheet; list only when the customer entered no category
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer
