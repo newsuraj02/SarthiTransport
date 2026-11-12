@@ -515,3 +515,12 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Call Apna Transport button (re-fingerprint on the pushed base)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Rebase merge: re-fingerprint after combining the Call Apna Transport button with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- Vehicle list hint line + Round trip booking panel on the customer booking screen (owner 2026-11-12, items 2-3)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Vehicle list hint + Round trip booking panel (re-fingerprint on the pushed base)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
