@@ -7936,7 +7936,15 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           )}
         </div>
         {mapEl}
-        <div className="px-5 pt-4">
+        {/* CALL APNA TRANSPORT (owner 2026-11-12: "paraphrase it in minimal words and add a call button next to it; place it above the Pickup and Drop box"): a short line + a Call button
+            (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box. We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
+        <div data-call-row className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <span className="min-w-0 text-sm font-bold leading-snug" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
+          <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-xl px-4 py-2.5 flex items-center gap-1.5 text-sm font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
+            <Phone size={16} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
+          </a>
+        </div>
+        <div className="px-5 pt-3">
           {placesFormEl}
         </div>
         <div className="px-5 pt-3 space-y-3">
@@ -7985,16 +7993,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
             </button>
           )}
         </div>
-      {/* CALL APNA TRANSPORT TO BOOK (owner 2026-11-12: a "If unable to fill Pickup and Drop, call Apna Transport to book vehicle" button on the customer's main screen that calls us directly; we then book on the
-          customer's behalf from Admin -> Bookings -> "Book for a customer", and the customer pays the driver). A plain in-flow button (a tel: link to the same support number the Help
-          screen dials, ADMIN_PHONE) as the LAST block of the booking screen -- Current AND Advance -- so nothing above it (Pickup / Drop boxes, the recent-trip cards, the map, the
-          vehicle list) moves; it is not fixed, so it never covers the Round trip bar or a suggestion list. */}
-      <div className="px-5 pt-1 pb-3">
-        <a data-call-to-book href={`tel:${ADMIN_PHONE}`} className="w-full rounded-2xl py-3 px-4 flex items-center justify-center gap-2 text-sm font-extrabold text-center" style={{ background: C.success, color: "#FFFFFF" }}>
-          <Phone size={18} className="shrink-0" />
-          <span>{lang === "en" ? "If unable to fill Pickup and Drop, call Apna Transport to book vehicle" : lang === "mr" ? "पिकअप आणि ड्रॉप भरता न आल्यास अपना ट्रान्सपोर्टला फोन करा, गाडी बुक करण्यासाठी" : "पिकअप और ड्रॉप न भर पाएँ तो अपना ट्रांसपोर्ट को फोन करो, गाड़ी बुक करने के लिए"}</span>
-        </a>
-      </div>
       </div>
         </>
       )}

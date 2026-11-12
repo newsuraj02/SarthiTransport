@@ -540,3 +540,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Customer booking screen: two screens -- vehicle list with Book now, then Pickup and Drop with the call button; vehicle-first / list-above-boxes replaced -- owner 2026-11-12
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminCustomerFlow.jsx#EVENT_TEXT, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Customer Pickup/Drop screen: call prompt shortened with a Call button, placed above the Pickup box -- owner 2026-11-12
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
