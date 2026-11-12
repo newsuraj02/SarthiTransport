@@ -506,3 +506,12 @@ Every change to a rule, condition, function or config file the app depends on, n
 - changed (14): fn:dispatchFleetTrip, fn:adminBookForCustomer, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/index.js#fn:dispatchFleetTrip, code:functions/index.js#fn:adminBookForCustomer, code:scripts/serverTests/adminBookForCustomer.cjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#failText, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel
 - added (11): code:functions/adminBooking.js#MAX_FARE, code:functions/adminBooking.js#isNum, code:functions/adminBooking.js#text, code:functions/adminBooking.js#cleanMobile, code:functions/adminBooking.js#validScheduledFor, code:functions/adminBooking.js#validateAdminBookingInput, code:functions/adminBooking.js#driverBlockReason, code:functions/adminBooking.js#fleetBlockReason, code:functions/adminBooking.js#buildAdminBookingDoc, code:functions/adminBooking.js#exportsList, code:functions/index.js#sendFleetDispatch
 - removed (1): code:functions/adminBooking.js
+
+## 2026-11-12 -- Rebase merge: re-fingerprint after combining the Admin Round trip / transporter change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- Call Apna Transport to book vehicle button on the customer booking screen (owner 2026-11-12)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Call Apna Transport button (re-fingerprint on the pushed base)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

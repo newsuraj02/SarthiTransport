@@ -7922,6 +7922,16 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           {changePlacesLink}
         </div>
       )}
+      {/* CALL APNA TRANSPORT TO BOOK (owner 2026-11-12: a "Call Apna Transport to book vehicle" button on the customer's main screen that calls us directly; we then book on the
+          customer's behalf from Admin -> Bookings -> "Book for a customer", and the customer pays the driver). A plain in-flow button (a tel: link to the same support number the Help
+          screen dials, ADMIN_PHONE) as the LAST block of the booking screen -- Current AND Advance -- so nothing above it (Pickup / Drop boxes, the recent-trip cards, the map, the
+          vehicle list) moves; it is not fixed, so it never covers the Round trip bar or a suggestion list. */}
+      <div className="px-5 pt-1 pb-3">
+        <a data-call-to-book href={`tel:${ADMIN_PHONE}`} className="w-full rounded-2xl py-3 px-4 flex items-center justify-center gap-2 text-sm font-extrabold text-center" style={{ background: C.success, color: "#FFFFFF" }}>
+          <Phone size={18} className="shrink-0" />
+          <span>{lang === "en" ? "Call Apna Transport to book vehicle" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा, गाडी बुक करण्यासाठी" : "अपना ट्रांसपोर्ट को फोन करो, गाड़ी बुक करने के लिए"}</span>
+        </a>
+      </div>
       {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Round trip" checkbox (Current and Advance, one
           shared screen). Plain fixed element, z-[25]: above the page, BELOW the Pickup (z-40) / Drop (z-30) suggestion lists, the menu
           and the sheets (z-50). Visible ONLY while the Pickup/Drop boxes are on screen (returnBarVisible); it must not depend on which
