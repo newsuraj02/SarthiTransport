@@ -208,7 +208,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
-const { validateAdminBookingInput, driverBlockReason, buildAdminBookingDoc } = require("./adminBooking");
+const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -996,17 +996,9 @@ exports.convertDriverToFleetOwner = onCall({ region: "asia-south1" }, async (req
   return { ok: true, vehicleId: plan.id };
 });
 
-exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
-  const callerPhone = callerPhoneFromAuth(request.auth?.token);
-  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
-  const { bookingId } = request.data || {};
-  if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
-  const bSnap = await db.collection("bookings").doc(bookingId).get();
-  if (!bSnap.exists) throw new HttpsError("not-found", "Booking not found.");
-  const booking = bSnap.data();
-  if (!booking.fleetBooking || !booking.fleetVehicleId || !booking.driverMobile || callerPhone !== `+91${booking.driverMobile}`) {
-    throw new HttpsError("permission-denied", "Not the fleet owner of this booking.");
-  }
+// Sends the trip to a transporter's driver (who has no app) on WhatsApp -- shared by the owner's own Accept (dispatchFleetTrip below) and an Admin booking
+// (adminBookForCustomer). Never throws for a send problem: { link, sent, text } -- `sent` false means the owner / Admin shares `text` by hand.
+async function sendFleetDispatch(bookingId, booking) {
   const privSnap = await db.collection("fleetVehiclePrivate").doc(booking.fleetVehicleId).get();
   const priv = privSnap.exists ? privSnap.data() : null;
   const token = await fleetLinkFor(bookingId);
@@ -1036,6 +1028,19 @@ exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH
     console.error("[dispatchFleetTrip] send failed:", e.message);
   }
   return { link, sent, text: buildFleetDispatchText({ booking, ownerName: booking.ownerName, ownerMobile: booking.driverMobile, link }) };
+}
+exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const { bookingId } = request.data || {};
+  if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
+  const bSnap = await db.collection("bookings").doc(bookingId).get();
+  if (!bSnap.exists) throw new HttpsError("not-found", "Booking not found.");
+  const booking = bSnap.data();
+  if (!booking.fleetBooking || !booking.fleetVehicleId || !booking.driverMobile || callerPhone !== `+91${booking.driverMobile}`) {
+    throw new HttpsError("permission-denied", "Not the fleet owner of this booking.");
+  }
+  return sendFleetDispatch(bookingId, booking);
 });
 
 // The trip page's own door (public/trip.html): no login -- the secret in the link is the proof. Actions: "info" (what the driver needs to see), "otp" (the customer's 4-digit
@@ -1660,7 +1665,7 @@ async function mobileHasRoleAccount(mobile, role) {
 // driver (status Ongoing, driver + vehicle filled in, pickup OTP made -- what the driver's own Accept would produce), so nobody else is rung and the ring code is not
 // involved at all. The customer pays the driver directly (`paymentBy: "customer"`); nothing is charged to Admin. Decisions live in functions/adminBooking.js.
 // Written with the Admin SDK, so firestore.rules need no change (a customer / driver session still cannot create a booking for someone else).
-exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request) => {
+exports.adminBookForCustomer = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const checked = validateAdminBookingInput(request.data);
   if (!checked.ok) return { ok: false, reason: checked.reason, message: checked.message };
@@ -1673,18 +1678,37 @@ exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request)
     console.error("[adminBookForCustomer] role lookup failed:", e.message);
     return { ok: false, reason: "lookup_failed", message: "Could not check the number -- try again." };
   }
-  const driverSnap = await db.collection("drivers").doc(v.driverMobile).get();
-  const driver = driverSnap.exists ? driverSnap.data() : null;
-  let conflict = false;
-  if (driver) {
-    const ongoing = (await db.collection("bookings").where("driverMobile", "==", v.driverMobile).where("status", "==", "Ongoing").get()).docs.map((d) => d.data());
-    conflict = hasLoadConflict({ scheduledFor: v.scheduledFor }, ongoing, notificationLockHours(Number(driver.vehicleSpec?.capacityKg) || 0));
+
+  // WHO takes the trip: a single driver (his own phone), or ONE VEHICLE of a transporter (owner 2026-11-12) -- then the trip is the OWNER's account, the vehicle's driver (no app) gets it on WhatsApp.
+  let driver = null, fleet = null, conflict = false, block = null;
+  if (v.fleetVehicleId) {
+    const [vSnap, pSnap] = await Promise.all([db.collection("fleetVehicles").doc(v.fleetVehicleId).get(), db.collection("fleetVehiclePrivate").doc(v.fleetVehicleId).get()]);
+    const vehicle = vSnap.exists ? vSnap.data() : null, priv = pSnap.exists ? pSnap.data() : null;
+    const ownerSnap = vehicle && vehicle.ownerMobile ? await db.collection("drivers").doc(vehicle.ownerMobile).get() : null;
+    const owner = ownerSnap && ownerSnap.exists ? ownerSnap.data() : null;
+    if (vehicle && owner) {
+      const ongoing = (await db.collection("bookings").where("fleetVehicleId", "==", v.fleetVehicleId).where("status", "==", "Ongoing").get()).docs.map((d) => d.data());
+      conflict = hasLoadConflict({ scheduledFor: v.scheduledFor }, ongoing, notificationLockHours(Number(vehicle.capacityKg) || 0));
+    }
+    block = fleetBlockReason(vehicle, priv, owner, conflict);
+    if (!block && [vehicle.ownerMobile, fleetCleanMobile(priv.driverMobile)].includes(v.customerMobile)) block = "same_number";
+    if (!block) {
+      driver = owner;
+      fleet = { vehicleId: v.fleetVehicleId, vehicleName: vehicle.vehicleName || "fleet", ownerMobile: vehicle.ownerMobile, ownerName: owner.name || "", driverName: String(priv.driverName).trim(), driverMobile: fleetCleanMobile(priv.driverMobile), vehicleNumber: priv.vehicleNumber || null };
+    }
+  } else {
+    const driverSnap = await db.collection("drivers").doc(v.driverMobile).get();
+    driver = driverSnap.exists ? driverSnap.data() : null;
+    if (driver) {
+      const ongoing = (await db.collection("bookings").where("driverMobile", "==", v.driverMobile).where("status", "==", "Ongoing").get()).docs.map((d) => d.data());
+      conflict = hasLoadConflict({ scheduledFor: v.scheduledFor }, ongoing, notificationLockHours(Number(driver.vehicleSpec?.capacityKg) || 0));
+    }
+    block = driverBlockReason(driver, conflict);
   }
-  const block = driverBlockReason(driver, conflict);
-  if (block) return { ok: false, reason: block, message: "That driver cannot take this trip (" + block.replace(/^driver_/, "").replace(/_/g, " ") + ")." };
+  if (block) return { ok: false, reason: block, message: "That " + (v.fleetVehicleId ? "vehicle" : "driver") + " cannot take this trip (" + block.replace(/^(driver|vehicle)_/, "").replace(/_/g, " ") + ")." };
 
   const stamp = FieldValue.serverTimestamp();
-  const doc = buildAdminBookingDoc(v, driver, stamp);
+  const doc = buildAdminBookingDoc(v, driver, stamp, fleet);
   let bookingId = null;
   for (let attempt = 0; attempt < 6 && !bookingId; attempt++) {
     const id = "TS-" + crypto.randomInt(10000, 100000);
@@ -1702,6 +1726,16 @@ exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request)
     await db.collection("bookingOtps").doc(bookingId).create({ otp: newPickupOtp(), customerMobile: v.customerMobile, createdAt: FieldValue.serverTimestamp() });
   } catch (e) {
     if (e.code !== 6 && !/already exists/i.test(e.message || "")) throw e;
+  }
+  // A transporter's driver has no app: send him the trip (pickup, drop, the customer's mobile, a private link for the OTP) on WhatsApp, the same message the owner's own Accept sends.
+  if (fleet) {
+    try {
+      const dispatch = await sendFleetDispatch(bookingId, { ...doc, id: bookingId });
+      return { ok: true, bookingId, fleet: true, dispatch: { sent: !!dispatch.sent, link: dispatch.link, text: dispatch.text, driverMobile: fleet.driverMobile } };
+    } catch (e) {
+      console.error("[adminBookForCustomer] fleet dispatch failed:", e.message);
+      return { ok: true, bookingId, fleet: true, dispatch: { sent: false, link: null, text: null, driverMobile: fleet.driverMobile } };
+    }
   }
   return { ok: true, bookingId };
 });

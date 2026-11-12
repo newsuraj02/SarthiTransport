@@ -1626,7 +1626,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ bookings, tripLog, lang, drivers, fareTiers, adminRouteFares, dieselPricePerLitre }) {
+function AdminBookings({ bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
   const [bookForCustomerOpen, setBookForCustomerOpen] = useState(false);
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
@@ -1726,7 +1726,7 @@ function AdminBookings({ bookings, tripLog, lang, drivers, fareTiers, adminRoute
       <button type="button" data-admin-book-for-customer-btn onClick={() => setBookForCustomerOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.navy, color: "#FFFFFF" }}>
         <Plus size={16} /> {lang === "en" ? "Book for a customer" : lang === "mr" ? "ग्राहकासाठी बुक करा" : "ग्राहक के लिए बुक करें"}
       </button>
-      {bookForCustomerOpen && <AdminBookForCustomer drivers={drivers} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} lang={lang} onClose={() => setBookForCustomerOpen(false)} />}
+      {bookForCustomerOpen && <AdminBookForCustomer drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomerOpen(false)} />}
       {sections.map((s) => (
         <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="flex items-center justify-between mb-3">
@@ -4718,7 +4718,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
+      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>

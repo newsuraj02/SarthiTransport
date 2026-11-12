@@ -40,6 +40,17 @@ col("drivers").set("9000000001", { name: "Suresh", mobile: "9000000001", kyc: "A
 col("drivers").set("9000000002", { name: "Blocked", mobile: "9000000002", kyc: "Approved", blacklisted: true, vehicleSpec: { capacityKg: 700 } });
 col("drivers").set("9000000003", { name: "Fleet", mobile: "9000000003", kyc: "Approved", fleetOwner: true, vehicleSpec: { capacityKg: 700 } });
 col("drivers").set("9000000004", { name: "Pending", mobile: "9000000004", kyc: "Pending", vehicleSpec: { capacityKg: 700 } });
+// a transporter with two vehicles (one Approved, one still Pending) and a blocked transporter
+col("drivers").set("9000000010", { name: "Owner Pratik", mobile: "9000000010", kyc: "Approved", fleetOwner: true, vehicleSpec: { capacityKg: 700 } });
+col("fleetVehicles").set("f1", { ownerMobile: "9000000010", vehicleName: "Tata Ace", capacityKg: 700, kyc: "Approved", active: true });
+col("fleetVehiclePrivate").set("f1", { ownerMobile: "9000000010", driverName: "Ramesh Patil", driverMobile: "9333333333", vehicleNumber: "MH12AB1234" });
+col("fleetVehicles").set("f2", { ownerMobile: "9000000010", vehicleName: "Pickup", capacityKg: 1200, kyc: "Pending", active: true });
+col("fleetVehiclePrivate").set("f2", { ownerMobile: "9000000010", driverName: "Sunil", driverMobile: "9444444444" });
+col("fleetVehicles").set("f3", { ownerMobile: "9000000010", vehicleName: "Pickup", capacityKg: 1200, kyc: "Approved", active: false });
+col("fleetVehiclePrivate").set("f3", { ownerMobile: "9000000010", driverName: "Sunil", driverMobile: "9444444444" });
+col("drivers").set("9000000011", { name: "Blocked Owner", mobile: "9000000011", kyc: "Approved", fleetOwner: true, blacklisted: true });
+col("fleetVehicles").set("f4", { ownerMobile: "9000000011", vehicleName: "Pickup", capacityKg: 1200, kyc: "Approved", active: true });
+col("fleetVehiclePrivate").set("f4", { ownerMobile: "9000000011", driverName: "Dev", driverMobile: "9555555551" });
 (async () => {
   const out = [];
   const t = async (name, req, check) => { let r, err; try { r = await call(req); } catch (e) { err = e; } out.push([check(r, err) ? "ok  " : "BUG?", name, JSON.stringify(r || (err && err.code)).slice(0, 140)]); };
@@ -61,6 +72,25 @@ col("drivers").set("9000000004", { name: "Pending", mobile: "9000000004", kyc: "
   await t("no coordinates", { ...admin, data: { ...base, pickupLat: null } }, (r) => r && r.reason === "coords");
   await t("zero fare", { ...admin, data: { ...base, fare: 0 } }, (r) => r && r.reason === "fare");
   await t("same number", { ...admin, data: { ...base, customerMobile: "9000000001" } }, (r) => r && r.reason === "same_number");
+  // ROUND TRIP: the fare is the TOTAL = one-way + return
+  await t("round trip books with one-way + return = fare", { ...admin, data: { ...base, driverMobile: "9000000001", scheduledFor: "2030-02-01 08:00", returnTrip: true, oneWayFare: 750, returnFare: 638, returnPct: 15, fare: 1388 } }, (r) => r && r.ok);
+  const rt = [...col("bookings").values()].find((x) => x.returnTrip === true);
+  out.push([rt && rt.fare === 1388 && rt.oneWayFare === 750 && rt.returnFare === 638 && rt.returnPct === 15 && rt.status === "Ongoing" ? "ok  " : "BUG?", "round trip doc keeps total + both legs", JSON.stringify(rt && { f: rt.fare, o: rt.oneWayFare, r: rt.returnFare })]);
+  await t("round trip whose legs do not add up", { ...admin, data: { ...base, returnTrip: true, oneWayFare: 750, returnFare: 638, returnPct: 15, fare: 900 } }, (r) => r && r.reason === "fare");
+  await t("round trip without a return fare", { ...admin, data: { ...base, returnTrip: true, oneWayFare: 750, fare: 750 } }, (r) => r && r.reason === "fare");
+  // TRANSPORTER'S VEHICLE
+  const fl = { ...base, driverMobile: undefined, fleetVehicleId: "f1" };
+  await t("transporter vehicle books (fleet doc, owner's account, WhatsApp text)", { ...admin, data: fl }, (r) => r && r.ok && r.fleet === true && r.dispatch && r.dispatch.sent === false && /trip\.html\?b=TS-\d+&k=/.test(r.dispatch.link) && /Chikhali/.test(r.dispatch.text) && r.dispatch.driverMobile === "9333333333");
+  const fb = [...col("bookings").values()].find((x) => x.fleetBooking === true);
+  out.push([fb && fb.status === "Ongoing" && fb.driverMobile === "9000000010" && fb.driverName === "Ramesh Patil" && fb.fleetVehicleId === "f1" && fb.fleetDriverName === "Ramesh Patil" && fb.fleetDriverMobile === "9333333333" && fb.fleetVehicleNumber === "MH12AB1234" && fb.ownerName === "Owner Pratik" && fb.vehicle === "Tata Ace" && fb.adminBooked === true && fb.paymentBy === "customer" ? "ok  " : "BUG?", "fleet booking fields (what the owner's own Accept writes)", JSON.stringify(fb && { d: fb.driverMobile, n: fb.driverName, v: fb.fleetVehicleId })]);
+  out.push([[...col("fleetTripLinks").keys()].length === 1 && [...col("bookingOtps").keys()].length >= 4 ? "ok  " : "BUG?", "trip link + OTP made for the fleet trip", String([...col("fleetTripLinks").keys()])]);
+  await t("same vehicle again -> busy (per vehicle)", { ...admin, data: fl }, (r) => r && r.reason === "driver_busy");
+  await t("pending (not approved) vehicle", { ...admin, data: { ...fl, fleetVehicleId: "f2" } }, (r) => r && r.reason === "vehicle_not_approved");
+  await t("inactive vehicle", { ...admin, data: { ...fl, fleetVehicleId: "f3" } }, (r) => r && r.reason === "vehicle_inactive");
+  await t("blocked transporter's vehicle", { ...admin, data: { ...fl, fleetVehicleId: "f4" } }, (r) => r && r.reason === "driver_blocked");
+  await t("unknown vehicle", { ...admin, data: { ...fl, fleetVehicleId: "nope" } }, (r) => r && r.reason === "vehicle_not_found");
+  await t("customer is the vehicle's own driver", { ...admin, data: { ...fl, fleetVehicleId: "f1", customerMobile: "9333333333", scheduledFor: "2030-03-01 08:00" } }, (r) => r && r.reason === "same_number");
+  await t("advance transporter booking on a later day works", { ...admin, data: { ...fl, scheduledFor: "2030-03-02 08:00" } }, (r) => r && r.ok && r.fleet);
   console.log(out.map((r) => r.join("  ")).join("\n"));
   process.exit(out.some((r) => r[0] !== "ok  ") ? 1 : 0);
 })();
