@@ -208,6 +208,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
+const { validateAdminBookingInput, driverBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -1654,6 +1655,56 @@ async function mobileHasRoleAccount(mobile, role) {
   const snap = await db.collection(role === "driver" ? "drivers" : "customers").doc(mobile).get();
   return snap.exists;
 }
+
+// ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12): Admin phones a driver; if the driver agrees, Admin presses Book. The trip is created ALREADY ASSIGNED to that
+// driver (status Ongoing, driver + vehicle filled in, pickup OTP made -- what the driver's own Accept would produce), so nobody else is rung and the ring code is not
+// involved at all. The customer pays the driver directly (`paymentBy: "customer"`); nothing is charged to Admin. Decisions live in functions/adminBooking.js.
+// Written with the Admin SDK, so firestore.rules need no change (a customer / driver session still cannot create a booking for someone else).
+exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const checked = validateAdminBookingInput(request.data);
+  if (!checked.ok) return { ok: false, reason: checked.reason, message: checked.message };
+  const v = checked.v;
+  try {
+    // One role per number (contract N11): a number that is a Driver (and not also a Customer) cannot be booked as a customer.
+    const [isCustomer, isDriver] = await Promise.all([mobileHasRoleAccount(v.customerMobile, "customer"), mobileHasRoleAccount(v.customerMobile, "driver")]);
+    if (isDriver && !isCustomer) return { ok: false, reason: "number_is_driver", message: "That number belongs to a Driver, so it cannot be booked as a customer." };
+  } catch (e) {
+    console.error("[adminBookForCustomer] role lookup failed:", e.message);
+    return { ok: false, reason: "lookup_failed", message: "Could not check the number -- try again." };
+  }
+  const driverSnap = await db.collection("drivers").doc(v.driverMobile).get();
+  const driver = driverSnap.exists ? driverSnap.data() : null;
+  let conflict = false;
+  if (driver) {
+    const ongoing = (await db.collection("bookings").where("driverMobile", "==", v.driverMobile).where("status", "==", "Ongoing").get()).docs.map((d) => d.data());
+    conflict = hasLoadConflict({ scheduledFor: v.scheduledFor }, ongoing, notificationLockHours(Number(driver.vehicleSpec?.capacityKg) || 0));
+  }
+  const block = driverBlockReason(driver, conflict);
+  if (block) return { ok: false, reason: block, message: "That driver cannot take this trip (" + block.replace(/^driver_/, "").replace(/_/g, " ") + ")." };
+
+  const stamp = FieldValue.serverTimestamp();
+  const doc = buildAdminBookingDoc(v, driver, stamp);
+  let bookingId = null;
+  for (let attempt = 0; attempt < 6 && !bookingId; attempt++) {
+    const id = "TS-" + crypto.randomInt(10000, 100000);
+    try {
+      await db.collection("bookings").doc(id).create(doc);
+      bookingId = id;
+    } catch (e) {
+      if (e.code !== 6 && !/already exists/i.test(e.message || "")) throw e;
+    }
+  }
+  if (!bookingId) return { ok: false, reason: "id_clash", message: "Could not create the booking -- try again." };
+  // The pickup OTP, made here exactly as issuePickupOtp does when a driver accepts (that trigger only fires on an UPDATE to Ongoing, and this booking is created
+  // Ongoing). create() so it is issued once.
+  try {
+    await db.collection("bookingOtps").doc(bookingId).create({ otp: newPickupOtp(), customerMobile: v.customerMobile, createdAt: FieldValue.serverTimestamp() });
+  } catch (e) {
+    if (e.code !== 6 && !/already exists/i.test(e.message || "")) throw e;
+  }
+  return { ok: true, bookingId };
+});
 
 // Admin-only: turn a CSV the Admin screen already built into a real, short-lived
 // download link. The Android app's WebView has no download handler, so a blob

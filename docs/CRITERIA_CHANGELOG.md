@@ -482,3 +482,14 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Round trip box stays visible once ticked (re-fingerprint on the pushed base)
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Rebase merge: re-fingerprint after combining the Round trip box change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- Admin Bookings four live groups + Admin books for a customer (adminBookForCustomer callable, AdminBookForCustomer screen, bookingGroups) (owner 2026-11-12)
+- changed (9): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#imports, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel
+- added (13): fn:adminBookForCustomer, code:functions/index.js#fn:adminBookForCustomer, code:src/firebaseClient.js#adminBookForCustomer, code:functions/adminBooking.js, code:scripts/serverTests/adminBookForCustomer.cjs, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#T, code:src/AdminBookForCustomer.jsx#inputCls, code:src/AdminBookForCustomer.jsx#inputStyle, code:src/AdminBookForCustomer.jsx#advanceDays, code:src/AdminBookForCustomer.jsx#failText, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/bookingGroups.js
+
+## 2026-11-12 -- Admin Bookings four live groups + Admin books for a customer (re-fingerprint on the pushed base)
+- changed (9): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#imports, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel
+- added (13): fn:adminBookForCustomer, code:functions/index.js#fn:adminBookForCustomer, code:src/firebaseClient.js#adminBookForCustomer, code:functions/adminBooking.js, code:scripts/serverTests/adminBookForCustomer.cjs, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#T, code:src/AdminBookForCustomer.jsx#inputCls, code:src/AdminBookForCustomer.jsx#inputStyle, code:src/AdminBookForCustomer.jsx#advanceDays, code:src/AdminBookForCustomer.jsx#failText, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/bookingGroups.js

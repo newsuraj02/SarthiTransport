@@ -237,6 +237,21 @@ export async function sendBulkDriverWhatsApp(kind, mobiles) {
   }
 }
 
+// ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12; functions/index.js: adminBookForCustomer). Creates the trip already assigned to the driver Admin phoned and
+// who agreed; the customer pays the driver directly. Never throws: { ok, bookingId? , reason?, message? }.
+export async function adminBookForCustomer(data) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "adminBookForCustomer");
+    const result = await call(data);
+    return result.data;
+  } catch (e) {
+    console.error("[adminBookForCustomer] callable failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), message: String(e?.message || "").slice(0, 220) };
+  }
+}
+
 // "Add new vehicle" in My Profile (owner 2026-11-09): asks the server to turn this driver into a fleet owner (functions/index.js: convertDriverToFleetOwner). Never throws:
 // { ok, already?, vehicleId?, reason? } -- reason is "trip-running" / "no-vehicle" / "blocked" / "no-profile" or a short error code.
 export async function convertToFleetOwner() {

@@ -16,6 +16,8 @@ import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { AdminFleetVehicles } from "./FleetOwner.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
+import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
+import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
@@ -1624,7 +1626,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ bookings, tripLog, lang }) {
+function AdminBookings({ bookings, tripLog, lang, drivers, fareTiers, adminRouteFares, dieselPricePerLitre }) {
+  const [bookForCustomerOpen, setBookForCustomerOpen] = useState(false);
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
     if (!d) return false;
@@ -1643,7 +1646,42 @@ function AdminBookings({ bookings, tripLog, lang }) {
   // whether it's still awaiting bids or already has a driver assigned.
   const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
 
+  // FOUR LIVE GROUPS (owner 2026-11-12): Current, Current Return, Advance, Advance Return -- every booking that is not finished yet, each row with the customer's
+  // name, mobile and a Call button (the booking already carries customerName / customerMobile, so it fills in by itself, live).
+  const groupTitles = {
+    current: lang === "en" ? "Current" : lang === "mr" ? "करंट" : "करन्ट",
+    currentReturn: lang === "en" ? "Current Return" : lang === "mr" ? "करंट रिटर्न" : "करन्ट रिटर्न",
+    advance: lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस",
+    advanceReturn: lang === "en" ? "Advance Return" : lang === "mr" ? "अ‍ॅडव्हान्स रिटर्न" : "एडवांस रिटर्न",
+  };
+  const liveGroups = groupLiveBookings(bookings);
+  const liveRow = (b) => (
+    <div key={b.id} data-live-booking={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
+      <div className="flex items-center justify-between gap-2 mt-1.5">
+        <div className="min-w-0">
+          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{b.customerName || (lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक")}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft }}>{b.customerMobile || "—"}</div>
+        </div>
+        {b.customerMobile && (
+          <a href={`tel:+91${b.customerMobile}`} data-live-booking-call className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#FFFFFF" }} aria-label="Call"><Phone size={16} /></a>
+        )}
+      </div>
+      <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
+        {b.scheduledFor ? `${b.scheduledFor} · ` : ""}{b.driverName || (lang === "en" ? "No driver yet" : lang === "mr" ? "ड्रायव्हर अजून नाही" : "अभी ड्राइवर नहीं")}{fleetTag(b)}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""} · {statusMeta[b.status]?.label || (b.status === "AwaitingDriver" ? (lang === "en" ? "Searching" : lang === "mr" ? "शोधत आहे" : "खोज जारी") : b.status)}
+      </div>
+    </div>
+  );
+  const liveSections = BOOKING_GROUP_KEYS.map((key) => ({
+    key: `live-${key}`,
+    title: groupTitles[key],
+    emptyMsg: lang === "en" ? "Nothing live in this group." : lang === "mr" ? "या गटात सध्या काही नाही." : "इस समूह में अभी कुछ नहीं है।",
+    items: liveGroups[key],
+    renderItem: liveRow,
+  }));
+
   const sections = [
+    ...liveSections,
     {
       key: "booked",
       title: lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं",
@@ -1684,6 +1722,11 @@ function AdminBookings({ bookings, tripLog, lang }) {
 
   return (
     <div className="space-y-5">
+      {/* ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12): call a driver; if the driver agrees, book the trip for the customer, who pays the driver directly. */}
+      <button type="button" data-admin-book-for-customer-btn onClick={() => setBookForCustomerOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.navy, color: "#FFFFFF" }}>
+        <Plus size={16} /> {lang === "en" ? "Book for a customer" : lang === "mr" ? "ग्राहकासाठी बुक करा" : "ग्राहक के लिए बुक करें"}
+      </button>
+      {bookForCustomerOpen && <AdminBookForCustomer drivers={drivers} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} lang={lang} onClose={() => setBookForCustomerOpen(false)} />}
       {sections.map((s) => (
         <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="flex items-center justify-between mb-3">
@@ -4675,7 +4718,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
+      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
