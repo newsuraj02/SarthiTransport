@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId, useMemo, useSyncExternalStore, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo, useCallback, useSyncExternalStore, Suspense, lazy } from "react";
 // Admin's 16 screens live in their own module and are lazy-loaded here so a
 // customer or driver never downloads any of it — see AdminPanel.jsx's own
 // header comment for how this was split out.
@@ -24,8 +24,9 @@ import {
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
-  claimBooking, addDeclinedBy, subscribeWhere,
+  claimBooking, addDeclinedBy, subscribeWhere, mergeDoc, subscribeRecent,
 } from "./firestoreStore";
+import { createFlowRecorder, tapLabel } from "./customerFlow";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
@@ -7152,7 +7153,7 @@ function SuccessBurst({ lang, onDone }) {
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, returnPct = 15, advance = false }) {
+function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, returnPct = 15, advance = false, flowTrack = null }) {
   const VEHICLES = vehicleTypes;
   // Only set right after a language change reloaded the page (see readLangReloadDraft); null otherwise.
   const [restored] = useState(() => { const d = readLangReloadDraft(); return d && !!d.advance === !!advance ? d : null; });
@@ -7640,7 +7641,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       fare: entry.fare,
     });
     if (err) { setBookingError(err); setSendingKey(null); }
-    else { resetBookingForm(); setSendingKey(null); setBookedMsg(true); }
+    else { if (flowTrackRef.current) flowTrackRef.current("booked", `Booking sent to drivers · ${fmt(entry.fare)}`, { stage: "booked" }); resetBookingForm(); setSendingKey(null); setBookedMsg(true); } // the "booked" step is reported here, before this screen is swapped for the ride screen
     }, 700);
   };
 
@@ -7774,6 +7775,34 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       )}
     </>
   );
+  // CUSTOMER FLOW TRACKING (owner 2026-11-12): each step of this screen is reported to the recorder in CustomerApp (see src/customerFlow.js). Observation only -- these
+  // effects read state and never change it, so nothing about the flow, the fares or the booking itself is affected. Typed text is recorded once, when the cursor leaves
+  // the box; no keystrokes.
+  const flowTrackRef = useRef(flowTrack);
+  flowTrackRef.current = flowTrack;
+  const flowSeenRef = useRef({ typing: null, returnTrip: !!returnTrip });
+  const ftrack = (type, detail, patch) => { if (flowTrackRef.current) flowTrackRef.current(type, detail, patch); };
+  useEffect(() => { ftrack("screen", advance ? "Advance Booking screen" : "Current Booking screen", { advance: !!advance }); }, [advance]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (flowSeenRef.current.returnTrip === !!returnTrip) return;
+    flowSeenRef.current.returnTrip = !!returnTrip;
+    ftrack("round_trip", returnTrip ? "Round trip ticked" : "Round trip unticked", { returnTrip: !!returnTrip });
+  }, [returnTrip]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (selectedCategory == null) return;
+    ftrack("vehicle", `${customerListCategoryName(selectedCategory, "en")} · ${customerListCategoryLimitKg(selectedCategory)} kg`, { stage: "vehicle", categoryKg: customerListCategoryLimitKg(selectedCategory) });
+  }, [selectedCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pickupSelected && pickup.trim()) ftrack("pickup", pickup, { stage: "pickup", pickup }); }, [pickupSelected, pickupCoords?.lat, pickupCoords?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (dropSelected && drop.trim()) ftrack("drop", drop, { stage: "drop", drop }); }, [dropSelected, dropCoords?.lat, dropCoords?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (advance && advanceDate) ftrack("day", `${advanceDate} ${advanceTime || ""}`, { stage: "day", scheduledFor: `${advanceDate} ${advanceTime || ""}`.trim() }); }, [advanceDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const prev = flowSeenRef.current.typing; flowSeenRef.current.typing = typingField;
+    if (prev === "pickup" && typingField !== "pickup" && pickup.trim() && !pickupSelected) ftrack("pickup_typed", pickup, { pickup });
+    if (prev === "drop" && typingField !== "drop" && drop.trim() && !dropSelected) ftrack("drop_typed", drop, { drop });
+  }, [typingField]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sendingKey) ftrack("book_tap", `Book now · ${selectedTopEntry ? fmt(selectedTopEntry.fare) : ""}`, { stage: "book_tapped" }); }, [sendingKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (bookingError) ftrack("book_error", bookingError, {}); }, [bookingError]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
@@ -8647,6 +8676,31 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // (between the hamburger menu and Home button) instead of a hamburger-menu
   // entry — replaces the old "Advance Bookings" menu item.
   const [rideView, setRideView] = useState("current");
+  // CUSTOMER FLOW TRACKING (owner 2026-11-12: "track the Customer screen end to end, even a single tap", every entry put in its category -- Current / Current Return /
+  // Advance / Advance Return): one recorder per signed-in customer (src/customerFlow.js). Every tap on this app's screens is logged by name (never the text in a box) and
+  // the booking screen reports each step (vehicle, Pickup, Drop, day, Round trip, Book). A failed write never breaks the app. Admin -> Bookings -> "Customer activity".
+  const flowProfileRef = useRef(customerProfile);
+  flowProfileRef.current = customerProfile;
+  const flow = useMemo(() => (firestoreReady && customerMobile ? createFlowRecorder({ mobile: customerMobile, getName: () => flowProfileRef.current?.name || "", send: (id, d) => mergeDoc("customerFlow", id, d) }) : null), [customerMobile]);
+  const flowScreenRef = useRef("booking-current");
+  flowScreenRef.current = settingsView || (rideView === "advance" ? "advance-list" : advanceOpen ? "booking-advance" : "booking-current");
+  const flowTrack = useCallback((type, detail, patch) => { if (flow) flow.record(type, detail, { screen: flowScreenRef.current, ...patch }); }, [flow]);
+  useEffect(() => {
+    if (!flow) return undefined;
+    const onTap = (ev) => {
+      try {
+        const el = ev.target && ev.target.closest ? ev.target.closest("button, a, input, select, textarea, label, [role=button], [data-track]") : null;
+        if (!el) return;
+        flowTrack("tap", tapLabel({ tag: el.tagName, type: el.type, text: (el.type === "checkbox" || el.type === "radio") && el.closest("label") ? el.closest("label").innerText : el.innerText, ariaLabel: el.getAttribute("aria-label"), title: el.getAttribute("title"), placeholder: el.getAttribute("placeholder"), dataTrack: el.getAttribute("data-track") }));
+      } catch { /* tracking must never break the app */ }
+    };
+    const onHide = () => { if (document.visibilityState === "hidden") flow.flushNow(); };
+    const onPageHide = () => flow.flushNow();
+    document.addEventListener("click", onTap, true);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onPageHide);
+    return () => { document.removeEventListener("click", onTap, true); document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", onPageHide); flow.flushNow(); };
+  }, [flow, flowTrack]);
   // `bookings` is the whole platform's list (drivers need to see every open
   // load to bid on) — a customer must only ever see their own, so every
   // lookup below filters to this customer's mobile number first.
@@ -9039,10 +9093,10 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
               onAddAnother={() => setAddingAnother(true)} />
           ) : advanceOpen ? (
             <CustomerAdvanceBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentTrips={recentTrips} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} flowTrack={flowTrack} />
           ) : (
             <CustomerBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentPlaces={recentPlaces} recentTrips={recentTrips} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} flowTrack={flowTrack} />
           )
         ) : (
           <div>
@@ -12660,6 +12714,9 @@ export default function App() {
   // Only Admin needs the full customer list (profile/address oversight).
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
+  // Customer flow sessions (owner 2026-11-12): every tap / step the customers make, newest 400 sessions, Admin only (see src/customerFlow.js).
+  const [flowSessions, setFlowSessions] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeRecent("customerFlow", setFlowSessions, "updatedAt", 400) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("bookings", (rows) => { setBookings(rows); markBookingsLoaded(); }) : undefined), authDeps);
   // Admin reads every alert (see AdminAlerts); customers/drivers now also
   // subscribe so SosScreen's "My Complaints" list can show their own
@@ -13644,7 +13701,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel flowSessions={flowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}

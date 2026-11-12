@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, where, serverTimestamp, writeBatch,
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, limit, where, serverTimestamp, writeBatch,
   runTransaction, arrayUnion,
 } from "firebase/firestore";
 import { getDb, hasConfig } from "./firebaseClient";
@@ -65,6 +65,18 @@ export function subscribeCollection(name, onChange, orderByField = "createdAt", 
   });
 }
 
+// The newest `max` docs of a collection by `orderByField` (used for the customer-flow sessions, which only ever grow).
+export function subscribeRecent(name, onChange, orderByField, max = 300, onError) {
+  const db = getDb();
+  if (!db) return () => {};
+  return onSnapshot(query(col(name), orderBy(orderByField, "desc"), limit(max)), (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => {
+    console.error(`[firestore] ${name} subscription error:`, err);
+    if (onError) onError(err);
+  });
+}
+
 // Live list of the docs where `field == value` (a scoped query -- needed where the rules only let a person read THEIR OWN docs, e.g. a fleet owner's private vehicle details).
 export function subscribeWhere(name, field, value, onChange) {
   const db = getDb();
@@ -120,6 +132,11 @@ export async function replaceDoc(name, id, data) {
 // untouched — used for status flips like "Pending" -> "Approved".
 export async function patchDoc(name, id, patch) {
   await withRetry(() => updateDoc(doc(getDb(), name, id), patch));
+}
+
+// Creates the doc or merges the given fields into it (a customer-flow session is rewritten as it grows); stamps updatedAt on every write.
+export async function mergeDoc(name, id, data) {
+  await withRetry(() => setDoc(doc(getDb(), name, id), { ...data, updatedAt: serverTimestamp() }, { merge: true }));
 }
 
 // Permanently removes a doc (e.g. an admin deleting a driver/customer

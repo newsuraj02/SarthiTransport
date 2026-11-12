@@ -264,6 +264,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // CUSTOMER FLOW TRACKING (owner 2026-11-12: "track the Customer screen end to end ... even a single tap"): one doc per booking attempt, written by the customer's own
+    // app as they go (src/customerFlow.js), read by Admin only. A customer can only create / update sessions that carry THEIR OWN mobile, the timeline is capped, and
+    // only Admin can delete.
+    match /customerFlow/{id} {
+      allow read: if isAdmin();
+      allow create: if isOwnPhone(request.resource.data.customerMobile) && request.resource.data.events.size() <= 250;
+      allow update: if isAdmin() || (isOwnPhone(resource.data.customerMobile) && request.resource.data.customerMobile == resource.data.customerMobile && request.resource.data.events.size() <= 250);
+      allow delete: if isAdmin();
+    }
+
     match /alerts/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();

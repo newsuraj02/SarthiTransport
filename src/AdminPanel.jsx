@@ -18,6 +18,7 @@ import { AdminFleetVehicles } from "./FleetOwner.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
+import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
@@ -1626,8 +1627,9 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
+function AdminBookings({ flowSessions, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
   const [bookForCustomerOpen, setBookForCustomerOpen] = useState(false);
+  const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
     if (!d) return false;
@@ -1726,6 +1728,11 @@ function AdminBookings({ bookings, tripLog, lang, drivers, fleetVehicles, fleetP
       <button type="button" data-admin-book-for-customer-btn onClick={() => setBookForCustomerOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.navy, color: "#FFFFFF" }}>
         <Plus size={16} /> {lang === "en" ? "Book for a customer" : lang === "mr" ? "ग्राहकासाठी बुक करा" : "ग्राहक के लिए बुक करें"}
       </button>
+      {/* CUSTOMER ACTIVITY (owner 2026-11-12): every tap / step the customers make, even unfinished, in the four categories -- see src/AdminCustomerFlow.jsx. */}
+      <button type="button" data-admin-customer-activity-btn onClick={() => setCustomerActivityOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.paper, color: C.navy, border: `2px solid ${C.navy}` }}>
+        <Eye size={16} /> {lang === "en" ? "Customer activity (every tap)" : lang === "mr" ? "ग्राहक हालचाल (प्रत्येक टॅप)" : "ग्राहक गतिविधि (हर टैप)"} · {(flowSessions || []).length}
+      </button>
+      {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onClose={() => setCustomerActivityOpen(false)} />}
       {bookForCustomerOpen && <AdminBookForCustomer drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomerOpen(false)} />}
       {sections.map((s) => (
         <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -4693,7 +4700,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ flowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   // "kyc" is deliberately not in this list -- KYC review lives inside the
@@ -4718,7 +4725,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
+      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
