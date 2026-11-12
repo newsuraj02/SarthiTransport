@@ -473,3 +473,12 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-12 -- One role per number also enforced by firestore.rules, read-only dual-role script, rules emulator test (re-fingerprint on the pushed base)
 - changed (5): file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks
 - added (2): code:scripts/listDualRoleNumbers.js, code:scripts/rulesTest/roleLock.mjs
+
+## 2026-11-12 -- Rebase merge: re-fingerprint after combining the rules-level one-role change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- Round trip box stays visible once ticked (returnBarPinned), can be unticked (owner 2026-11-12)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Round trip box stays visible once ticked (re-fingerprint on the pushed base)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

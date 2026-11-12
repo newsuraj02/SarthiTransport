@@ -7162,6 +7162,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // Owner 2026-11-01: "Return trip" checkbox right under the Pickup box (Current and Advance). Saved on the booking as `returnTrip`;
   // it does NOT change the fare (not asked) and is cleared after Book like the rest of the form.
   const [returnTrip, setReturnTrip] = useState(!!restored?.returnTrip);
+  // Owner 2026-11-12: once the Round trip box has been ticked it STAYS on screen (it used to vanish the moment it was ticked); it can be unticked again and
+  // only goes away when the form is emptied after a booking. `returnBarPinned` remembers "it has been ticked".
+  const [returnBarPinned, setReturnBarPinned] = useState(!!restored?.returnTrip);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
@@ -7400,6 +7403,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     setFromTrip(false);
     setAdvanceDate(""); setAdvanceTime("");
     setReturnTrip(false);
+    setReturnBarPinned(false);
     setPickupTouched(false);
     setActiveField(null);
   };
@@ -7529,7 +7533,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // Owner 2026-11-04 (replaces the above): the bar is for the MAIN screen only -- Current AND Advance Booking (same screen, owner: "I want it on the Advance booking screen
   // similarly"), nothing entered yet. It is gone for good once the cursor has been placed in Pickup (`pickupTouched`), once Pickup has any text, and once ticked;
   // the form emptying after a booking brings it back.
-  const returnBarVisible = !returnTrip && !pickupTouched && !pickup.trim();
+  // Owner 2026-11-12 (REPLACES the "gone once ticked" part above): "when the customer clicks Round trip Booking the button must not disappear". Once ticked the box
+  // STAYS on screen, shown ticked, until the form is emptied after a booking; it can be unticked and re-ticked. Before it is ever ticked the 2026-11-04 rule stands
+  // (main screen only: nothing entered yet, gone once the cursor is in Pickup / Pickup has text).
+  const returnBarVisible = returnTrip || returnBarPinned || (!pickupTouched && !pickup.trim());
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? tripKmRounded(distance) : null;
@@ -7926,7 +7933,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               <span className="text-base" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
               <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{lang === "en" ? "Book Round trip" : lang === "mr" ? "राउंड ट्रिप बुक करा" : "राउंड ट्रिप बुक करें"}</span>
             </span>
-            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
+            <input type="checkbox" checked={returnTrip} onChange={(e) => { setReturnTrip(e.target.checked); if (e.target.checked) setReturnBarPinned(true); }} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
         </div>
       )}

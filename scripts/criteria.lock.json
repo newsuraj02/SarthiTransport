@@ -151,7 +151,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "4aa2706132dedb64",
+  "code:CLAUDE.md": "25806c1da865b87f",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -575,6 +575,7 @@
   "code:scripts/knownIssues.json": "eea8e8616254c563",
   "code:scripts/listCustomerBookingAttempts.js": "f0a3916fa99be325",
   "code:scripts/listDriverCustomerOverlap.js": "95247c7afc8cf9f8",
+  "code:scripts/listDualRoleNumbers.js": "83f853f8d9bb0286",
   "code:scripts/migrateFareTierBoundaries.mjs#imports": "9ca872c44a2d5f92",
   "code:scripts/migrateFareTierBoundaries.mjs#__dirname": "369dbf352aaefa60",
   "code:scripts/migrateFareTierBoundaries.mjs#keyPath": "0bce3c19164f5447",
@@ -588,6 +589,7 @@
   "code:scripts/revertDieselDriverRates.mjs": "7a7934f8a27a2691",
   "code:scripts/rulesTest/access.mjs": "27832935e406d5ea",
   "code:scripts/rulesTest/claim.mjs": "3a69820c3d0384c3",
+  "code:scripts/rulesTest/roleLock.mjs": "c846549dd4310233",
   "code:scripts/setupAdmin.js": "04c314885dd33bf4",
   "code:scripts/setupAdmins.js": "c07c6b961359868f",
   "code:scripts/simplifyProfiles.js#admin": "d7fc24a4b0206ba5",
@@ -622,7 +624,7 @@
   "code:scripts/verifyInvariants.mjs#loadSignupFinalizeFn": "042d3aa5ce083f6b",
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
-  "code:scripts/verifyInvariants.mjs#checks": "1339efa8fb685653",
+  "code:scripts/verifyInvariants.mjs#checks": "c0a2c6bcb4bb8b79",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/whyNoDriver.js": "41941451dc841b4e",
@@ -1010,7 +1012,7 @@
   "code:src/App.jsx#EmptyState": "26f75f25146b39df",
   "code:src/App.jsx#StepDots": "a8d53a059c998973",
   "code:src/App.jsx#SuccessBurst": "887fabfe46039555",
-  "code:src/App.jsx#CustomerBooking": "6ccbc133a7c1c88f",
+  "code:src/App.jsx#CustomerBooking": "2516013e0a88fbe6",
   "code:src/App.jsx#CustomerAdvanceBooking": "45abf9a27e76f14c",
   "code:src/App.jsx#RouteLine": "f7858c5b1b1e46ca",
   "code:src/App.jsx#ReturnTripTag": "0ca27422b1c6bcc2",
@@ -1176,8 +1178,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:scripts/listDualRoleNumbers.js": "83f853f8d9bb0286",
-  "code:scripts/rulesTest/roleLock.mjs": "c846549dd4310233"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }
