@@ -6560,7 +6560,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
             <span className="text-sm font-bold flex-1 min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Invoice / Bill" : lang === "mr" ? "इनव्हॉइस / बिल" : "इनवॉइस / बिल"}</span>
             {file?.url && <CheckCircle2 size={16} color={C.success} className="shrink-0" />}
           </div>
-          {file?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{file.name}</div>}
+          {file?.url && <div className="text-[11px] break-words mb-2 min-w-0" style={{ color: C.inkSoft }}>{file.name}</div>}
           <div className="flex gap-2">
             <button type="button" onClick={() => scanInputRef.current?.click()} className="rounded-lg py-3.5 px-3 flex items-center justify-center gap-1.5 text-base font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
               <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : lang === "mr" ? "पुन्हा स्कॅन करा" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : lang === "mr" ? "कागदपत्र स्कॅन करा" : "दस्तावेज़ स्कैन करें")}
@@ -7589,7 +7589,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // link at the right (the Pickup / Drop partition design lives on the main screen's recent-trip cards only).
   const changePlacesLink = estKm != null || tripHidden ? (
     <div data-trip-row className="flex items-center justify-between gap-3">
-      <div data-est-km className="text-base font-extrabold min-w-0 truncate" style={{ color: C.ink }}>
+      <div data-est-km className="text-base font-extrabold min-w-0 break-words" style={{ color: C.ink }}>
         {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
       </div>
       {tripHidden && (
@@ -7988,7 +7988,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
             (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box -- shown only until Pickup and Drop are entered (owner 2026-11-12: "appear only until the Pickup and drop is entered, remove it afterwards"). We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
         {!placesReady && (
           <div data-call-row className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-xl px-2.5 py-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
+            <span className="min-w-0 flex-1 break-words leading-tight text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
             <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-lg px-2.5 py-1 flex items-center gap-1 text-xs font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
               <Phone size={13} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
             </a>
@@ -8007,7 +8007,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           {placesReady && returnFareNote}
           {advance && scheduleReady && placesReady && (
             <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
-              <span className="text-sm font-extrabold min-w-0 truncate" style={{ color: "#0052CC" }}>
+              <span className="text-sm font-extrabold min-w-0 break-words" style={{ color: "#0052CC" }}>
                 📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
               </span>
               <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
@@ -8055,7 +8055,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
             <span className="flex items-center gap-2 min-w-0">
               <span className="text-base" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
-              <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{lang === "en" ? "Book Round trip" : lang === "mr" ? "राउंड ट्रिप बुक करा" : "राउंड ट्रिप बुक करें"}</span>
+              <span className="text-sm font-bold break-words min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Book Round trip" : lang === "mr" ? "राउंड ट्रिप बुक करा" : "राउंड ट्रिप बुक करें"}</span>
             </span>
             <input type="checkbox" checked={returnTrip} onChange={(e) => { setReturnTrip(e.target.checked); if (e.target.checked) setReturnBarPinned(true); }} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
@@ -8209,8 +8209,8 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
           fallback={<div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.pimpri }}><UserCircle2 size={22} color="#fff" /></div>}
         />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-black truncate" style={{ color: C.ink }}>{b.driverName || "—"}</div>
-          <div className="text-xs font-bold truncate mt-0.5" style={{ color: C.inkSoft }}>{modelName}</div>
+          <div className="text-sm font-black break-words min-w-0" style={{ color: C.ink }}>{b.driverName || "—"}</div>
+          <div className="text-xs font-bold break-words mt-0.5 min-w-0" style={{ color: C.inkSoft }}>{modelName}</div>
         </div>
         <div className="shrink-0 rounded-md px-2 py-1 text-xs font-black" style={{ background: "#FFF6D6", color: C.ink, border: `1.5px solid ${C.ink}`, fontFamily: monoFont, letterSpacing: 1 }}>
           {b.fleetVehicleNumber || spec?.vehicleNumber || T("No. pending", "नंबर नाही", "नंबर नहीं")}
@@ -9053,7 +9053,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
             {showRideBadge ? (
               <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
                 <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
-                <span className="text-sm font-extrabold text-white truncate">
+                <span className="text-sm font-extrabold text-white break-words min-w-0">
                   {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
                 </span>
               </div>
@@ -9253,7 +9253,7 @@ function tripHourBreakdown(trip) {
 // agreed design, not the app's usual thin grey hairlines.
 function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }) {
   const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(trip);
-  const cellStyle = { border: `1.5px solid ${C.line}`, padding: "8px 10px", fontSize: 13, textAlign: "left" };
+  const cellStyle = { border: `1.5px solid ${C.line}`, padding: "8px 6px", fontSize: 13, textAlign: "left", overflowWrap: "anywhere" };
   const Row = ({ context, time, charges, bold, zebra }) => (
     <tr style={{ background: bold ? C.success : zebra ? C.bg : C.paper }}>
       <td style={{ ...cellStyle, fontFamily: bodyFont, fontWeight: bold ? 900 : 700, color: bold ? "#fff" : "#000000" }}>{context}</td>
@@ -9262,7 +9262,7 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
     </tr>
   );
   return (
-    <div className="rounded-xl overflow-hidden mb-2.5 shadow-sm" style={{ border: `2px solid ${C.line}` }}>
+    <div className="rounded-xl overflow-x-auto mb-2.5 shadow-sm" style={{ border: `2px solid ${C.line}` }}>
       <table className="w-full" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: C.marigold }}>
@@ -10168,7 +10168,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}><UserCircle2 size={22} color="#fff" /></div>
               <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
-                <div className="text-sm font-black truncate" style={{ color: C.ink }}>{myTrip.customerName || (lang === "en" ? "Name not given" : lang === "mr" ? "नाव दिलेले नाही" : "नाम नहीं दिया")}</div>
+                <div className="text-sm font-black break-words min-w-0" style={{ color: C.ink }}>{myTrip.customerName || (lang === "en" ? "Name not given" : lang === "mr" ? "नाव दिलेले नाही" : "नाम नहीं दिया")}</div>
                 {myTrip.customerMobile && (
                   <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>📱 ••••••{String(myTrip.customerMobile).replace(/\D/g, "").slice(-4)}</div>
                 )}
@@ -10699,7 +10699,7 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
                 <div key={tx.id} className="rounded-lg p-2.5 flex items-center gap-2.5" style={{ background: C.bg }}>
                   <span className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black" style={{ color: tx.type === "credit" ? C.success : C.safety, background: tx.type === "credit" ? "rgba(0,168,84,0.12)" : "rgba(255,42,42,0.12)" }}>{tx.type === "credit" ? "+" : "−"}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
+                    <div className="text-xs font-semibold break-words min-w-0" style={{ color: C.ink }}>{tx.label}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{txTime(tx.createdAt)}</div>
                   </div>
                   <span className="text-xs font-bold shrink-0" style={{ color: tx.type === "credit" ? C.success : C.safety, fontFamily: monoFont }}>
@@ -11162,7 +11162,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     )}
                   </div>
                 ) : (
-                  <span key={val ? "done" : "todo"} className={`text-[9px] mt-0.5 pb-1 truncate max-w-full ${val ? "pop-in" : ""}`} style={{ color: val ? C.success : C.inkSoft }}>
+                  <span key={val ? "done" : "todo"} className={`text-[9px] mt-0.5 pb-1 break-words max-w-full ${val ? "pop-in" : ""}`} style={{ color: val ? C.success : C.inkSoft }}>
                     {val ? doneTxt : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
                   </span>
                 )}
@@ -11761,8 +11761,8 @@ function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre,
               <div className="space-y-1.5">
                 {myRoutes.map((r) => (
                   <button key={r.id} onClick={() => editRoute(r)} className="w-full text-left rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
-                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                    <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{r.pickupName}</div>
+                    <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>→ {r.dropName}</div>
                     <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
                   </button>
                 ))}

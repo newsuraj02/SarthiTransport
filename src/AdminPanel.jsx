@@ -848,7 +848,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
-          <div className="text-xs font-bold truncate min-w-0" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{d.name}</div>
         </div>
         <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}{driverPlateText(d, lang) && driverPlateText(d, lang) !== "—" ? ` · ${driverPlateText(d, lang)}` : ""}</div>
         {reasonText ? <div className="text-[10px] font-bold mt-0.5" style={{ color: reasonColor }}>{reasonText}</div> : null}
@@ -986,7 +986,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
-                <div className="text-xs font-bold truncate min-w-0" style={{ color: C.ink }}>{d.name}</div>
+                <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{d.name}</div>
                 <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: roleTag === "customer" ? C.marigoldDeep : C.navy, color: "#fff" }}>
                   {roleTag === "customer"
                     ? (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")
@@ -1153,8 +1153,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
                         <div className="min-w-0">
-                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name}</div>
-                          <div className="text-[10px] truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                          <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{c.name}</div>
+                          <div className="text-[10px] break-words min-w-0" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.navy }}>
@@ -1176,8 +1176,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
                             <div className="min-w-0">
-                              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{dr.name}</div>
-                              <div className="text-xs truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                              <div className="text-sm font-bold break-words min-w-0" style={{ color: C.ink }}>{dr.name}</div>
+                              <div className="text-xs break-words min-w-0" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -1604,7 +1604,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               return (
                 <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.bg }}>
                   <div className="min-w-0">
-                    <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.returnTrip ? "↩ " : ""}{b.pickup} → {b.drop}</div>
+                    <div className="text-[11px] font-bold break-words min-w-0" style={{ color: C.ink }}>{b.returnTrip ? "↩ " : ""}{b.pickup} → {b.drop}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName}${fleetTag(b)} · ` : ""}{activityTime(b)}</div>
                   </div>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
@@ -1662,7 +1662,7 @@ function AdminBookings({ flowSessions, bookings, tripLog, lang, drivers, fleetVe
       <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
       <div className="flex items-center justify-between gap-2 mt-1.5">
         <div className="min-w-0">
-          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{b.customerName || (lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक")}</div>
+          <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{b.customerName || (lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक")}</div>
           <div className="text-[11px]" style={{ color: C.inkSoft }}>{b.customerMobile || "—"}</div>
         </div>
         {b.customerMobile && (
@@ -2246,8 +2246,8 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, fareTiers, la
                       {(r.zone || "in") === "out" ? (lang === "en" ? "Outside city" : lang === "mr" ? "शहराबाहेर" : "शहर के बाहर") : (lang === "en" ? "Inside city" : lang === "mr" ? "शहरात" : "शहर के अंदर")}
                     </span>
                   </div>
-                  <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
-                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                  <div className="text-xs font-bold break-words mt-1 min-w-0" style={{ color: C.ink }}>{r.pickupName}</div>
+                  <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>→ {r.dropName}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                     {savedRateCategoryText(r, fareTiers, lang) ? `${savedRateCategoryText(r, fareTiers, lang)} · ` : ""}{r.estimatedKm != null ? `${formatTripKm(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
                     {r.rateBasis === "ton" && r.tons && r.perTon ? ` · ${r.tons} ${lang === "en" ? "t" : "टन"} × ${fmt(r.perTon)}/${lang === "en" ? "t" : "टन"}` : ""}
@@ -2734,8 +2734,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 style={{ ...inputStyle, borderColor: tier ? C.navy : C.marigoldDeep, background: tier ? C.bg : "rgba(239,108,26,0.08)" }}>
                 {tier ? (
                   <span className="min-w-0">
-                    <span className="block font-black truncate">{selectedCategoryRow ? categoryRowTitle(selectedCategoryRow) : formatKgLabel(tier.maxKg, lang)}</span>
-                    {selectedCategoryRow && selectedCategoryRow.top.maxKg !== tier.maxKg && <span className="block text-[11px] font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "saved on the" : lang === "mr" ? "यावर सेव्ह:" : "इस पर सेव:"} {formatKgLabel(tier.maxKg, lang)}</span>}
+                    <span className="block font-black break-words min-w-0">{selectedCategoryRow ? categoryRowTitle(selectedCategoryRow) : formatKgLabel(tier.maxKg, lang)}</span>
+                    {selectedCategoryRow && selectedCategoryRow.top.maxKg !== tier.maxKg && <span className="block text-[11px] font-semibold break-words min-w-0" style={{ color: C.inkSoft }}>{lang === "en" ? "saved on the" : lang === "mr" ? "यावर सेव्ह:" : "इस पर सेव:"} {formatKgLabel(tier.maxKg, lang)}</span>}
                   </span>
                 ) : (
                   <span style={{ color: C.marigoldDeep }}>{lang === "en" ? "Choose vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}</span>
@@ -2884,7 +2884,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
           {comparingEntry && comparingJudge && (
             <div className="rounded-xl px-3 py-2.5 flex items-center gap-2.5" style={{ background: `${JUDGE_COLOR[comparingJudge.cls]}1A`, border: `1.5px solid ${JUDGE_COLOR[comparingJudge.cls]}` }}>
               <span className="text-base font-black shrink-0" style={{ color: JUDGE_COLOR[comparingJudge.cls] }}>{comparingJudge.diff >= 0 ? "+" : "−"}{comparingJudge.a.toFixed(0)}%</span>
-              <span className="text-xs font-semibold flex-1 min-w-0 truncate" style={{ color: C.ink }}>
+              <span className="text-xs font-semibold flex-1 min-w-0 break-words" style={{ color: C.ink }}>
                 {comparingJudge.cls === "ok" ? (lang === "en" ? "Fair rate" : lang === "mr" ? "योग्य दर" : "सही भाड़ा") : comparingJudge.cls === "warn" ? (lang === "en" ? "A bit off" : lang === "mr" ? "थोडा फरक" : "थोड़ा फ़र्क़") : (lang === "en" ? "Way off" : lang === "mr" ? "खूप फरक" : "बहुत फ़र्क़")}
                 {" · "}{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"} <b>{fmt(comparingEntry.totalFare)}</b> · {lang === "en" ? "Route" : lang === "mr" ? "रूट" : "रूट"} <b>{fmt(Number(totalFare) || 0)}</b>
               </span>
@@ -2923,8 +2923,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                   <div key={r.id} className="rounded-xl p-2.5" style={{ background: C.bg, border: `${isActive ? 2 : 1}px solid ${isActive ? C.navy : C.line}` }}>
                     <button onClick={() => openDriverEntry(r)} className="w-full text-left flex items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
-                        <div className="text-[10px] truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                        <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
+                        <div className="text-[10px] break-words min-w-0" style={{ color: C.inkSoft, fontFamily: monoFont }}>
                           {r.driverMobile} · {r.estimatedKm != null ? formatTripKm(r.estimatedKm, lang) : "—"}
                         </div>
                       </div>
@@ -3336,7 +3336,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
           <SafeImage src={d.photo?.url || d.docs?.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name || "—"}</div>
+            <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{d.name || "—"}</div>
             <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.mobile}</div>
           </div>
           {called ? (
@@ -3589,7 +3589,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                   {box.opts.map((o) => (
                     <div key={o.v} className="min-w-0">
                       <div className="text-xl font-extrabold leading-none" style={{ color: o.color }}>{o.list.length}</div>
-                      <div className="text-[11px] font-bold mt-1 truncate" style={{ color: C.inkSoft }}>{o.label}</div>
+                      <div className="text-[11px] font-bold mt-1 break-words min-w-0" style={{ color: C.inkSoft }}>{o.label}</div>
                     </div>
                   ))}
                 </div>
@@ -3690,7 +3690,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                 <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
                 <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                  <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
                 </div>
                 {called ? (
@@ -3719,7 +3719,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                     ) : (
                       <>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{latestRide.pickup} → {latestRide.drop}</span>
+                          <span className="text-[11px] font-bold break-words min-w-0" style={{ color: C.ink }}>{latestRide.pickup} → {latestRide.drop}</span>
                         </div>
                         <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
                           {bookingCategoryText(latestRide, lang)}
@@ -3751,7 +3751,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                         return (
                           <div key={b.id} className="rounded-lg p-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
+                              <span className="text-[11px] font-bold break-words min-w-0" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                             </div>
                             <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
@@ -4412,7 +4412,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
               <label key={b.id} data-pick-row className="flex items-start gap-2 px-3 py-2 cursor-pointer" style={{ borderBottom: `1px solid ${C.line}`, background: picked[b.id] ? "#FEF2F2" : C.paper }}>
                 <input type="checkbox" data-pick-box checked={!!picked[b.id]} onChange={(e) => setPicked((p) => ({ ...p, [b.id]: e.target.checked }))} className="mt-0.5 shrink-0" style={{ width: 18, height: 18, accentColor: C.safety }} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
+                  <span className="block text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
                   <span className="block text-[11px] font-semibold" style={{ color: C.inkSoft }}>{rideMs(b) ? localDateKey(new Date(rideMs(b))) : "—"} · {b.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : (lang === "en" ? "Completed" : lang === "mr" ? "पूर्ण" : "पूरी हुई")}{b.customerName ? ` · ${b.customerName}` : ""}{b.driverName ? ` · ${b.driverName}` : ""}</span>
                 </span>
                 <span className="text-xs font-bold shrink-0" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(b.fare)}</span>
@@ -4598,7 +4598,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                     <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
+                          <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
                           <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi}` : e.category}</div>
                         </div>
                         <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>

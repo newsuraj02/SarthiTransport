@@ -258,7 +258,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                       <button key={o.index} type="button" data-admin-book-category={o.index} onClick={() => { setCategoryIndex(o.index); setConfirming(null); setError(""); }}
                         className="w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left"
                         style={{ background: on ? "#E8F7EE" : C.bg, border: `1px solid ${on ? C.success : C.line}` }}>
-                        <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{o.label}</span>
+                        <span className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{o.label}</span>
                         <span className="text-xs font-extrabold shrink-0 text-right" style={{ color: C.ink }}>
                           {f && f.fare > 0 ? fmt(f.fare) : "—"}
                           {f && f.returnFare != null && <span className="block text-[10px] font-semibold" style={{ color: C.inkSoft }}>{fmt(f.oneWayFare)} + {fmt(f.returnFare)} ↩</span>}
@@ -283,7 +283,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                       <div key={d.mobile} data-admin-book-driver={d.mobile} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="text-xs font-extrabold truncate" style={{ color: C.ink }}>{d.name || "—"}</div>
+                            <div className="text-xs font-extrabold break-words min-w-0" style={{ color: C.ink }}>{d.name || "—"}</div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>{d.mobile} · {vehicleCategoryText(d.vehicleSpec.capacityKg, lang)}</div>
                             <div className="text-[11px] flex items-center gap-1.5 mt-0.5" style={{ color: C.inkSoft }}>
                               <span className="font-bold" style={{ color: d.online ? C.success : C.inkSoft }}>{d.online ? T(lang, "On duty", "ड्यूटी पर", "ड्युटीवर") : T(lang, "Off duty", "ड्यूटी बंद", "ड्युटी बंद")}</span>
@@ -319,7 +319,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                     <div key={v.id} data-admin-book-fleet-vehicle={v.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-xs font-extrabold truncate" style={{ color: C.ink }}>{priv.vehicleNumber || v.vehicleName || "—"} <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{T(lang, "Transporter", "ट्रांसपोर्टर", "ट्रान्सपोर्टर")}</span></div>
+                          <div className="text-xs font-extrabold break-words min-w-0" style={{ color: C.ink }}>{priv.vehicleNumber || v.vehicleName || "—"} <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{T(lang, "Transporter", "ट्रांसपोर्टर", "ट्रान्सपोर्टर")}</span></div>
                           <div className="text-[11px]" style={{ color: C.inkSoft }}>{vehicleCategoryText(v.capacityKg, lang)}</div>
                           <div className="text-[11px]" style={{ color: C.inkSoft }}>{T(lang, "Owner", "मालिक", "मालक")}: {owner.name || "—"} · {owner.mobile}</div>
                           <div className="text-[11px]" style={{ color: C.inkSoft }}>{T(lang, "Driver", "ड्राइवर", "ड्रायव्हर")}: {priv.driverName} · {priv.driverMobile}</div>

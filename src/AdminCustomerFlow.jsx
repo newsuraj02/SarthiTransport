@@ -114,8 +114,8 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
       <div key={c.mobile} data-flow-customer={c.mobile} className="rounded-xl overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.line}` }}>
         <div className="p-3 flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{c.name || T(lang, "Customer", "ग्राहक", "ग्राहक")}</span>
+            <div data-flow-customer-name className="text-sm font-extrabold break-words min-w-0" style={{ color: C.ink }}>{c.name || T(lang, "Customer", "ग्राहक", "ग्राहक")}</div>
+            <div data-flow-customer-tags className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {pill(st)}
               {c.tries.some((t) => calledAdmin(t)) && <span data-flow-called-badge className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: "#FFF4D6", color: C.marigoldDeep, border: `1px solid ${C.marigold}` }}>📞 {T(lang, "Tapped Call", "कॉल दबाया", "कॉल दाबले")}</span>}
             </div>

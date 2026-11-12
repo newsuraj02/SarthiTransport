@@ -154,8 +154,8 @@ export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup",
               <div key={x.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`}</div>
-                    <div className="text-xs truncate" style={{ color: C.inkSoft }}>{[x.categoryIndex == null ? x.vehicleName : "", p.driverName, p.driverMobile].filter(Boolean).join(" · ")}</div>
+                    <div className="text-sm font-extrabold break-words min-w-0" style={{ color: C.ink }}>{p.vehicleNumber || x.vehicleName} · {vehicleCategoryText(x.capacityKg, lang) || `${x.capacityKg} kg`}</div>
+                    <div className="text-xs break-words min-w-0" style={{ color: C.inkSoft }}>{[x.categoryIndex == null ? x.vehicleName : "", p.driverName, p.driverMobile].filter(Boolean).join(" · ")}</div>
                   </div>
                   <span className="text-[10px] font-extrabold px-2 py-1 rounded-full shrink-0" style={{ background: "#fff", border: `1px solid ${color}`, color }}>{label}</span>
                 </div>
@@ -264,7 +264,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
           <div key={o.mobile} data-fleet-owner-card className="rounded-xl" style={{ background: C.paper, border: `2px solid ${C.line}` }}>
             <div className="flex items-center gap-2 p-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{o.name}</div>
+                <div className="text-sm font-extrabold break-words min-w-0" style={{ color: C.ink }}>{o.name}</div>
                 <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.mobile} · {T(lang, `${o.vehicles.length} vehicle(s)`, `${o.vehicles.length} गाड़ी`, `${o.vehicles.length} गाडी`)}{o.pending > 0 && <span className="font-bold" style={{ color: C.marigoldDeep }}> · {T(lang, `${o.pending} pending`, `${o.pending} लंबित`, `${o.pending} प्रलंबित`)}</span>}</div>
               </div>
               <a href={`tel:+91${o.mobile}`} aria-label="Call" className="shrink-0 p-2 rounded-full" style={{ background: C.navy }}><Phone size={14} color="#FFFFFF" /></a>
@@ -283,7 +283,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
                       <div className="text-[10px] font-extrabold uppercase mt-2" style={{ color: C.inkSoft }}>{T(lang, "Driver details", "ड्राइवर की जानकारी", "ड्रायव्हरची माहिती")}</div>
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{p.driverName || "-"}</div>
+                          <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{p.driverName || "-"}</div>
                           <div data-fleet-driver-phone className="text-xs font-semibold" style={{ color: C.inkSoft }}>{p.driverMobile || "-"}</div>
                         </div>
                         {p.driverMobile && <a href={`tel:+91${p.driverMobile}`} aria-label="Call driver" className="shrink-0 p-2 rounded-full" style={{ background: C.navy }}><Phone size={14} color="#FFFFFF" /></a>}
