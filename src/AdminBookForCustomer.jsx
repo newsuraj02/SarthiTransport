@@ -212,6 +212,14 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   <input data-admin-book-name className={inputCls} style={inputStyle} value={customerName} onChange={(e) => setCustomerName(cleanNameInput(e.target.value))} />
                 </div>
               </div>
+              {prefill && (
+                <div data-admin-book-entered-weight className="rounded-lg px-3 py-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                  <div className={label} style={{ color: C.inkSoft }}>{T(lang, "Weight entered by the customer", "ग्राहक द्वारा भरा गया वज़न", "ग्राहकाने भरलेले वजन")}</div>
+                  <div data-admin-book-entered-weight-value className="text-sm font-extrabold" style={{ color: pf.categoryKg ? C.ink : C.inkSoft }}>
+                    {pf.categoryKg ? vehicleCategoryText(Math.min(Number(pf.categoryKg), 35000), lang) : T(lang, "Not entered", "भरा नहीं गया", "भरले नाही")}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <LocationField lang={lang} value={pickup}
                   onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupPlaceId(null); }}
