@@ -553,3 +553,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Vehicle list button renamed Book now -> Select vehicle (hi/mr equivalents) -- owner 2026-11-12
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Pickup/Drop screen: call row only until places entered; vehicle card shows the vehicle being booked -- owner 2026-11-12
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

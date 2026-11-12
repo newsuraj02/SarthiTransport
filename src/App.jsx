@@ -7964,25 +7964,36 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         <>
       {/* SCREEN 2 (owner 2026-11-12: "on this screen Pickup and Drop boxes and then a 'If unable to fill Pickup and Drop, call Apna Transport to book vehicle' button underneath"): reached from Book now on the vehicle list. */}
       <div data-places-screen>
-        <div className="px-5 pt-3 flex items-center justify-between gap-3">
-          <button type="button" data-back-to-vehicles disabled={!!sendingKey} onClick={() => setFlowStep("vehicle")} className="shrink-0 py-2 pr-2 text-sm font-extrabold flex items-center gap-1" style={{ color: C.navy }}>
+        <div className="px-5 pt-3">
+          <button type="button" data-back-to-vehicles disabled={!!sendingKey} onClick={() => setFlowStep("vehicle")} className="py-2 pr-2 text-sm font-extrabold flex items-center gap-1" style={{ color: C.navy }}>
             <ChevronLeft size={18} /> {lang === "en" ? "Change vehicle" : lang === "mr" ? "गाडी बदला" : "गाड़ी बदलें"}
           </button>
           {selectedCategory != null && (
-            <div data-selected-vehicle-chip className="min-w-0 rounded-full px-3 py-1 text-xs font-extrabold truncate" style={{ background: "rgba(0,168,84,0.12)", border: `1px solid ${C.success}`, color: C.success }}>
-              ✓ {customerListCategoryName(selectedCategory, lang)} · {customerListCategoryLabel(selectedCategory, lang)}
+            /* The vehicle the customer is booking (owner 2026-11-12: "on the next screen, show the vehicle that the customer actually booking"): its picture, name and weight, and the fare once the route is known. */
+            <div data-selected-vehicle className="mt-1 rounded-2xl p-3 flex items-center gap-3" style={{ background: "linear-gradient(160deg, rgba(0,168,84,0.12), rgba(255,255,255,0.98) 60%)", border: `2px solid ${C.success}` }}>
+              <div className="w-[96px] h-14 shrink-0"><CategoryVehicleArt index={selectedCategory} bold className="w-full h-full" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-extrabold" style={{ color: C.success }}>✓ {lang === "en" ? "Your vehicle" : lang === "mr" ? "तुमची गाडी" : "आपकी गाड़ी"}</div>
+                <div className="text-base font-black leading-snug" style={{ color: C.ink }}>{customerListCategoryName(selectedCategory, lang)}</div>
+                <div className="mt-0.5 inline-block rounded-md px-2 py-0.5 text-xs font-bold" style={{ color: C.inkSoft, background: "#EEF2F8" }}>⚖ {customerListCategoryLabel(selectedCategory, lang)}</div>
+              </div>
+              {showFares && selectedTopEntry && (
+                <div data-selected-vehicle-fare className="shrink-0 rounded-full px-3 py-1 text-base font-black" style={{ color: "#FFFFFF", background: C.navy }}>{fmt(selectedTopEntry.fare)}</div>
+              )}
             </div>
           )}
         </div>
         {mapEl}
         {/* CALL APNA TRANSPORT (owner 2026-11-12: "paraphrase it in minimal words and add a call button next to it; place it above the Pickup and Drop box"): a short line + a Call button
-            (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box. We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
-        <div data-call-row className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <span className="min-w-0 text-sm font-bold leading-snug" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
-          <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-xl px-4 py-2.5 flex items-center gap-1.5 text-sm font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
-            <Phone size={16} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
-          </a>
-        </div>
+            (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box -- shown only until Pickup and Drop are entered (owner 2026-11-12: "appear only until the Pickup and drop is entered, remove it afterwards"). We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
+        {!placesReady && (
+          <div data-call-row className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <span className="min-w-0 text-sm font-bold leading-snug" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
+            <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-xl px-4 py-2.5 flex items-center gap-1.5 text-sm font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
+              <Phone size={16} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
+            </a>
+          </div>
+        )}
         <div className="px-5 pt-3">
           {placesFormEl}
         </div>
