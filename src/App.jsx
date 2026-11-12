@@ -7375,10 +7375,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     });
   }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, advance, advanceDate, advanceTime, returnTrip]);
 
-  // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, the picked vehicle) -- owner brief 2026-10-29.
+  // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance) -- owner brief 2026-10-29.
   // Distance is derived from the two coordinates, so clearing them clears it too.
+  // VEHICLE-FIRST (owner 2026-11-12): the vehicle is picked BEFORE Pickup / Drop, so typing in them must NOT un-pick it any more.
   const clearAfterDrop = () => {
-    setSelectedCategory(null); setBookingError("");
+    setBookingError("");
   };
   const clearAfterPickup = () => {
     setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
@@ -7483,19 +7484,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // elsewhere.
   const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM; // 50 km Advance / 30 km Current
   const nearbyDrivers = (() => {
-    if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
+    // VEHICLE-FIRST (owner 2026-11-12): before Pickup is chosen the list is a PREVIEW measured from the customer's current location (no fare yet); in Advance it also shows before the day is picked (availability "now").
+    const refCoords = pickupCoords || customerLocation || null;
     // ONE FARE EVERYWHERE (owner 2026-11-05): the fare table is built once over ALL vehicle tiers (buildRouteFareTable -- the same function the Admin Rate
     // Calculator reads), and a category's fare is the fare of its TOP tier (categoryRouteFare) -- it no longer depends on which drivers are online.
     const fareTable = buildRouteFareTable({ tiers: fareTiers, pickup, drop, distance, pickupLat: pickupCoords?.lat, pickupLng: pickupCoords?.lng, dropLat: dropCoords?.lat, dropLng: dropCoords?.lng, adminRouteFares, dieselPricePerLitre });
     const priced = drivers
-      .filter((d) => isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
+      .filter((d) => isDriverListableForCustomer(d, { pickupCoords: refCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
         const tier = findFareTier(capacityKg, fareTiers);
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
         // km from Pickup is measured from the driver's last known location; gpsOn = that location is live (a fix under 5 min old).
         // A fleet owner's vehicle has no phone / location of its own (lastKnownLocation null): it is listed, never GPS-on, so any large finite km keeps the sort safe.
-        const km = d.lastKnownLocation && pickupCoords ? haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : NO_LOCATION_KM;
+        const km = d.lastKnownLocation && refCoords ? haversineKm(refCoords.lat, refCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : NO_LOCATION_KM;
         const gpsOn = hasFreshLocation(d);
         const id = d.mobile || d.id;
         const cat = categoryRouteFare(customerListCategoryIndex(capacityKg), fareTiers, fareTable);
@@ -7558,14 +7560,23 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // ONE fixed "Book now" bar at the bottom of the screen (owner 2026-11-04: "just keep one fixed book now button at the bottom of the list").
   // The customer taps a category (it is highlighted); the bar books it at the category's TOP fare. Greyed out until a category is picked, and a
   // picked category that disappeared from the list (its last vehicle went off duty) counts as not picked.
-  const orderedListGroups = (() => { const all = groupByCustomerListCategory(nearbyDrivers); const first = selectedCategory == null ? null : all.find((g) => g.index === selectedCategory); return first ? [first, ...all.filter((g) => g !== first)] : all; })();
+  // VEHICLE-FIRST (owner 2026-11-12): the list can exist before the route is known. With nobody to list yet (no location, nobody near) the full set of categories shows without
+  // "N min away"; a category the customer picked that has no vehicle near the real pickup stays as an empty card so the Pickup / Drop form under it does not vanish mid-flow.
+  const showFares = placesReady; // the fare needs the route
+  const listGroups = (() => {
+    let g = groupByCustomerListCategory(nearbyDrivers);
+    if (!placesReady && g.length === 0) g = Array.from({ length: CUSTOMER_LIST_CATEGORY_KG.length + 1 }, (_, index) => ({ index, entries: [] }));
+    if (selectedCategory != null && !g.some((x) => x.index === selectedCategory)) g = [...g, { index: selectedCategory, entries: [] }].sort((a, b) => a.index - b.index);
+    return g;
+  })();
+  const orderedListGroups = (() => { const all = listGroups; const first = selectedCategory == null ? null : all.find((g) => g.index === selectedCategory); return first ? [first, ...all.filter((g) => g !== first)] : all; })();
   // After a pick the card jumps to the top of the list: bring it into view (the page may be scrolled further down).
   useEffect(() => {
     if (selectedCategory == null) return undefined;
     const t = setTimeout(() => { document.querySelector("[data-category-picked]")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 140);
     return () => clearTimeout(t);
   }, [selectedCategory]);
-  const selectedGroup = selectedCategory == null ? null : groupByCustomerListCategory(nearbyDrivers).find((g) => g.index === selectedCategory) || null;
+  const selectedGroup = selectedCategory == null ? null : listGroups.find((g) => g.index === selectedCategory) || null;
   const selectedTopEntry = selectedGroup ? categoryTopEntry(selectedGroup.entries) : null;
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
   // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
@@ -7637,67 +7648,21 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // booking system / form must open from it so the customer understands the whole process"): once Round trip is ticked a panel opens at the top of the booking screen --
   // the steps of THIS form (Pickup, Drop, [the day in Advance], Vehicle, Book) with a tick on each that is done, and ONE button that takes the customer to the next undone
   // step (cursor into Pickup / Drop, or scroll to the day buttons / the vehicle list / "Book now"). It adds no second form: the fields are the ones on this screen.
-  const roundTripStep = !pickupSelected ? "pickup" : !dropSelected ? "drop" : (advance && !scheduleReady) ? "day" : selectedCategory == null ? "vehicle" : "book";
+  // Vehicle-first order (owner 2026-11-12): Vehicle -> Pickup -> Drop -> [Day] -> Book.
+  const roundTripStep = selectedCategory == null ? "vehicle" : !pickupSelected ? "pickup" : !dropSelected ? "drop" : (advance && !scheduleReady) ? "day" : "book";
   const roundTripNext = () => {
     if (roundTripStep === "pickup") { setActiveField("pickup"); requestFocus("pickup"); return; }
     if (roundTripStep === "drop") { setActiveField("drop"); requestFocus("drop"); return; }
-    const sel = roundTripStep === "day" ? "[data-advance-days]" : roundTripStep === "vehicle" ? "[data-list-category]" : "[data-category-picked] + button"; // "Book now" is the button right after the picked category's card
+    const sel = roundTripStep === "day" ? "[data-advance-days]" : roundTripStep === "vehicle" ? "[data-list-category]" : "[data-picked-flow]"; // the picked vehicle's flow ends with "Book now"
     const el = typeof document !== "undefined" ? document.querySelector(sel) : null;
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  return (
-    <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
-      {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
-      {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
-          booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
-          Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
-          Owner brief 2026-10-29: once the vehicle list shows, the map shows ONLY active vehicles of the matching types
-          (inactive ones hidden). */}
-      {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
-          Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched.
-          Owner 2026-11-04 ("the map at the top disappears on the vehicle selection list and reappears from the OTP screen onwards; in Advance it also disappears on the
-          date selection"): the map is HIDDEN, to give the whole screen to the list -- in Current from the moment the vehicle list shows (`listStage`), in Advance from the
-          moment Pickup + Drop are chosen (the date step and the list; `placesReady`). It is back while Pickup / Drop are being typed (so a map tap can still pick a
-          place) and on the OTP / ride screen, which has its own map. */}
-      {!mapHidden && (
-      <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
-        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
-          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
-      </div>
-      )}
-      {bookedMsg && (
-        <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
-          ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
-        </div>
-      )}
-      {returnTrip && (
-        <div data-round-trip-panel className="mx-5 mt-3 rounded-2xl p-3 space-y-2.5 anim-rise" style={{ background: "rgba(0,168,84,0.08)", border: `1.5px solid ${C.success}` }}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-extrabold" style={{ color: C.ink }}>↔ {lang === "en" ? "Round trip booking" : lang === "mr" ? "राउंड ट्रिप बुकिंग" : "राउंड ट्रिप बुकिंग"}</span>
-            <span className="text-[11px] font-bold text-right" style={{ color: C.success }}>{lang === "en" ? `Return fare included (${returnPct}% off)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (${returnPct}% सूट)` : `वापसी का किराया शामिल (${returnPct}% छूट)`}</span>
-          </div>
-          <div data-round-trip-steps className="flex flex-wrap gap-1.5">
-            {[
-              ["pickup", pickupSelected, lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"],
-              ["drop", dropSelected, lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"],
-              ...(advance ? [["day", scheduleReady, lang === "en" ? "Day" : lang === "mr" ? "दिवस" : "दिन"]] : []),
-              ["vehicle", selectedCategory != null, lang === "en" ? "Vehicle" : lang === "mr" ? "गाडी" : "गाड़ी"],
-            ].map(([key, done, text], i) => (
-              <span key={key} data-round-trip-step={key} data-done={done ? "1" : "0"} className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
-                style={{ background: done ? C.success : "#FFFFFF", color: done ? "#FFFFFF" : C.inkSoft, border: `1px solid ${done ? C.success : C.line}` }}>{done ? "✓" : i + 1} {text}</span>
-            ))}
-          </div>
-          <button type="button" data-round-trip-next onClick={roundTripNext} className="w-full rounded-xl py-2.5 text-sm font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>
-            {roundTripStep === "pickup" ? (lang === "en" ? "Enter Pickup →" : lang === "mr" ? "पिकअप भरा →" : "पिकअप भरें →")
-              : roundTripStep === "drop" ? (lang === "en" ? "Enter Drop →" : lang === "mr" ? "ड्रॉप भरा →" : "ड्रॉप भरें →")
-              : roundTripStep === "day" ? (lang === "en" ? "Choose the day →" : lang === "mr" ? "दिवस निवडा →" : "दिन चुनें →")
-              : roundTripStep === "vehicle" ? (lang === "en" ? "Choose a vehicle →" : lang === "mr" ? "गाडी निवडा →" : "गाड़ी चुनें →")
-              : (lang === "en" ? "Book now →" : lang === "mr" ? "आता बुक करा →" : "अभी बुक करें →")}
-          </button>
-        </div>
-      )}
-      <div className="px-5 pt-4 space-y-4">
+  // VEHICLE-FIRST FLOW (owner 2026-11-12, the developer requirements document item 1): the vehicle list is the FIRST thing under the map; tapping a vehicle opens the Pickup box right
+  // below it; Pickup opens Drop; Drop (and the day in Advance) opens the Book button. These two blocks are the same Pickup / Drop form and Advance day buttons as before, only now
+  // rendered inside the list, under the vehicle that was tapped (placesFormEl / dayButtonsEl).
+  const placesFormEl = (
+      <div className="pt-1 space-y-4">
         {/* Layering (owner 2026-10-29: the km and weight boxes -- since removed -- were painting OVER the Drop suggestions): every
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
@@ -7785,11 +7750,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         </SmoothCollapse>
 
       </div>
-
+  );
+  const dayButtonsEl = (
+    <>
       {/* Advance only: the three day buttons (owner 2026-11-04 -- date only, see ADVANCE_DAY_OFFSETS). Owner 2026-11-04: "Date selection disappears once the date is
           selected" -- they are shown ONLY until a day is picked (`!scheduleReady`); then the vehicle list takes the screen, with a one-line summary + "Change" (below). */}
       {advance && placesReady && !scheduleReady && (
-        <div data-advance-days-pin className="px-5 pt-4">
+        <div data-advance-days-pin className="pt-1">
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
               background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
@@ -7819,52 +7786,63 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           </div>
         </div>
       )}
-
-      {/* Once Pickup+Drop are filled (owner 2026-11-04: there is NO weight / est. distance box any more), this section shows the
-          eligible-driver list straight away. Every real, currently eligible driver near Pickup is
-          listed with their own KYC vehicle photo, category label, capacity and fare (see nearbyDrivers), grouped under the
-          capacity categories (owner 2026-11-04). The vehicle rows are information only -- nobody picks a single driver. The customer taps a category
-          and then presses the ONE fixed "Book now" bar (see bookDriver) that sends the request to every vehicle in that category (ONLY that category, owner 2026-11-05)
-          at the category's top fare, immediately (no confirmation sheet); that same bar becomes "Sending request..." while it goes out. */}
-      {locationsReady && (
-        <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {sameLocation ? (
-            // Pickup and Drop read as the same place (see isSameLocation) --
-            // no point showing bookable vehicles for a trip that can't be
-            // booked: the list is hidden on this location problem.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
-                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
-                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
-            </div>
-          ) : (
-            <>
-              {returnFareNote}
-              {advance && scheduleReady && (
-                <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
-                  <span className="text-sm font-extrabold min-w-0 truncate" style={{ color: "#0052CC" }}>
-                    📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
-                  </span>
-                  <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setSelectedCategory(null); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
-                    {lang === "en" ? "Change date" : lang === "mr" ? "तारीख बदला" : "तारीख बदलें"}
-                  </button>
-                </div>
-              )}
-              {changePlacesLink}
-              {bookingError && (
-                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
-              )}
-              {nearbyDrivers.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-                  {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
-                </p>
-              ) : (
-                <>
-                  {/* Owner 2026-11-04: the list is grouped in the 14 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
-                      ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category NAME in big bold type, its weight limit under it, the top fare and
-                      "N min" of its nearest GPS-on vehicle. Tapping a row selects the category (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
-                  {/* Owner 2026-11-04: the category the customer picked MOVES TO THE TOP of the list and is shown as a bigger "selected" card; the others follow
-                      under a small "Other vehicles" label (the order inside each part stays light -> heavy). */}
+    </>
+  );
+  return (
+    <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
+      {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
+      {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
+          booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
+          Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
+          Owner brief 2026-10-29: once the vehicle list shows, the map shows ONLY active vehicles of the matching types
+          (inactive ones hidden). */}
+      {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
+          Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched.
+          Owner 2026-11-04 ("the map at the top disappears on the vehicle selection list and reappears from the OTP screen onwards; in Advance it also disappears on the
+          date selection"): the map is HIDDEN, to give the whole screen to the list -- in Current from the moment the vehicle list shows (`listStage`), in Advance from the
+          moment Pickup + Drop are chosen (the date step and the list; `placesReady`). It is back while Pickup / Drop are being typed (so a map tap can still pick a
+          place) and on the OTP / ride screen, which has its own map. */}
+      {!mapHidden && (
+      <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
+        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
+          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+      </div>
+      )}
+      {bookedMsg && (
+        <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
+          ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
+        </div>
+      )}
+      {returnTrip && (
+        <div data-round-trip-panel className="mx-5 mt-3 rounded-2xl p-3 space-y-2.5 anim-rise" style={{ background: "rgba(0,168,84,0.08)", border: `1.5px solid ${C.success}` }}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-extrabold" style={{ color: C.ink }}>↔ {lang === "en" ? "Round trip booking" : lang === "mr" ? "राउंड ट्रिप बुकिंग" : "राउंड ट्रिप बुकिंग"}</span>
+            <span className="text-[11px] font-bold text-right" style={{ color: C.success }}>{lang === "en" ? `Return fare included (${returnPct}% off)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (${returnPct}% सूट)` : `वापसी का किराया शामिल (${returnPct}% छूट)`}</span>
+          </div>
+          <div data-round-trip-steps className="flex flex-wrap gap-1.5">
+            {[
+              ["vehicle", selectedCategory != null, lang === "en" ? "Vehicle" : lang === "mr" ? "गाडी" : "गाड़ी"],
+              ["pickup", pickupSelected, lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"],
+              ["drop", dropSelected, lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"],
+              ...(advance ? [["day", scheduleReady, lang === "en" ? "Day" : lang === "mr" ? "दिवस" : "दिन"]] : []),
+            ].map(([key, done, text], i) => (
+              <span key={key} data-round-trip-step={key} data-done={done ? "1" : "0"} className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
+                style={{ background: done ? C.success : "#FFFFFF", color: done ? "#FFFFFF" : C.inkSoft, border: `1px solid ${done ? C.success : C.line}` }}>{done ? "✓" : i + 1} {text}</span>
+            ))}
+          </div>
+          <button type="button" data-round-trip-next onClick={roundTripNext} className="w-full rounded-xl py-2.5 text-sm font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>
+            {roundTripStep === "pickup" ? (lang === "en" ? "Enter Pickup →" : lang === "mr" ? "पिकअप भरा →" : "पिकअप भरें →")
+              : roundTripStep === "drop" ? (lang === "en" ? "Enter Drop →" : lang === "mr" ? "ड्रॉप भरा →" : "ड्रॉप भरें →")
+              : roundTripStep === "day" ? (lang === "en" ? "Choose the day →" : lang === "mr" ? "दिवस निवडा →" : "दिन चुनें →")
+              : roundTripStep === "vehicle" ? (lang === "en" ? "Choose a vehicle →" : lang === "mr" ? "गाडी निवडा →" : "गाड़ी चुनें →")
+              : (lang === "en" ? "Book now →" : lang === "mr" ? "आता बुक करा →" : "अभी बुक करें →")}
+          </button>
+        </div>
+      )}
+      {/* VEHICLE-FIRST FLOW (owner 2026-11-12): the list of vehicle categories is the first thing under the map. Before the route is known a row shows the category, its weight
+          and "N min away" (measured from the customer's current location); the FARE appears once Pickup + Drop are chosen. Tapping a row picks the category, moves it to the top and
+          opens Pickup -> Drop -> (day in Advance) -> "Book now" right under it (data-picked-flow). Category booking, the ring and every fare are unchanged. */}
+      <div className="px-5 pt-3 pb-4 space-y-2.5">
                   {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
                   const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category
@@ -7907,7 +7885,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       <div data-category-eta className="text-xs font-bold" style={{ color: C.inkSoft }}>
                         {mins != null ? <>⏱ {lang === "en" ? `${mins} min away` : lang === "mr" ? `${mins} मिनिटांवर` : `${mins} मिनट दूर`}</> : null}
                       </div>
-                      <div data-category-fare className={`${isPicked ? "text-2xl px-4 py-1" : "text-lg px-3.5 py-0.5"} font-black rounded-full`} style={{ color: isPicked ? "#FFFFFF" : C.navy, background: isPicked ? C.navy : "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
+                      {showFares && top ? (<div data-category-fare className={`${isPicked ? "text-2xl px-4 py-1" : "text-lg px-3.5 py-0.5"} font-black rounded-full`} style={{ color: isPicked ? "#FFFFFF" : C.navy, background: isPicked ? C.navy : "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>) : <span />}
                     </div>
                     {isPicked && (
                       <div data-category-art className="mt-3 rounded-2xl flex items-center gap-2 py-4 px-3 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
@@ -7930,16 +7908,54 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       </div>
                     )}
                   </button>
-                  {isPicked && !typingField && (
-                    /* Owner 2026-11-04 ("I dont want the Book now button fixed ... keep it simple"): "Book now" is NOT a fixed bar any more -- it sits right BELOW the selected
-                       category card, and the other categories follow after it. It exists only while a category is selected. */
-                    <button type="button" data-book-now disabled={!canBook || !selectedTopEntry || !!sendingKey} onClick={() => selectedTopEntry && bookDriver(selectedTopEntry, selectedCategory)}
-                      className="w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
-                      style={{ background: sendingKey ? C.inkSoft : "linear-gradient(135deg, #00A854, #00C26A)", color: "#FFFFFF", boxShadow: sendingKey ? "0 2px 6px rgba(15,27,45,0.12)" : "0 6px 14px rgba(0,168,84,0.28)" }}>
-                      {sendingKey
-                        ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-                        : <>🚚 {lang === "en" ? "Book now" : lang === "mr" ? "आता बुक करा" : "अभी बुक करें"}{selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}</>}
-                    </button>
+                  {isPicked && (
+                    <div data-picked-flow className="relative z-20 space-y-3">
+                      {placesFormEl}
+                      {dayButtonsEl}
+                      {advance && placesReady && !scheduleReady && (
+                        <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
+                          👆 {lang === "en" ? "Choose the day first, then book" : lang === "mr" ? "आधी दिवस निवडा, मग बुक करा" : "पहले दिन चुनें, फिर बुक करें"}
+                        </div>
+                      )}
+                      {placesReady && returnFareNote}
+                      {advance && scheduleReady && placesReady && (
+                        <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
+                          <span className="text-sm font-extrabold min-w-0 truncate" style={{ color: "#0052CC" }}>
+                            📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
+                          </span>
+                          <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
+                            {lang === "en" ? "Change date" : lang === "mr" ? "तारीख बदला" : "तारीख बदलें"}
+                          </button>
+                        </div>
+                      )}
+                      {changePlacesLink}
+                      {sameLocation && (
+                        // Pickup and Drop read as the same place (see isSameLocation) -- no point offering Book for a trip that can't be booked.
+                        <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+                          {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
+                            : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+                            : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
+                        </div>
+                      )}
+                      {bookingError && (
+                        <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+                      )}
+                      {locationsReady && !sameLocation && !selectedTopEntry && (
+                        <p data-no-vehicle-here className="text-sm text-center py-2" style={{ color: C.inkSoft }}>
+                          {lang === "en" ? "No online vehicle of this type is available near this pickup right now — choose another vehicle." : lang === "mr" ? "सध्या या पिकअपजवळ या प्रकारची ऑनलाइन गाडी उपलब्ध नाही — दुसरी गाडी निवडा." : "अभी इस पिकअप के पास इस तरह की कोई ऑनलाइन गाड़ी उपलब्ध नहीं है — दूसरी गाड़ी चुनें।"}
+                        </p>
+                      )}
+                      {locationsReady && !sameLocation && !typingField && (
+                        /* Owner 2026-11-12 (vehicle-first flow): "Book now" comes LAST -- after the vehicle, Pickup, Drop (and the day in Advance). Still an ordinary in-flow button (owner 2026-11-04: not fixed). */
+                        <button type="button" data-book-now disabled={!canBook || !selectedTopEntry || !!sendingKey} onClick={() => selectedTopEntry && bookDriver(selectedTopEntry, selectedCategory)}
+                          className="w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
+                          style={{ background: sendingKey ? C.inkSoft : "linear-gradient(135deg, #00A854, #00C26A)", color: "#FFFFFF", boxShadow: sendingKey ? "0 2px 6px rgba(15,27,45,0.12)" : "0 6px 14px rgba(0,168,84,0.28)" }}>
+                          {sendingKey
+                            ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
+                            : <>🚚 {lang === "en" ? "Book now" : lang === "mr" ? "आता बुक करा" : "अभी बुक करें"}{selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}</>}
+                        </button>
+                      )}
+                    </div>
                   )}
                   </React.Fragment>
                   );
@@ -7948,23 +7964,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                   <p data-list-hint className="text-center text-xs font-semibold pt-1" style={{ color: C.inkSoft }}>
                     {lang === "en" ? "Choose any vehicle according to your load (you can cancel)" : lang === "mr" ? "तुमच्या लोडनुसार कोणतीही गाडी निवडा (रद्द करता येईल)" : "कोई भी गाड़ी चुने अपने लोड के हिसाब से (कैंसल कर सकते हैं)"}
                   </p>
-                </>
-              )}
-            </>
-          )}
-          {sameLocation && returnFareNote}
-          {sameLocation && changePlacesLink}
-        </div>
-      )}
-      {advance && placesReady && !scheduleReady && (
-        <div className="px-5 pt-3 pb-4">
-          <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
-            👆 {lang === "en" ? "Choose the day first, then vehicles will show" : lang === "mr" ? "आधी दिवस निवडा, मग गाड्या दिसतील" : "पहले दिन चुनें, तभी गाड़ियाँ दिखेंगी"}
-          </div>
-          {returnFareNote}
-          {changePlacesLink}
-        </div>
-      )}
+      </div>
       {/* CALL APNA TRANSPORT TO BOOK (owner 2026-11-12: a "Call Apna Transport to book vehicle" button on the customer's main screen that calls us directly; we then book on the
           customer's behalf from Admin -> Bookings -> "Book for a customer", and the customer pays the driver). A plain in-flow button (a tel: link to the same support number the Help
           screen dials, ADMIN_PHONE) as the LAST block of the booking screen -- Current AND Advance -- so nothing above it (Pickup / Drop boxes, the recent-trip cards, the map, the
