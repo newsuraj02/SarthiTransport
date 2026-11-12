@@ -7987,10 +7987,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         {/* CALL APNA TRANSPORT (owner 2026-11-12: "paraphrase it in minimal words and add a call button next to it; place it above the Pickup and Drop box"): a short line + a Call button
             (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box -- shown only until Pickup and Drop are entered (owner 2026-11-12: "appear only until the Pickup and drop is entered, remove it afterwards"). We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
         {!placesReady && (
-          <div data-call-row className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <span className="min-w-0 text-sm font-bold leading-snug" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
-            <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-xl px-4 py-2.5 flex items-center gap-1.5 text-sm font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
-              <Phone size={16} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
+          <div data-call-row className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-xl px-2.5 py-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Can't fill Pickup / Drop? Call us" : lang === "mr" ? "पिकअप / ड्रॉप भरता येत नाही? फोन करा" : "पिकअप / ड्रॉप नहीं भर पा रहे? फोन करें"}</span>
+            <a data-call-to-book href={`tel:${ADMIN_PHONE}`} aria-label={lang === "en" ? "Call Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टला फोन करा" : "अपना ट्रांसपोर्ट को फोन करें"} className="shrink-0 rounded-lg px-2.5 py-1 flex items-center gap-1 text-xs font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
+              <Phone size={13} className="shrink-0" /> {lang === "en" ? "Call" : "फोन"}
             </a>
           </div>
         )}

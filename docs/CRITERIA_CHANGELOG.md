@@ -556,3 +556,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Pickup/Drop screen: call row only until places entered; vehicle card shows the vehicle being booked -- owner 2026-11-12
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Call row on the Pickup/Drop screen made small and single-line -- owner 2026-11-12
+- changed (2): code:CLAUDE.md, code:src/App.jsx#CustomerBooking
