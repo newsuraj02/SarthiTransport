@@ -564,3 +564,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow
 - added (14): code:src/customerFlow.js#imports, code:src/customerFlow.js#FLOW_GROUP_KEYS, code:src/customerFlow.js#FLOW_IDLE_MS, code:src/customerFlow.js#FLOW_MAX_EVENTS, code:src/customerFlow.js#FLOW_FLUSH_MS, code:src/customerFlow.js#flowGroupKey, code:src/customerFlow.js#FLOW_STAGES, code:src/customerFlow.js#stageRank, code:src/customerFlow.js#squash, code:src/customerFlow.js#tapLabel, code:src/customerFlow.js#flowStatus, code:src/customerFlow.js#groupFlowSessions, code:src/customerFlow.js#groupSessionsByCustomer, code:src/customerFlow.js#createFlowRecorder
 - removed (1): code:src/customerFlow.js
+
+## 2026-11-12 -- Book for this customer moves into Customer activity with prefill (owner 2026-11-12)
+- changed (7): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminPanel.jsx#AdminBookings
+- added (3): code:src/customerFlow.js#CALL_TAP_LABELS, code:src/customerFlow.js#calledAdmin, code:src/customerFlow.js#bookingPrefillFromTries

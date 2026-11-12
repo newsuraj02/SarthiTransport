@@ -53,18 +53,20 @@ function failText(res, lang) {
   return m[r] || (res && res.message) || T(lang, "Could not book -- please try again.", "बुक नहीं हो सका — फिर कोशिश करें।", "बुक होऊ शकले नाही — पुन्हा प्रयत्न करा.");
 }
 
-export default function AdminBookForCustomer({ drivers, fleetVehicles = [], fleetPrivate = [], fareTiers, adminRouteFares, dieselPricePerLitre, returnPct = 0, lang, onClose }) {
+export default function AdminBookForCustomer({ drivers, fleetVehicles = [], fleetPrivate = [], fareTiers, adminRouteFares, dieselPricePerLitre, returnPct = 0, prefill = null, lang, onClose }) {
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
-  const [customerMobile, setCustomerMobile] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [pickup, setPickup] = useState(""); const [pickupCoords, setPickupCoords] = useState(null); const [pickupPlaceId, setPickupPlaceId] = useState(null);
-  const [drop, setDrop] = useState(""); const [dropCoords, setDropCoords] = useState(null); const [dropPlaceId, setDropPlaceId] = useState(null);
+  // PREFILL (owner 2026-11-12): opened from Customer activity, the form starts with what the customer had entered (mobile, name, Pickup, Drop, vehicle category, day, Round trip).
+  const pf = prefill || {};
+  const [customerMobile, setCustomerMobile] = useState(digitsOnly(pf.mobile || "", 10));
+  const [customerName, setCustomerName] = useState(cleanNameInput(pf.name || ""));
+  const [pickup, setPickup] = useState(pf.pickup || ""); const [pickupCoords, setPickupCoords] = useState(null); const [pickupPlaceId, setPickupPlaceId] = useState(null);
+  const [drop, setDrop] = useState(pf.drop || ""); const [dropCoords, setDropCoords] = useState(null); const [dropPlaceId, setDropPlaceId] = useState(null);
   const [distance, setDistance] = useState(null);
-  const [when, setWhen] = useState("now"); // "now" | "advance"
-  const [returnTrip, setReturnTrip] = useState(false);
-  const [advanceDate, setAdvanceDate] = useState("");
-  const [categoryIndex, setCategoryIndex] = useState(null);
+  const [when, setWhen] = useState(pf.advance ? "advance" : "now"); // "now" | "advance"
+  const [returnTrip, setReturnTrip] = useState(!!pf.returnTrip);
+  const [advanceDate, setAdvanceDate] = useState(() => (pf.advance && pf.scheduledFor && advanceDays(lang).some((d) => d.key === String(pf.scheduledFor).slice(0, 10)) ? String(pf.scheduledFor).slice(0, 10) : ""));
+  const [categoryIndex, setCategoryIndex] = useState(() => (pf.categoryKg ? categoryIndexForKg(Number(pf.categoryKg), customerListCategoryOptions(lang)) : null));
   const [showAll, setShowAll] = useState(false);
   const [confirming, setConfirming] = useState(null); // the driver Admin is about to book
   const [working, setWorking] = useState(false);
@@ -160,7 +162,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
 
   const label = "text-[11px] font-bold mb-1";
   return (
-    <div data-admin-book-for-customer className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
+    <div data-admin-book-for-customer className="fixed inset-0 z-[80] flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[92vh] flex flex-col relative" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
           <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{T(lang, "Book for a customer", "ग्राहक के लिए बुक करें", "ग्राहकासाठी बुक करा")}</h3>
@@ -192,6 +194,11 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
             </div>
           ) : (
             <>
+              {prefill && (
+                <div data-admin-book-prefilled className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold" style={{ background: "rgba(0,82,204,0.10)", color: C.navy }}>
+                  {T(lang, "Filled in from what the customer entered -- check it with the customer on the call.", "ग्राहक ने जो भरा था वही भर दिया है — कॉल पर ग्राहक से जाँच लें।", "ग्राहकाने जे भरले तेच भरले आहे — कॉलवर ग्राहकाकडून तपासा.")}
+                </div>
+              )}
               <p className="text-[11px] leading-snug" style={{ color: C.inkSoft }}>
                 {T(lang, "Phone the driver first. Press Book only if the driver agrees. The customer pays the driver directly.", "पहले ड्राइवर को फ़ोन करें। ड्राइवर के मानने पर ही बुक दबाएँ। ग्राहक ड्राइवर को सीधे भुगतान करेगा।", "आधी ड्रायव्हरला फोन करा. ड्रायव्हरने होकार दिल्यावरच बुक दाबा. ग्राहक ड्रायव्हरला थेट पैसे देईल.")}
               </p>

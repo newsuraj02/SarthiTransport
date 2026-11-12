@@ -85,6 +85,25 @@ export function groupSessionsByCustomer(sessions, groupKey = null, now = Date.no
   return out.sort((x, y) => y.lastAt - x.lastAt);
 }
 
+// The "Can't fill Pickup / Drop? Call us" button (App.jsx, data-call-to-book) has no tracking of its own: its tap is logged by the generic tap logger under its aria-label.
+// These are those three labels (en / hi / mr) -- an invariant keeps them equal to the button's.
+export const CALL_TAP_LABELS = ["Call Apna Transport", "अपना ट्रांसपोर्ट को फोन करें", "अपना ट्रान्सपोर्टला फोन करा"];
+export const calledAdmin = (session) => !!(session && (session.events || []).some((ev) => ev && ev.e === "tap" && CALL_TAP_LABELS.includes(ev.d)));
+
+// What Admin's "Book for this customer" fills in from a customer's tries (owner 2026-11-12: "autofill the data that was entered by the customer ... like weight, Pickup and Drop if filled").
+// Takes the newest try that is not booked and has anything filled in (else the newest try with anything filled, else the newest) -> { mobile, name, pickup, drop, categoryKg, advance, scheduledFor, returnTrip }.
+// `categoryKg` is the vehicle category's weight limit the customer picked (the customer screen has no weight box any more -- the category IS the weight).
+export function bookingPrefillFromTries(customer) {
+  const tries = (customer && customer.tries) || [];
+  const filled = (t) => !!(t && (t.pickup || t.drop || t.categoryKg));
+  const t = tries.find((x) => filled(x) && !(x.booked || x.stage === "booked")) || tries.find(filled) || tries[0] || {};
+  return {
+    mobile: String((customer && customer.mobile) || ""), name: String((customer && customer.name) || ""),
+    pickup: t.pickup || "", drop: t.drop || "", categoryKg: t.categoryKg == null ? null : Number(t.categoryKg),
+    advance: !!t.advance, scheduledFor: t.scheduledFor || null, returnTrip: !!t.returnTrip,
+  };
+}
+
 // The recorder. `send(sessionId, doc)` writes the session (the app passes a Firestore merge-write; tests pass a spy); a failing send is swallowed -- tracking must
 // never break the app.
 export function createFlowRecorder({ mobile, getName = () => "", send, now = Date.now, idleMs = FLOW_IDLE_MS, maxEvents = FLOW_MAX_EVENTS, flushMs = FLOW_FLUSH_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {

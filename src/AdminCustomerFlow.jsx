@@ -7,7 +7,7 @@
 import React, { useMemo, useState } from "react";
 import { Phone, ChevronDown } from "lucide-react";
 import { C } from "./App.jsx";
-import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer } from "./customerFlow.js";
+import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer, calledAdmin, bookingPrefillFromTries } from "./customerFlow.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const pad = (n) => String(n).padStart(2, "0");
@@ -35,7 +35,7 @@ const STATUS_META = {
   abandoned: { en: "Not finished", hi: "अधूरा छोड़ा", mr: "अपूर्ण सोडले", bg: "#E89828", fg: "#FFFFFF" },
 };
 
-export default function AdminCustomerFlow({ sessions, bookings, lang, onClose }) {
+export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor, onClose }) {
   const [tab, setTab] = useState("all");           // all | current | currentReturn | advance | advanceReturn
   const [range, setRange] = useState("7d");        // today | 7d | all (of the newest sessions loaded)
   const [openMobile, setOpenMobile] = useState(null);   // the one customer entry that is open
@@ -116,6 +116,7 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{c.name || T(lang, "Customer", "ग्राहक", "ग्राहक")}</span>
               {pill(st)}
+              {c.tries.some((t) => calledAdmin(t)) && <span data-flow-called-badge className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: "#FFF4D6", color: C.marigoldDeep, border: `1px solid ${C.marigold}` }}>📞 {T(lang, "Tapped Call", "कॉल दबाया", "कॉल दाबले")}</span>}
             </div>
             <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{c.mobile}</div>
             <div data-flow-customer-summary className="text-[11px]" style={{ color: C.inkSoft }}>
@@ -127,6 +128,13 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
             <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
           </button>
         </div>
+        {onBookFor && (
+          <div className="px-3 pb-3">
+            <button type="button" data-flow-book-for onClick={() => onBookFor(bookingPrefillFromTries(c))} className="w-full rounded-lg py-2 text-xs font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>
+              {T(lang, "Book for this customer", "इस ग्राहक के लिए बुक करें", "या ग्राहकासाठी बुक करा")}
+            </button>
+          </div>
+        )}
         {open && (
           <div data-flow-tries className="px-3 pb-3 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="pt-2" />

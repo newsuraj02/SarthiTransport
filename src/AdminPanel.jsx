@@ -1628,7 +1628,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
 function AdminBookings({ flowSessions, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
-  const [bookForCustomerOpen, setBookForCustomerOpen] = useState(false);
+  const [bookForCustomer, setBookForCustomer] = useState(null); // the prefill (from Customer activity) of the open "Book for this customer" sheet, or null
   const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
@@ -1724,16 +1724,12 @@ function AdminBookings({ flowSessions, bookings, tripLog, lang, drivers, fleetVe
 
   return (
     <div className="space-y-5">
-      {/* ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12): call a driver; if the driver agrees, book the trip for the customer, who pays the driver directly. */}
-      <button type="button" data-admin-book-for-customer-btn onClick={() => setBookForCustomerOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.navy, color: "#FFFFFF" }}>
-        <Plus size={16} /> {lang === "en" ? "Book for a customer" : lang === "mr" ? "ग्राहकासाठी बुक करा" : "ग्राहक के लिए बुक करें"}
-      </button>
       {/* CUSTOMER ACTIVITY (owner 2026-11-12): every tap / step the customers make, even unfinished, in the four categories -- see src/AdminCustomerFlow.jsx. */}
       <button type="button" data-admin-customer-activity-btn onClick={() => setCustomerActivityOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.paper, color: C.navy, border: `2px solid ${C.navy}` }}>
         <Eye size={16} /> {lang === "en" ? "Customer activity (every tap)" : lang === "mr" ? "ग्राहक हालचाल (प्रत्येक टॅप)" : "ग्राहक गतिविधि (हर टैप)"} · {(flowSessions || []).length}
       </button>
-      {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onClose={() => setCustomerActivityOpen(false)} />}
-      {bookForCustomerOpen && <AdminBookForCustomer drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomerOpen(false)} />}
+      {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onBookFor={(pf) => setBookForCustomer(pf)} onClose={() => setCustomerActivityOpen(false)} />}
+      {bookForCustomer && <AdminBookForCustomer prefill={bookForCustomer} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomer(null)} />}
       {sections.map((s) => (
         <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="flex items-center justify-between mb-3">
