@@ -60,6 +60,31 @@ export function groupFlowSessions(sessions) {
   return out;
 }
 
+// ONE ENTRY PER CUSTOMER (owner 2026-11-12: "a single entry for every customer and all the tries inside it; not multiple entries of a single customer"): the sessions (tries) of
+// each customer mobile are folded into one customer record, newest activity first, every try kept inside. With `groupKey` only the tries of that category are folded in (a customer
+// with tries in several categories then appears once in each category tab, with just that category's tries); with none, every try of the customer.
+// -> [{ mobile, name, tries: [session...] (newest first), lastAt, booked, notFinished, latest }] sorted by the customer's latest activity.
+export function groupSessionsByCustomer(sessions, groupKey = null, now = Date.now()) {
+  const byMobile = new Map();
+  (sessions || []).forEach((s) => {
+    if (!s || !s.customerMobile) return;
+    const k = FLOW_GROUP_KEYS.includes(s.group) ? s.group : flowGroupKey(s);
+    if (groupKey && k !== groupKey) return;
+    if (!byMobile.has(s.customerMobile)) byMobile.set(s.customerMobile, []);
+    byMobile.get(s.customerMobile).push(s);
+  });
+  const out = [];
+  byMobile.forEach((tries, mobile) => {
+    tries.sort((a, b) => (Number(b.lastAt) || 0) - (Number(a.lastAt) || 0));
+    const named = tries.find((t) => t.customerName);
+    out.push({
+      mobile, name: named ? named.customerName : "", tries, lastAt: Number(tries[0].lastAt) || 0, latest: tries[0],
+      booked: tries.filter((t) => flowStatus(t, now) === "booked").length, notFinished: tries.filter((t) => flowStatus(t, now) === "abandoned").length,
+    });
+  });
+  return out.sort((x, y) => y.lastAt - x.lastAt);
+}
+
 // The recorder. `send(sessionId, doc)` writes the session (the app passes a Firestore merge-write; tests pass a spy); a failing send is swallowed -- tracking must
 // never break the app.
 export function createFlowRecorder({ mobile, getName = () => "", send, now = Date.now, idleMs = FLOW_IDLE_MS, maxEvents = FLOW_MAX_EVENTS, flushMs = FLOW_FLUSH_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {

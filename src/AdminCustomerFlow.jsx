@@ -2,11 +2,12 @@
 // Current Return, Advance, Advance Return) ... unfinished attempts, even a single tap on any of the screen ... track the Customer screen end to end").
 // Reads the `customerFlow` sessions the customers' apps write (src/customerFlow.js). Four tabs = the four categories; every session shows who it is (name + a Call button),
 // how far they got (vehicle / Pickup / Drop / day / Book tapped / Booked), whether it is still going, finished or abandoned, and -- behind the arrow -- the whole timeline of taps
-// and steps. One session open at a time, like the Customer / Driver lists.
+// and steps. ONE ENTRY PER CUSTOMER (owner 2026-11-12: "a single entry for every customer and all the tries inside it"): the customer's tries (sessions) are listed INSIDE their one entry;
+// one customer open at a time, and one try's timeline open at a time, like the Customer / Driver lists.
 import React, { useMemo, useState } from "react";
 import { Phone, ChevronDown } from "lucide-react";
 import { C } from "./App.jsx";
-import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions } from "./customerFlow.js";
+import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer } from "./customerFlow.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const pad = (n) => String(n).padStart(2, "0");
@@ -35,9 +36,10 @@ const STATUS_META = {
 };
 
 export default function AdminCustomerFlow({ sessions, bookings, lang, onClose }) {
-  const [tab, setTab] = useState("current");
+  const [tab, setTab] = useState("all");           // all | current | currentReturn | advance | advanceReturn
   const [range, setRange] = useState("7d");        // today | 7d | all (of the newest sessions loaded)
-  const [openId, setOpenId] = useState(null);
+  const [openMobile, setOpenMobile] = useState(null);   // the one customer entry that is open
+  const [openTry, setOpenTry] = useState(null);         // the one try (session) whose timeline is open
   const now = Date.now();
   const titles = {
     current: T(lang, "Current", "करन्ट", "करंट"), currentReturn: T(lang, "Current Return", "करन्ट रिटर्न", "करंट रिटर्न"),
@@ -46,37 +48,39 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
   const startOfToday = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
   const since = range === "today" ? startOfToday : range === "7d" ? now - 7 * 86400000 : 0;
   const inRange = useMemo(() => (sessions || []).filter((s) => (Number(s.lastAt) || 0) >= since), [sessions, since]);
-  const groups = useMemo(() => groupFlowSessions(inRange), [inRange]);
-  const list = groups[tab] || [];
-  const counts = { booked: 0, active: 0, abandoned: 0 };
-  list.forEach((s) => { counts[flowStatus(s, now)] += 1; });
-  // The booking a "Booked" session turned into: the same customer's booking created during / just after the session.
+  // One entry per customer in every tab: "All" holds every try of the customer, a category tab only that category's tries.
+  const perTab = useMemo(() => {
+    const o = { all: groupSessionsByCustomer(inRange, null, now) };
+    FLOW_GROUP_KEYS.forEach((k) => { o[k] = groupSessionsByCustomer(inRange, k, now); });
+    return o;
+  }, [inRange]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = perTab[tab] || [];
+  const totals = { booked: 0, abandoned: 0, active: 0 };
+  list.forEach((c) => c.tries.forEach((t) => { totals[flowStatus(t, now)] += 1; }));
+  // The booking a "Booked" try turned into: the same customer's booking created during / just after it.
   const bookingOf = (s) => (bookings || []).find((b) => b.customerMobile === s.customerMobile && createdMs(b) >= (Number(s.startedAt) || 0) - 5000 && createdMs(b) <= (Number(s.lastAt) || 0) + 120000) || null;
+  const pill = (st) => { const meta = STATUS_META[st]; return <span data-flow-status-pill className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: meta.bg, color: meta.fg }}>{T(lang, meta.en, meta.hi, meta.mr)}</span>; };
 
-  const row = (s) => {
-    const st = flowStatus(s, now), meta = STATUS_META[st], open = openId === s.id;
+  // ONE TRY inside a customer's entry
+  const tryRow = (s, n) => {
+    const st = flowStatus(s, now), open = openTry === s.id;
     const stage = STAGE_TEXT[s.stage] || STAGE_TEXT.opened;
     const bk = st === "booked" ? bookingOf(s) : null;
     return (
-      <div key={s.id} data-flow-session={s.id} data-flow-status={st} className="rounded-xl overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.line}` }}>
-        <div className="p-3 flex items-center gap-2.5">
+      <div key={s.id} data-flow-session={s.id} data-flow-status={st} className="rounded-lg" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <button type="button" data-flow-try-toggle aria-expanded={open} onClick={() => setOpenTry(open ? null : s.id)} className="w-full text-left p-2.5 flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{s.customerName || T(lang, "Customer", "ग्राहक", "ग्राहक")}</span>
-              <span data-flow-status-pill className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: meta.bg, color: meta.fg }}>{T(lang, meta.en, meta.hi, meta.mr)}</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-extrabold" style={{ color: C.ink }}>{T(lang, "Try", "कोशिश", "प्रयत्न")} {n}</span>
+              <span data-flow-try-category className="rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: "rgba(0,82,204,0.10)", color: C.navy }}>{titles[s.group] || s.group}</span>
+              {pill(st)}
             </div>
-            <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{s.customerMobile} · {T(lang, stage[0], stage[1], stage[2])}</div>
-            <div className="text-[11px]" style={{ color: C.inkSoft }}>{dayClock(s.lastAt)} · {(s.events || []).length} {T(lang, "steps", "स्टेप", "स्टेप")}{bk ? ` · ${bk.status}` : ""}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{T(lang, stage[0], stage[1], stage[2])} · {dayClock(s.lastAt)} · {(s.events || []).length} {T(lang, "steps", "स्टेप", "स्टेप")}{bk ? ` · ${bk.status}` : ""}</div>
           </div>
-          {s.customerMobile && (
-            <a href={`tel:+91${s.customerMobile}`} data-flow-call className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#FFFFFF" }} aria-label="Call"><Phone size={16} /></a>
-          )}
-          <button type="button" data-flow-toggle aria-expanded={open} onClick={() => setOpenId(open ? null : s.id)} className="shrink-0 p-2 rounded-lg" style={{ background: C.bg, border: `1px solid ${C.line}` }} aria-label="Details">
-            <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
-          </button>
-        </div>
+          <ChevronDown size={14} className="shrink-0" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+        </button>
         {open && (
-          <div data-flow-details className="px-3 pb-3 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
+          <div data-flow-details className="px-2.5 pb-2.5 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="pt-2 text-[11px] space-y-0.5" style={{ color: C.ink }}>
               <div><b>{T(lang, "Category", "श्रेणी", "श्रेणी")}:</b> {titles[s.group] || s.group}{s.categoryKg ? ` · ${s.categoryKg} kg` : ""}</div>
               {s.pickup && <div><b>{T(lang, "Pickup", "पिकअप", "पिकअप")}:</b> {s.pickup}</div>}
@@ -84,7 +88,7 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
               {s.scheduledFor && <div><b>{T(lang, "Day", "दिन", "दिवस")}:</b> {s.scheduledFor}</div>}
               <div><b>{T(lang, "Started", "शुरू", "सुरू")}:</b> {dayClock(s.startedAt)}</div>
             </div>
-            <div data-flow-timeline className="rounded-lg p-2 space-y-1" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <div data-flow-timeline className="rounded-lg p-2 space-y-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               {(s.events || []).map((ev, i) => {
                 const lab = EVENT_TEXT[ev.e] || [ev.e, ev.e, ev.e];
                 return (
@@ -102,6 +106,37 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
     );
   };
 
+  // ONE ENTRY PER CUSTOMER
+  const customerRow = (c) => {
+    const open = openMobile === c.mobile, st = flowStatus(c.latest, now);
+    return (
+      <div key={c.mobile} data-flow-customer={c.mobile} className="rounded-xl overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.line}` }}>
+        <div className="p-3 flex items-center gap-2.5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{c.name || T(lang, "Customer", "ग्राहक", "ग्राहक")}</span>
+              {pill(st)}
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{c.mobile}</div>
+            <div data-flow-customer-summary className="text-[11px]" style={{ color: C.inkSoft }}>
+              {c.tries.length} {T(lang, c.tries.length === 1 ? "try" : "tries", "कोशिशें", "प्रयत्न")} · {c.booked} {T(lang, "booked", "बुक", "बुक")} · {c.notFinished} {T(lang, "not finished", "अधूरी", "अपूर्ण")} · {dayClock(c.lastAt)}
+            </div>
+          </div>
+          <a href={`tel:+91${c.mobile}`} data-flow-call className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#FFFFFF" }} aria-label="Call"><Phone size={16} /></a>
+          <button type="button" data-flow-toggle aria-expanded={open} onClick={() => { setOpenMobile(open ? null : c.mobile); setOpenTry(null); }} className="shrink-0 p-2 rounded-lg" style={{ background: C.bg, border: `1px solid ${C.line}` }} aria-label="Details">
+            <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+          </button>
+        </div>
+        {open && (
+          <div data-flow-tries className="px-3 pb-3 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="pt-2" />
+            {c.tries.map((t, i) => tryRow(t, c.tries.length - i))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div data-customer-activity className="fixed inset-0 z-[70] overflow-y-auto" style={{ background: C.bg }}>
       <div className="max-w-lg mx-auto p-4 pb-10 space-y-3">
@@ -109,13 +144,13 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
           <h2 className="text-lg font-extrabold" style={{ color: C.ink }}>{T(lang, "Customer activity", "ग्राहक गतिविधि", "ग्राहक हालचाल")}</h2>
           <button type="button" data-flow-close onClick={onClose} className="rounded-lg px-3 py-2 text-xs font-extrabold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>{T(lang, "Close", "बंद करें", "बंद करा")}</button>
         </div>
-        <p className="text-[11px]" style={{ color: C.inkSoft }}>{T(lang, "Every tap and step a customer makes, even if they never book, sorted into the four booking categories.", "ग्राहक का हर टैप और हर स्टेप, बुक न करने पर भी, चार बुकिंग श्रेणियों में।", "ग्राहकाचा प्रत्येक टॅप आणि स्टेप, बुक न केले तरी, चार बुकिंग श्रेणींमध्ये.")}</p>
+        <p className="text-[11px]" style={{ color: C.inkSoft }}>{T(lang, "One entry per customer, with every try inside it -- even tries that never ended in a booking.", "हर ग्राहक की एक ही एंट्री, उसमें उसकी सारी कोशिशें -- बुकिंग न बनने पर भी।", "प्रत्येक ग्राहकाची एकच एंट्री, त्यात त्याचे सर्व प्रयत्न -- बुकिंग न झाल्यासही.")}</p>
         <div data-flow-tabs className="grid grid-cols-2 gap-2">
-          {FLOW_GROUP_KEYS.map((k) => (
-            <button key={k} type="button" data-flow-tab={k} aria-pressed={tab === k} onClick={() => { setTab(k); setOpenId(null); }} className="rounded-xl px-3 py-2.5 text-left"
+          {[["all", T(lang, "All customers", "सभी ग्राहक", "सर्व ग्राहक")], ...FLOW_GROUP_KEYS.map((k) => [k, titles[k]])].map(([k, label], idx) => (
+            <button key={k} type="button" data-flow-tab={k} aria-pressed={tab === k} onClick={() => { setTab(k); setOpenMobile(null); setOpenTry(null); }} className={`rounded-xl px-3 py-2.5 text-left ${idx === 0 ? "col-span-2" : ""}`}
               style={{ background: tab === k ? C.navy : C.paper, color: tab === k ? "#FFFFFF" : C.ink, border: `1px solid ${tab === k ? C.navy : C.line}` }}>
-              <div className="text-xs font-extrabold">{titles[k]}</div>
-              <div data-flow-count className="text-lg font-black leading-tight">{groups[k].length}</div>
+              <div className="text-xs font-extrabold">{label}</div>
+              <div data-flow-count className="text-lg font-black leading-tight">{perTab[k].length}</div>
             </button>
           ))}
         </div>
@@ -127,12 +162,12 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onClose })
             ))}
           </div>
           <div data-flow-summary className="text-[11px] font-bold text-right" style={{ color: C.inkSoft }}>
-            {counts.booked} {T(lang, "booked", "बुक", "बुक")} · {counts.abandoned} {T(lang, "not finished", "अधूरे", "अपूर्ण")} · {counts.active} {T(lang, "active", "चालू", "सुरू")}
+            {totals.booked} {T(lang, "booked", "बुक", "बुक")} · {totals.abandoned} {T(lang, "not finished", "अधूरी", "अपूर्ण")} · {totals.active} {T(lang, "active", "चालू", "सुरू")}
           </div>
         </div>
         {list.length === 0
           ? <div className="rounded-xl p-6 text-center text-sm font-semibold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.inkSoft }}>{T(lang, "Nothing in this category yet.", "इस श्रेणी में अभी कुछ नहीं।", "या श्रेणीत अजून काही नाही.")}</div>
-          : <div className="space-y-2">{list.slice(0, 100).map(row)}</div>}
+          : <div className="space-y-2">{list.slice(0, 100).map(customerRow)}</div>}
         {list.length > 100 && <div className="text-center text-[11px]" style={{ color: C.inkSoft }}>{T(lang, `Showing the newest 100 of ${list.length}.`, `${list.length} में से नवीनतम 100 दिख रहे हैं।`, `${list.length} पैकी नवीनतम 100 दिसत आहेत.`)}</div>}
       </div>
     </div>
