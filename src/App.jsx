@@ -6639,6 +6639,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // relevance ranking (soft location bias around the reference point) untouched; each row only shows its distance.
 function formatSuggestionKm(km) { return km < 1 ? "<1 km" : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`; }
 
+if (typeof window !== "undefined") window.__baseVh = Math.max(window.__baseVh || 0, window.innerHeight); // the screen height before any keyboard opens (see LocationField)
 export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -6772,17 +6773,54 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     transition: "padding 0.15s ease, background 0.15s ease",
   };
   const showDropdown = dropdownOpen && predictions.length > 0;
+  // KEYBOARD-AWARE SUGGESTIONS (owner 2026-11-12: "the system keyboard is taking up too much space and blocking the suggestions from Pickup and Drop"). In the installed app the WebView
+  // often does NOT shrink when the keyboard opens (the window is only panned), so the list used to be measured against the full screen and drawn UNDER the keyboard. Now: (1) the focused
+  // box is scrolled to the TOP of the visible area (and again once the keyboard has finished opening), so everything between it and the keyboard is the list; (2) the list is capped to
+  // the part of the screen the keyboard leaves free -- the real visual-viewport height when the page resized, otherwise a safe guess (the keyboard covers ~42 % of the screen) -- and
+  // only reserves room for the fixed Round trip bar when that bar is really visible above the keyboard.
+  const KEYBOARD_GUESS = 0.42, FIELD_TOP_GAP = 76;
+  // The app's screens scroll inside their own container (not the window), so find the nearest scrollable parent.
+  const scrollParent = () => {
+    // (the screen's own scroller -- not a small animating wrapper such as the collapse around the Drop box)
+    let el = fieldWrapRef.current && fieldWrapRef.current.parentElement;
+    while (el && el !== document.body) { const oy = getComputedStyle(el).overflowY; if ((oy === "auto" || oy === "scroll") && el.clientHeight >= window.innerHeight * 0.4) return el; el = el.parentElement; }
+    return null;
+  };
+  const scrollFieldToTop = () => {
+    const el = fieldWrapRef.current; if (!el) return;
+    const r = el.getBoundingClientRect(); const delta = r.top - FIELD_TOP_GAP;
+    if (Math.abs(delta) <= 6) return;
+    const sp = scrollParent();
+    if (sp) sp.scrollBy({ top: delta, behavior: "smooth" }); else window.scrollBy({ top: delta, behavior: "smooth" });
+  };
+  // A short page cannot scroll the box up to the top, so while a box is open its scroll container gets extra room at the bottom (removed again when the last open box closes).
+  useEffect(() => {
+    if (!dropdownOpen || typeof document === "undefined") return undefined;
+    const sp = scrollParent(); if (!sp) return undefined;
+    sp.__locFieldsOpen = (sp.__locFieldsOpen || 0) + 1;
+    sp.style.paddingBottom = "90vh";
+    return () => { sp.__locFieldsOpen = Math.max(0, (sp.__locFieldsOpen || 1) - 1); if (!sp.__locFieldsOpen) sp.style.paddingBottom = ""; };
+  }, [dropdownOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!dropdownOpen || !fieldWrapRef.current) return undefined;
     const fit = () => {
-      const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      const innerH = window.innerHeight, vvH = (window.visualViewport && window.visualViewport.height) || innerH;
+      window.__baseVh = Math.max(window.__baseVh || 0, innerH, vvH);          // the tallest the page has been = the screen without a keyboard
+      const shown = Math.min(innerH, vvH);
+      const resized = shown < window.__baseVh - 100;                          // the page itself shrank: the keyboard is already out of the way
+      const usableBottom = resized ? shown : Math.round(innerH * (1 - KEYBOARD_GUESS));
       const r = fieldWrapRef.current.getBoundingClientRect();
-      setDdMaxH(Math.max(120, Math.min(256, Math.round(vh - r.bottom - 88))));
+      const bar = typeof document !== "undefined" ? document.querySelector("[data-return-bar]") : null;
+      const reserve = resized && bar ? Math.round(bar.getBoundingClientRect().height) + 8 : 8;
+      setDdMaxH(Math.max(120, Math.min(320, Math.round(usableBottom - r.bottom - reserve))));
     };
     fit();
-    window.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("resize", fit);
-    return () => { window.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("resize", fit); };
+    const timers = [250, 600].map((ms) => setTimeout(() => { fit(); }, ms));
+    const onVv = () => { fit(); if (document.activeElement && fieldWrapRef.current && fieldWrapRef.current.contains(document.activeElement)) scrollFieldToTop(); };
+    window.addEventListener("resize", onVv);
+    window.visualViewport?.addEventListener("resize", onVv);
+    window.addEventListener("scroll", fit, { passive: true, capture: true }); // capture: the app scrolls inside its own container, whose scroll events do not bubble
+    return () => { timers.forEach(clearTimeout); window.removeEventListener("resize", onVv); window.visualViewport?.removeEventListener("resize", onVv); window.removeEventListener("scroll", fit, true); };
   }, [dropdownOpen, predictions.length, value]);
   // Shown instead of the live-predictions dropdown, only while the field is
   // focused and still empty — the moment there's real input, predictions
@@ -6799,7 +6837,8 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
               setDropdownOpen(true);
-              e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+              scrollFieldToTop();
+              setTimeout(scrollFieldToTop, 350); // again once the keyboard has finished opening
               onFocus?.();
             }}
             onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
@@ -6816,7 +6855,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
                 const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
                 return (
                   <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
-                    className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                    className="w-full text-left px-4 py-2.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
                     <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
                     <span className="text-xs leading-snug flex-1 min-w-0">
                       <span className="font-bold" style={{ color: C.ink }}>{main}</span>
@@ -6834,7 +6873,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
             <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden overflow-y-auto" style={{ maxHeight: ddMaxH, border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
               {recentItems.map((r, i) => (
                 <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
-                  className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                  className="w-full text-left px-4 py-2.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
                   <Clock3 size={14} color={C.inkSoft} className="mt-0.5 shrink-0" />
                   <span className="text-xs font-bold leading-snug" style={{ color: C.ink }}>{r.name}</span>
                 </button>
