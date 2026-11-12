@@ -5018,6 +5018,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
       const res = await checkMobileRegistered("customer", mobile);
       setSending(false);
       if (res.ok && res.exists) { setError(numberExistsMsg(lang)); return; }
+      if (res.ok && res.otherRoleExists) { setError(numberOtherRoleMsg(lang, "customer")); return; }
     }
     setPin(""); setPinConfirm(""); setError("");
     setStage("pin");
@@ -5040,8 +5041,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
       if (mode === "signup" && detailsValid) submitProfile();
     } catch (e) {
       console.error(e);
+      // ONE ROLE PER NUMBER (owner 2026-11-12): a failed login on a number that belongs to the other role says so, instead of "Incorrect PIN".
+      const otherRole = mode === "login" ? await numberBelongsToOtherRole("customer", mobile) : false;
       setError(
-        mode === "signup" && e?.code === "auth/email-already-in-use"
+        otherRole
+          ? numberOtherRoleMsg(lang, "customer")
+          : mode === "signup" && e?.code === "auth/email-already-in-use"
           ? numberExistsMsg(lang)
           : mode === "login"
           ? (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।")
@@ -5103,7 +5108,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     const result = await resetPinAfterPhoneVerify("customer", pinToPassword(forgotNewPin));
     setForgotSending(false);
     if (!result.ok) {
-      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
+      setForgotError(result.reason === "other_role" ? numberOtherRoleMsg(lang, "customer") : lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
       return;
     }
     // Already phone-verified for real just above -- straight into the app,
@@ -5598,6 +5603,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       const res = await checkMobileRegistered("driver", mobile);
       setSending(false);
       if (res.ok && res.exists) { setError(numberExistsMsg(lang)); return; }
+      if (res.ok && res.otherRoleExists) { setError(numberOtherRoleMsg(lang, "driver")); return; }
     }
     setPin(""); setPinConfirm(""); setError("");
     setStage("pin");
@@ -5612,7 +5618,8 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       onOtpVerified(mobile, true);
     } catch (e) {
       console.error(e);
-      setError(lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।");
+      // ONE ROLE PER NUMBER (owner 2026-11-12): a number that belongs to a Customer gets a clear message, not "Incorrect PIN".
+      setError((await numberBelongsToOtherRole("driver", mobile)) ? numberOtherRoleMsg(lang, "driver") : (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।"));
       setSending(false);
       return;
     }
@@ -5754,7 +5761,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     const result = await resetPinAfterPhoneVerify("driver", pinToPassword(forgotNewPin));
     setForgotSending(false);
     if (!result.ok) {
-      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
+      setForgotError(result.reason === "other_role" ? numberOtherRoleMsg(lang, "driver") : lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
       return;
     }
     // Already phone-verified for real just above -- straight into the app,
@@ -10632,6 +10639,27 @@ function DriverHistory({ tripLog, driver, lang }) {
 // that SAME role (owner 2026-10-28). A number may still be used once per role.
 function numberExistsMsg(lang) {
   return lang === "en" ? "Number Already exists. Try login" : lang === "mr" ? "नंबर आधीपासून अस्तित्वात आहे. लॉगिन करून पहा" : "नंबर पहले से मौजूद है। लॉगिन करके देखें";
+}
+
+// True when the mobile has NO account in `role` but belongs to the other role (asks the server; any failure = false, so a lookup problem never blocks a login).
+async function numberBelongsToOtherRole(role, mobile) {
+  try {
+    const res = await checkMobileRegistered(role, mobile);
+    return !!(res && res.ok && !res.exists && res.otherRoleExists);
+  } catch { return false; }
+}
+
+// ONE ROLE PER NUMBER (owner 2026-11-12): shown when the mobile already belongs to the OTHER role. `role` is the role the person is trying to use
+// ("customer" | "driver"); the number is registered as the opposite one. Used at sign-up, at login and by forgot-PIN.
+function numberOtherRoleMsg(lang, role) {
+  if (role === "driver") {
+    return lang === "en" ? "This number is already registered as a Customer, so it cannot be used as a Driver. Please use a different mobile number."
+      : lang === "mr" ? "हा नंबर आधीच ग्राहक (Customer) म्हणून नोंदणीकृत आहे, त्यामुळे तो ड्रायव्हर म्हणून वापरता येणार नाही. कृपया दुसरा मोबाइल नंबर वापरा."
+      : "यह नंबर पहले से ग्राहक (Customer) के रूप में रजिस्टर है, इसलिए इसे ड्राइवर के रूप में इस्तेमाल नहीं किया जा सकता। कृपया दूसरा मोबाइल नंबर इस्तेमाल करें।";
+  }
+  return lang === "en" ? "This number is already registered as a Driver, so it cannot be used as a Customer. Please use a different mobile number."
+    : lang === "mr" ? "हा नंबर आधीच ड्रायव्हर म्हणून नोंदणीकृत आहे, त्यामुळे तो ग्राहक म्हणून वापरता येणार नाही. कृपया दुसरा मोबाइल नंबर वापरा."
+    : "यह नंबर पहले से ड्राइवर के रूप में रजिस्टर है, इसलिए इसे ग्राहक के रूप में इस्तेमाल नहीं किया जा सकता। कृपया दूसरा मोबाइल नंबर इस्तेमाल करें।";
 }
 
 // The "I confirm that keeping my documents valid is MY responsibility" clause

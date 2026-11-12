@@ -207,6 +207,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // isn't removed along with the rest.
 const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
+const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -1606,6 +1607,14 @@ exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (requ
     await getAuth().updateUser(user.uid, { password: newPin });
   } catch (e) {
     if (e.code === "auth/user-not-found") {
+      // One role per number (owner 2026-11-12): a number that is a Customer must not become a Driver through "forgot PIN" (this branch CREATES the account), nor the reverse.
+      try {
+        const roles = await lookupMobileRoles(toRole, (rr) => mobileHasRoleAccount(mobile, rr));
+        if (refusesSecondRole(roles)) return { ok: false, reason: "other_role" };
+      } catch (e2) {
+        console.error("[forgotPin] role lookup failed:", e2.message);
+        return { ok: false, reason: "reset_failed" };
+      }
       await getAuth().createUser({ email, password: newPin });
     } else {
       console.error("[forgotPin] reset failed:", e.message);
@@ -1616,22 +1625,35 @@ exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (requ
 });
 
 // Sign-up pre-check: does this mobile already have a PIN account for this
-// role? Callable signed-out (nobody has an account yet). A number can still
-// hold one account per role. Reveals only a yes/no the sign-up screen would
-// reveal anyway when account creation is refused.
+// role, and does it already belong to the OTHER role? Callable signed-out
+// (nobody has an account yet). ONE ROLE PER NUMBER (owner 2026-11-12): a
+// Customer number cannot become a Driver and vice versa (functions/roleLock.js).
+// Reveals only yes/no facts the sign-up screen would reveal anyway.
 exports.checkMobileRegistered = onCall({ region: "asia-south1" }, async (request) => {
   const { role, mobile } = request.data || {};
   if (typeof mobile !== "string" || !/^\d{10}$/.test(mobile)) throw new HttpsError("invalid-argument", "A 10-digit mobile is required.");
   const toRole = role === "driver" ? "driver" : "customer";
   try {
-    await getAuth().getUserByEmail(pinAuthEmail(mobile, toRole));
-    return { ok: true, exists: true };
+    const r = await lookupMobileRoles(toRole, (rr) => mobileHasRoleAccount(mobile, rr));
+    // exists = this role already has the number; otherRoleExists = the number belongs to the OTHER role (owner 2026-11-12: one role per number).
+    return { ok: true, exists: r.exists, otherRoleExists: r.otherRoleExists };
   } catch (e) {
-    if (e.code === "auth/user-not-found") return { ok: true, exists: false };
     console.error("[checkMobileRegistered] lookup failed:", e.message);
     return { ok: false, reason: "error" };
   }
 });
+
+// Does this mobile hold an account in `role`? A PIN login (Auth user) or the role's profile document. Throws on a real lookup error.
+async function mobileHasRoleAccount(mobile, role) {
+  try {
+    await getAuth().getUserByEmail(pinAuthEmail(mobile, role));
+    return true;
+  } catch (e) {
+    if (e.code !== "auth/user-not-found") throw e;
+  }
+  const snap = await db.collection(role === "driver" ? "drivers" : "customers").doc(mobile).get();
+  return snap.exists;
+}
 
 // Admin-only: turn a CSV the Admin screen already built into a real, short-lived
 // download link. The Android app's WebView has no download handler, so a blob

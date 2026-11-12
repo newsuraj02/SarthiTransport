@@ -437,3 +437,28 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-11 -- New read-only admin scripts whyNoDriver.js and driverSupplyReport.js (replay the ring rule against live drivers; supply funnel per hub); no app/rule change
 - changed (1): code:CLAUDE.md
 - added (2): code:scripts/driverSupplyReport.js, code:scripts/whyNoDriver.js
+## 2026-11-10 -- Ring: never-located drivers are skipped by the first ring and rung from escalation round 1 (last resort); evaluateNewLoadDriver + isDriverBroadcastEligible mirror; new invariant
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-11 -- Rebase merge: re-fingerprint after combining the Danger Zone change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-11 -- Rebase merge: re-fingerprint after combining the Transporter change with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-11 -- Rebase merge: re-fingerprint after combining the All Transporters button with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-11 -- Rebase merge: re-fingerprint after combining the supply scripts with the never-located ring change
+- changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-12 -- One role per mobile number: roleLock.js, checkMobileRegistered/resetPinAfterPhoneVerify, sign-up/login/forgot-PIN messages (owner 2026-11-12)
+- changed (10): fn:resetPinAfterPhoneVerify, fn:checkMobileRegistered, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:functions/index.js#fn:checkMobileRegistered, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding
+- added (4): code:functions/index.js#mobileHasRoleAccount, code:src/App.jsx#numberBelongsToOtherRole, code:src/App.jsx#numberOtherRoleMsg, code:functions/roleLock.js
+
+## 2026-11-12 -- CLAUDE.md: point the 2026-10-28 sign-up line at the one-role-per-number rule
+- changed (1): code:CLAUDE.md
+
+## 2026-11-12 -- One role per mobile number (re-fingerprint on the pushed base)
+- changed (10): fn:resetPinAfterPhoneVerify, fn:checkMobileRegistered, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:functions/index.js#fn:checkMobileRegistered, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding
+- added (4): code:functions/index.js#mobileHasRoleAccount, code:src/App.jsx#numberBelongsToOtherRole, code:src/App.jsx#numberOtherRoleMsg, code:functions/roleLock.js
