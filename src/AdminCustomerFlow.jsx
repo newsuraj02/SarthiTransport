@@ -24,7 +24,7 @@ const STAGE_TEXT = {
   booked: ["Booked", "बुक किया", "बुक केले"],
 };
 const EVENT_TEXT = {
-  screen: ["Screen", "स्क्रीन", "स्क्रीन"], tap: ["Tap", "टैप", "टॅप"], vehicle: ["Vehicle", "गाड़ी", "गाडी"], pickup: ["Pickup", "पिकअप", "पिकअप"], drop: ["Drop", "ड्रॉप", "ड्रॉप"],
+  screen: ["Screen", "स्क्रीन", "स्क्रीन"], step: ["Step", "स्टेप", "स्टेप"], tap: ["Tap", "टैप", "टॅप"], vehicle: ["Vehicle", "गाड़ी", "गाडी"], pickup: ["Pickup", "पिकअप", "पिकअप"], drop: ["Drop", "ड्रॉप", "ड्रॉप"],
   pickup_typed: ["Pickup typed", "पिकअप लिखा", "पिकअप टाइप"], drop_typed: ["Drop typed", "ड्रॉप लिखा", "ड्रॉप टाइप"], day: ["Day", "दिन", "दिवस"], round_trip: ["Round trip", "राउंड ट्रिप", "राउंड ट्रिप"],
   book_tap: ["Book now", "बुक नाउ", "बुक नाउ"], book_error: ["Error", "त्रुटि", "त्रुटी"], booked: ["Booked", "बुक हुआ", "बुक झाले"],
 };
