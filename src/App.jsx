@@ -7644,20 +7644,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     }, 700);
   };
 
-  // ROUND TRIP BOOKING PANEL (owner 2026-11-12, from the developer requirements document: "when the customer clicks Round trip Booking the button must not disappear; the whole
-  // booking system / form must open from it so the customer understands the whole process"): once Round trip is ticked a panel opens at the top of the booking screen --
-  // the steps of THIS form (Pickup, Drop, [the day in Advance], Vehicle, Book) with a tick on each that is done, and ONE button that takes the customer to the next undone
-  // step (cursor into Pickup / Drop, or scroll to the day buttons / the vehicle list / "Book now"). It adds no second form: the fields are the ones on this screen.
-  // Vehicle-first order (owner 2026-11-12): Vehicle -> Pickup -> Drop -> [Day] -> Book.
-  const roundTripStep = selectedCategory == null ? "vehicle" : !pickupSelected ? "pickup" : !dropSelected ? "drop" : (advance && !scheduleReady) ? "day" : "book";
-  const roundTripNext = () => {
-    if (roundTripStep === "pickup") { setActiveField("pickup"); requestFocus("pickup"); return; }
-    if (roundTripStep === "drop") { setActiveField("drop"); requestFocus("drop"); return; }
-    const sel = roundTripStep === "day" ? "[data-advance-days]" : roundTripStep === "vehicle" ? "[data-list-category]" : "[data-picked-flow]"; // the picked vehicle's flow ends with "Book now"
-    const el = typeof document !== "undefined" ? document.querySelector(sel) : null;
-    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-
   // VEHICLE-FIRST FLOW (owner 2026-11-12, the developer requirements document item 1): the vehicle list is the FIRST thing under the map; tapping a vehicle opens the Pickup box right
   // below it; Pickup opens Drop; Drop (and the day in Advance) opens the Book button. These two blocks are the same Pickup / Drop form and Advance day buttons as before, only now
   // rendered inside the list, under the vehicle that was tapped (placesFormEl / dayButtonsEl).
@@ -7811,32 +7797,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
           ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
-        </div>
-      )}
-      {returnTrip && (
-        <div data-round-trip-panel className="mx-5 mt-3 rounded-2xl p-3 space-y-2.5 anim-rise" style={{ background: "rgba(0,168,84,0.08)", border: `1.5px solid ${C.success}` }}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-extrabold" style={{ color: C.ink }}>↔ {lang === "en" ? "Round trip booking" : lang === "mr" ? "राउंड ट्रिप बुकिंग" : "राउंड ट्रिप बुकिंग"}</span>
-            <span className="text-[11px] font-bold text-right" style={{ color: C.success }}>{lang === "en" ? `Return fare included (${returnPct}% off)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (${returnPct}% सूट)` : `वापसी का किराया शामिल (${returnPct}% छूट)`}</span>
-          </div>
-          <div data-round-trip-steps className="flex flex-wrap gap-1.5">
-            {[
-              ["vehicle", selectedCategory != null, lang === "en" ? "Vehicle" : lang === "mr" ? "गाडी" : "गाड़ी"],
-              ["pickup", pickupSelected, lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"],
-              ["drop", dropSelected, lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"],
-              ...(advance ? [["day", scheduleReady, lang === "en" ? "Day" : lang === "mr" ? "दिवस" : "दिन"]] : []),
-            ].map(([key, done, text], i) => (
-              <span key={key} data-round-trip-step={key} data-done={done ? "1" : "0"} className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
-                style={{ background: done ? C.success : "#FFFFFF", color: done ? "#FFFFFF" : C.inkSoft, border: `1px solid ${done ? C.success : C.line}` }}>{done ? "✓" : i + 1} {text}</span>
-            ))}
-          </div>
-          <button type="button" data-round-trip-next onClick={roundTripNext} className="w-full rounded-xl py-2.5 text-sm font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>
-            {roundTripStep === "pickup" ? (lang === "en" ? "Enter Pickup →" : lang === "mr" ? "पिकअप भरा →" : "पिकअप भरें →")
-              : roundTripStep === "drop" ? (lang === "en" ? "Enter Drop →" : lang === "mr" ? "ड्रॉप भरा →" : "ड्रॉप भरें →")
-              : roundTripStep === "day" ? (lang === "en" ? "Choose the day →" : lang === "mr" ? "दिवस निवडा →" : "दिन चुनें →")
-              : roundTripStep === "vehicle" ? (lang === "en" ? "Choose a vehicle →" : lang === "mr" ? "गाडी निवडा →" : "गाड़ी चुनें →")
-              : (lang === "en" ? "Book now →" : lang === "mr" ? "आता बुक करा →" : "अभी बुक करें →")}
-          </button>
         </div>
       )}
       {/* VEHICLE-FIRST FLOW (owner 2026-11-12): the list of vehicle categories is the first thing under the map. Before the route is known a row shows the category, its weight

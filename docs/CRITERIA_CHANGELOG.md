@@ -527,3 +527,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- Customer booking screen: vehicle-first flow (list of categories first, then Pickup, Drop, Book) -- owner 2026-11-12
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-12 -- Customer booking screen: Round trip panel removed, only the Book Round trip box tick stays -- owner 2026-11-12
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
