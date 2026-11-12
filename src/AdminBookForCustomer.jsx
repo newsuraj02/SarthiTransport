@@ -241,9 +241,10 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   ))}
                 </div>
               )}
-              {placesReady && (
+              {(
                 <div data-admin-book-categories className="space-y-1">
                   <div className={label} style={{ color: C.inkSoft }}>{T(lang, "Vehicle category (the fare the customer sees)", "गाड़ी की श्रेणी (ग्राहक को दिखने वाला भाड़ा)", "वाहन श्रेणी (ग्राहकाला दिसणारे भाडे)")}</div>
+                  {!placesReady && <div data-admin-book-fares-wait className="text-[10px]" style={{ color: C.inkSoft }}>{T(lang, "Fares show once Pickup and Drop are found on the map.", "पिकअप और ड्रॉप मैप पर मिलते ही भाड़ा दिखेगा।", "पिकअप आणि ड्रॉप नकाशावर मिळताच भाडे दिसेल.")}</div>}
                   {options.map((o) => {
                     const f = fareFor(o.index);
                     const on = categoryIndex === o.index;

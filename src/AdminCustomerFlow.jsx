@@ -6,7 +6,7 @@
 // one customer open at a time, and one try's timeline open at a time, like the Customer / Driver lists.
 import React, { useMemo, useState } from "react";
 import { Phone, ChevronDown } from "lucide-react";
-import { C } from "./App.jsx";
+import { C, vehicleCategoryText } from "./App.jsx";
 import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer, calledAdmin, bookingPrefillFromTries } from "./customerFlow.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
@@ -82,7 +82,8 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
         {open && (
           <div data-flow-details className="px-2.5 pb-2.5 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="pt-2 text-[11px] space-y-0.5" style={{ color: C.ink }}>
-              <div><b>{T(lang, "Category", "श्रेणी", "श्रेणी")}:</b> {titles[s.group] || s.group}{s.categoryKg ? ` · ${s.categoryKg} kg` : ""}</div>
+              <div><b>{T(lang, "Booking type", "बुकिंग प्रकार", "बुकिंग प्रकार")}:</b> {titles[s.group] || s.group}</div>
+              {s.categoryKg ? <div data-flow-vehicle-category><b>{T(lang, "Vehicle category", "गाड़ी की श्रेणी", "वाहन श्रेणी")}:</b> {vehicleCategoryText(Math.min(Number(s.categoryKg), 35000), lang)}</div> : null}
               {s.pickup && <div><b>{T(lang, "Pickup", "पिकअप", "पिकअप")}:</b> {s.pickup}</div>}
               {s.drop && <div><b>{T(lang, "Drop", "ड्रॉप", "ड्रॉप")}:</b> {s.drop}</div>}
               {s.scheduledFor && <div><b>{T(lang, "Day", "दिन", "दिवस")}:</b> {s.scheduledFor}</div>}
@@ -119,6 +120,7 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
               {c.tries.some((t) => calledAdmin(t)) && <span data-flow-called-badge className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: "#FFF4D6", color: C.marigoldDeep, border: `1px solid ${C.marigold}` }}>📞 {T(lang, "Tapped Call", "कॉल दबाया", "कॉल दाबले")}</span>}
             </div>
             <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{c.mobile}</div>
+            {(() => { const pf = bookingPrefillFromTries(c); return pf.categoryKg ? <div data-flow-customer-vehicle className="text-[11px] font-bold" style={{ color: C.navy }}>🚚 {vehicleCategoryText(Math.min(pf.categoryKg, 35000), lang)}</div> : null; })()}
             <div data-flow-customer-summary className="text-[11px]" style={{ color: C.inkSoft }}>
               {c.tries.length} {T(lang, c.tries.length === 1 ? "try" : "tries", "कोशिशें", "प्रयत्न")} · {c.booked} {T(lang, "booked", "बुक", "बुक")} · {c.notFinished} {T(lang, "not finished", "अधूरी", "अपूर्ण")} · {dayClock(c.lastAt)}
             </div>
