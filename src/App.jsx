@@ -7948,7 +7948,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                     <button type="button" data-book-now disabled={!!sendingKey} onClick={() => { setBookingError(""); setFlowStep("places"); }}
                       className="w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
                       style={{ background: "linear-gradient(135deg, #00A854, #00C26A)", color: "#FFFFFF", boxShadow: "0 6px 14px rgba(0,168,84,0.28)" }}>
-                      🚚 {lang === "en" ? "Book now" : lang === "mr" ? "आता बुक करा" : "अभी बुक करें"}{showFares && selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}
+                      🚚 {lang === "en" ? "Select vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}{showFares && selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}
                     </button>
                   )}
                   </React.Fragment>

@@ -550,3 +550,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- LocationField: keyboard-aware suggestions (scroll box to top, cap list above the keyboard, tighter rows) -- owner 2026-11-12 (check fixed)
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-12 -- Vehicle list button renamed Book now -> Select vehicle (hi/mr equivalents) -- owner 2026-11-12
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
