@@ -588,3 +588,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-13 -- Customer vehicle list offers every category when the phone has no usable location (Nasir Ahmed 500 kg bug, 2026-11-13)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerBooking
 - added (1): code:src/categoryList.js
+
+## 2026-11-13 -- Vehicle picker: one flat Company Model list, no company dropdown (owner 2026-11-13)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx
