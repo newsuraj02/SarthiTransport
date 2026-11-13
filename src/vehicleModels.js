@@ -39,6 +39,26 @@ export function categoryIndexForKg(kg, categoryOptions = []) {
   return i < 0 ? Math.max(categoryOptions.length - 1, 0) : categoryOptions[i].index;
 }
 
+// JUNK VEHICLE NAMES (owner 2026-11-13: a driver's vehicle read "meri maujuda gaadi nhi hai......." -- before 2026-11-10 the KYC form had a FREE-TEXT vehicle-name box and whatever was
+// typed there was saved as the driver's vehicle type; the picker that replaced it cannot create text, but the old record stays and "Keep my current vehicle" would have kept it).
+// looksLikeVehicleName is a junk DETECTOR, not an allow-list (older real names such as "Tata 407" or "Bolero" must still pass): false for sentences, filler words, runs of dots / marks,
+// long text, no letters at all. A catalogue "Company Model" label always passes.
+const VEHICLE_NAME_JUNK_WORDS = /^(meri|mera|mere|apni|apna|nhi|nahi|nahin|hai|hain|hu|hoon|maujuda|mojuda|mauzuda|koi|nothing|none|na|no|not|gaadi|gadi|chune|chuno|please|pls|sir|ok|test|abc|xyz|ghar|kuch|abhi|paas|my|is|have|dont|do)$/i;
+export function looksLikeVehicleName(name) {
+  const n = String(name == null ? "" : name).trim();
+  if (!n) return false;
+  const lower = n.toLowerCase();
+  for (const c of VEHICLE_MODEL_CATALOG) for (const m of c.models) if (`${c.company} ${m.name}`.toLowerCase() === lower) return true;
+  if (n.length > 40) return false;
+  if (/\.{2,}|[!?,;"]/.test(n)) return false;
+  if (!/[a-z\u0900-\u097f]/i.test(n)) return false;                 // digits / marks only
+  const words = lower.split(/\s+/);
+  if (words.length > 5) return false;                                 // a sentence, not a vehicle
+  const junk = words.filter((w) => VEHICLE_NAME_JUNK_WORDS.test(w)).length;
+  if (junk >= 2) return false;                                        // "meri gaadi nhi hai"
+  if (words.length === 1 && junk === 1) return false;                 // "nahi", "test"
+  return true;
+}
 export const VEHICLE_CHOICE_SAVED = "saved";   // "keep my current vehicle" (a driver who already has one saved)
 export const VEHICLE_CHOICE_OTHER = "other";   // "my model is not listed" -> a weight category is picked
 export const vehicleModelChoice = (ci, mi) => `m:${ci}:${mi}`;
@@ -58,7 +78,7 @@ export function parseVehicleModelChoice(choice) {
 export function resolveVehicleChoice(choice, { categoryOptions = [], categoryIndex = null, saved = null } = {}) {
   if (choice === VEHICLE_CHOICE_SAVED) {
     const kg = Number(saved && saved.kg);
-    return saved && String(saved.name || "").trim() && isSaneCapacityKg(kg) ? { name: String(saved.name).trim(), kg, company: null, model: null } : null;
+    return saved && String(saved.name || "").trim() && looksLikeVehicleName(saved.name) && isSaneCapacityKg(kg) ? { name: String(saved.name).trim(), kg, company: null, model: null } : null;
   }
   if (choice === VEHICLE_CHOICE_OTHER) {
     if (categoryIndex == null || categoryIndex === "") return null; // Number(null) is 0 -- nothing picked must not become the first category

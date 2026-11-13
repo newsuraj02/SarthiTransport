@@ -35,7 +35,7 @@ import {
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
-import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg } from "./vehicleModels.js";
+import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 
 // ADMIN'S DRIVER EDIT FORMS USE THE SAME VEHICLE PICKER AS THE DRIVER KYC FORM (owner 2026-11-10: "make this consistent throughout the Admin and Driver, in every form where category is
 // entered"): company -> model (weight from the sheet), or "my model is not listed" + a weight category, or "keep the current vehicle" (only offered while the saved weight is sane).
@@ -44,7 +44,7 @@ function adminVehicleDraft(d, vehicleTypes) {
   const t = (vehicleTypes || []).find((v) => v.key === d.vehicleSpec?.type);
   const savedName = t ? (t.labelEn || t.label) : (d.vehicleSpec?.type || "");
   const savedKg = Number(d.vehicleSpec?.capacityKg) || 0;
-  return { savedName, savedKg, vehicleChoice: savedName && isSaneCapacityKg(savedKg) ? VEHICLE_CHOICE_SAVED : "", vehicleCategory: null };
+  return { savedName, savedKg, vehicleChoice: savedName && looksLikeVehicleName(savedName) && isSaneCapacityKg(savedKg) ? VEHICLE_CHOICE_SAVED : "", vehicleCategory: null };
 }
 function adminPickedVehicle(draft) {
   return resolveVehicleChoice(draft.vehicleChoice || "", { categoryOptions: customerListCategoryOptions("en"), categoryIndex: draft.vehicleCategory, saved: { name: draft.savedName, kg: draft.savedKg } });
@@ -601,7 +601,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // before.
   const { installed: installedDriversList, uninstalled: uninstalledDrivers, blacklisted: blacklistedDrivers } = partitionDriversByInstallStatus(drivers);
   // The dashboard's four-way install + KYC split (owner 2026-11-10): installed + KYC done / installed + KYC not done / uninstalled / installed with wrong details.
-  const instKyc = partitionDriversByInstallAndKyc(drivers);
+  const instKyc = partitionDriversByInstallAndKyc(drivers, vehicleTypes);
   // Owner rule (2026-10-27): the Uninstalled page holds ONLY the drivers
   // inactive 14+ days (uninstalledDrivers); Blocked drivers have their own
   // tile + page ("blocked" in detailPages) -- they used to be folded into

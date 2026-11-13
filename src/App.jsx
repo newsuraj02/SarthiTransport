@@ -35,7 +35,7 @@ import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
-import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg } from "./vehicleModels.js";
+import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
@@ -3580,7 +3580,7 @@ function driverInstallStatus(driver) {
 //   kycNotDone    -- the rest of the installed drivers: nobody filled the form yet, or it is complete and waiting for Admin's approval
 // Blocked drivers keep their own tile and are in none of the four. Pure; the four lists always add up to (all drivers - blocked).
 const SANE_CAPACITY_MIN_KG = 300;
-export function driverKycDetailsProblem(d) {
+export function driverKycDetailsProblem(d, vehicleTypes) {
   if (!d || d.fleetOwner) return null;
   if (!d.vehicleSpec && d.kyc == null) return null; // never filled the form: "not done", not "wrong"
   if (d.kyc === "Rejected") return { kind: "rejected" };
@@ -3589,23 +3589,28 @@ export function driverKycDetailsProblem(d) {
     if (missing.length) return { kind: "form", missing };
     const kg = Number(d.vehicleSpec.capacityKg);
     if (!(kg >= SANE_CAPACITY_MIN_KG && kg <= MAX_BOOKING_WEIGHT_KG)) return { kind: "weight", kg: d.vehicleSpec.capacityKg };
+    // 2026-11-13: a vehicle "name" that is a sentence (typed into the free-text box that existed until 10 Nov) is wrong details too
+    const vt = (vehicleTypes || []).find((v) => v.key === d.vehicleSpec.type);
+    const vName = vt ? (vt.labelEn || vt.label || "") : "";
+    if (vName && !looksLikeVehicleName(vName)) return { kind: "vehicleName", name: vName };
   }
   return null;
 }
 export function kycProblemText(problem, lang) {
   if (!problem) return "";
   if (problem.kind === "rejected") return lang === "en" ? "KYC was rejected - needs to resubmit" : lang === "mr" ? "KYC नाकारले - पुन्हा सबमिट करावे" : "KYC रिजेक्ट हुआ - दोबारा भरना है";
+  if (problem.kind === "vehicleName") return lang === "en" ? `Vehicle name "${problem.name}" is not a valid vehicle - must pick from the list` : lang === "mr" ? `गाडीचे नाव "${problem.name}" योग्य नाही - यादीतून निवडावे` : `गाड़ी का नाम "${problem.name}" सही नहीं है - सूची से चुनना होगा`;
   if (problem.kind === "weight") return lang === "en" ? `Vehicle weight ${problem.kg} kg is not possible` : lang === "mr" ? `गाडीचे वजन ${problem.kg} किग्रॅ शक्य नाही` : `गाड़ी का वज़न ${problem.kg} किग्रा संभव नहीं`;
   const names = (problem.missing || []).map((k) => kycFieldLabel(k, lang)).join(", ");
   return lang === "en" ? `Form incomplete - missing: ${names}` : lang === "mr" ? `फॉर्म अपूर्ण - राहिलेले: ${names}` : `फॉर्म अधूरा - बाकी: ${names}`;
 }
-export function partitionDriversByInstallAndKyc(drivers) {
+export function partitionDriversByInstallAndKyc(drivers, vehicleTypes) {
   const out = { kycDone: [], kycNotDone: [], wrongDetails: [], uninstalled: [], blocked: [], problems: {} };
   (drivers || []).forEach((d) => {
     const status = driverInstallStatus(d);
     if (status === "blacklisted") { out.blocked.push(d); return; }
     if (status === "uninstalled") { out.uninstalled.push(d); return; }
-    const problem = driverKycDetailsProblem(d);
+    const problem = driverKycDetailsProblem(d, vehicleTypes);
     if (problem) { out.wrongDetails.push(d); out.problems[d.mobile || d.id] = problem; return; }
     if (d.kyc === "Approved" && isDriverKycComplete(d)) out.kycDone.push(d);
     else out.kycNotDone.push(d);
@@ -10969,7 +10974,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // typed vehicle name. "My model is not listed" asks for a weight category instead. A driver who already has a vehicle saved can keep it ("saved"), so opening
   // the form never rewrites a weight. Resolved to a vehicleTypes entry (reusing a matching one by name, or creating one) only at submit time.
   const savedVehicle = { name: existingVehicleType ? (existingVehicleType.labelEn || existingVehicleType.label) : (driver.vehicleSpec?.type || ""), kg: Number(driver.vehicleSpec?.capacityKg) || 0 };
-  const [vehicleChoice, setVehicleChoice] = usePersistedState("sarthi_driverKyc_vehicleChoice", savedVehicle.name && isSaneCapacityKg(savedVehicle.kg) ? VEHICLE_CHOICE_SAVED : "", !deferred);
+  const [vehicleChoice, setVehicleChoice] = usePersistedState("sarthi_driverKyc_vehicleChoice", savedVehicle.name && looksLikeVehicleName(savedVehicle.name) && isSaneCapacityKg(savedVehicle.kg) ? VEHICLE_CHOICE_SAVED : "", !deferred);
   const [vehicleCategory, setVehicleCategory] = usePersistedState("sarthi_driverKyc_vehicleCategory", null, !deferred);
   const categoryOptions = customerListCategoryOptions(lang);
   const pickedVehicle = resolveVehicleChoice(vehicleChoice, { categoryOptions, categoryIndex: vehicleCategory, saved: savedVehicle });

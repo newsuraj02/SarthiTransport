@@ -62,6 +62,7 @@ const fullDriver = () => ({
   vehicleSpec: { type: "tata-109", vehicleNumber: "MH14XX1234", capacityKg: 2500, photoSide: photo("side") },
 });
 
+const VM_ALL_LABELS = (vm) => vm.VEHICLE_MODEL_CATALOG.flatMap((c) => c.models.map((m) => `${c.company} ${m.name}`));
 const checks = [
   // ---- Weight cap: nothing above 35 ton / 35000 kg is ever accepted (owner rule 2026-10-26) ----
   ["weight cap constant is 35000 kg", () => app.includes("const MAX_BOOKING_WEIGHT_KG = 35000;")],
@@ -721,12 +722,12 @@ const checks = [
     const stored = a.includes("vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null") && a.includes("vehicleCompany: pending.vehicleCompany || null");
     return sheet && resolver && form && generic && stored;
   }],
-  ["ADMIN DASHBOARD: INSTALLS + KYC FOUR-WAY SPLIT (owner 2026-11-10: 'instead of install vs uninstall, 4 categories: installed + KYC done, installed + KYC not done, uninstalled, and installed but details not filled correctly'): every driver who is not blocked is in EXACTLY ONE of the four (they add up to all drivers minus blocked); KYC done = Approved + every mandatory item; not done = never filled the form, or complete and waiting for approval; wrong details = Rejected, a form missing a mandatory item, or a weight under 300 kg / over 35 ton (tons typed into the kg box); a fleet owner is judged by the fleet setup; the dashboard shows the four bars and no longer the old two", () => {
+  ["ADMIN DASHBOARD: INSTALLS + KYC FOUR-WAY SPLIT (owner 2026-11-10: 'instead of install vs uninstall, 4 categories: installed + KYC done, installed + KYC not done, uninstalled, and installed but details not filled correctly'): every driver who is not blocked is in EXACTLY ONE of the four (they add up to all drivers minus blocked); KYC done = Approved + every mandatory item; not done = never filled the form, or complete and waiting for approval; wrong details = Rejected, a form missing a mandatory item, or a weight under 300 kg / over 35 ton (tons typed into the kg box); a fleet owner is judged by the fleet setup; the dashboard shows the four bars and no longer the old two", async () => {
     const start = app.indexOf("const SANE_CAPACITY_MIN_KG"), end = app.indexOf("// The base population for every \"how many drivers\" count across Admin");
     const kycCode = app.slice(app.indexOf("const DRIVER_KYC_FIELDS"), app.indexOf("// END driver KYC completeness helpers")).replace(/\bexport /g, "");
     const unCode = app.slice(app.indexOf("const UNINSTALL_INACTIVE_DAYS"), app.indexOf("// Single source of truth for \"which of the three buckets")).replace(/\bexport /g, "");
     const dsStart = app.indexOf("function driverInstallStatus(driver) {"); const dsCode = app.slice(dsStart, app.indexOf("\n}\n", dsStart) + 3);
-    const fns = new Function("DAY_MS", "MAX_BOOKING_WEIGHT_KG", kycCode + "\n" + unCode + "\n" + dsCode + "\n" + app.slice(start, end).replace(/\bexport /g, "") + "; return { partitionDriversByInstallAndKyc, driverKycDetailsProblem, kycProblemText };")(86400000, 35000);
+    const fns = new Function("DAY_MS", "MAX_BOOKING_WEIGHT_KG", "looksLikeVehicleName", kycCode + "\n" + unCode + "\n" + dsCode + "\n" + app.slice(start, end).replace(/\bexport /g, "") + "; return { partitionDriversByInstallAndKyc, driverKycDetailsProblem, kycProblemText };")(86400000, 35000, (await import(pathToFileURL(join(root, "src", "vehicleModels.js")).href)).looksLikeVehicleName);
     const now = Date.now(); const photo = { url: "u" };
     const good = (o = {}) => ({ mobile: "m" + Math.random(), name: "x", kyc: "Approved", photo, docs: { dl: photo, photo }, vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1500, photoSide: photo }, lastActiveAt: now, ...o });
     const D = {
@@ -742,7 +743,7 @@ const checks = [
     const where = has(r.kycDone, D.done) && has(r.kycDone, D.fleetOk) && has(r.kycNotDone, D.pending) && has(r.kycNotDone, D.never) && has(r.kycNotDone, D.fleetNew) && has(r.wrongDetails, D.rejected) && has(r.wrongDetails, D.noDl) && has(r.wrongDetails, D.tons) && has(r.wrongDetails, D.huge) && has(r.uninstalled, D.old) && has(r.blocked, D.blocked);
     const text = fns.kycProblemText(r.problems[D.tons.mobile], "en").includes("1.7 kg") && fns.kycProblemText(r.problems[D.noDl.mobile], "en").includes("Driving license photo") && fns.kycProblemText(r.problems[D.rejected.mobile], "en").includes("rejected");
     const a = stripComments(admin, "AdminPanel.jsx");
-    const ui = a.includes("data-install-kyc-card") && ["kycDone", "kycNotDone", "uninstalled", "wrongDetails"].every((k) => a.includes(`key: "${k}"`)) && a.includes("partitionDriversByInstallAndKyc(drivers)") && !a.includes("installPct") && !a.includes('"Installs vs Uninstalls"') && a.includes("installKycDone:") && a.includes("installKycNotDone:") && a.includes("installWrongDetails:");
+    const ui = a.includes("data-install-kyc-card") && ["kycDone", "kycNotDone", "uninstalled", "wrongDetails"].every((k) => a.includes(`key: "${k}"`)) && a.includes("partitionDriversByInstallAndKyc(drivers, vehicleTypes)") && !a.includes("installPct") && !a.includes('"Installs vs Uninstalls"') && a.includes("installKycDone:") && a.includes("installKycNotDone:") && a.includes("installWrongDetails:");
     return placed && exact && where && text && ui;
   }],
   ["ADMIN DASHBOARD: CUSTOMERS TILE (owner 2026-11-10: 'as there is a drivers section in the dashboard, add a customer section, just how many people have installed the app'): the Live Dashboard has a Customers tile showing the number of customer accounts (a customer account only exists once the app is installed and signed up) that opens the Customers tab; customers have no last-seen stamp, so there is no uninstalled split for them", () => {
@@ -807,6 +808,19 @@ const checks = [
     const wired = app0.includes("const myTier = myCapacityKg != null ? categoryTopTier(customerListCategoryIndex(myCapacityKg), fareTiers) : null;") && app0.includes("returnTierMaxKg: categoryTopTier(customerListCategoryIndex(driver.vehicleSpec?.capacityKg), DEFAULT_FARE_TIERS).maxKg")
       && !app0.includes("const myTier = myCapacityKg != null ? findFareTier(myCapacityKg, fareTiers) : null;") && !app0.includes("returnTierMaxKg: findFareTier(");
     return behaviour && wired;
+  }],
+  ["JUNK VEHICLE NAMES ARE NEVER KEPT OR OFFERED (owner 2026-11-13: a driver's vehicle read 'meri maujuda gaadi nhi hai.......' -- typed into the free-text box that existed until 2026-11-10): looksLikeVehicleName rejects sentences / filler words / dot runs / digits-only and accepts catalogue labels and real older names; 'Keep my current vehicle' is not offered for a junk name (picker, driver KYC default, both Admin forms, resolveVehicleChoice); a driver whose saved vehicle name is junk lands in Admin's wrong-details bucket with a clear reason", async () => {
+    const vm = await import(pathToFileURL(join(root, "src", "vehicleModels.js")).href);
+    const bad = ["meri maujuda gaadi nhi hai.......", "nahi hai", "nhi", "123", "my vehicle is not here", "x".repeat(60), "koi nahi", "...", "gaadi nhi hai"];
+    const good = ["Tata 407", "Bolero", "Pickup", "3 wheeler", "Chhota Hathi (Mini Truck)", "Tata Ace", "Ashok Leyland Dost", "10ft truck", "Eicher Pro 2049"];
+    VM_ALL_LABELS(vm).forEach((l) => good.push(l));
+    const names = bad.every((n) => !vm.looksLikeVehicleName(n)) && good.every((n) => vm.looksLikeVehicleName(n));
+    const resolve = vm.resolveVehicleChoice(vm.VEHICLE_CHOICE_SAVED, { saved: { name: "meri maujuda gaadi nhi hai.......", kg: 7500 } }) === null && !!vm.resolveVehicleChoice(vm.VEHICLE_CHOICE_SAVED, { saved: { name: "Tata 407", kg: 2500 } });
+    const pk = stripComments(read("src/VehicleModelPicker.jsx"), "VehicleModelPicker.jsx"), a = stripComments(app, "App.jsx"), ad = stripComments(admin, "AdminPanel.jsx");
+    const ui = pk.includes("looksLikeVehicleName(saved.name)") && pk.includes("data-vehicle-junk-note") && /hasSaved = !!\(saved && String\(saved\.name \|\| ""\)\.trim\(\) && !savedNameJunk/.test(pk)
+      && a.includes("looksLikeVehicleName(savedVehicle.name) && isSaneCapacityKg(savedVehicle.kg)") && ad.includes("looksLikeVehicleName(savedName) && isSaneCapacityKg(savedKg)");
+    const prob = a.includes('kind: "vehicleName"') && a.includes("driverKycDetailsProblem(d, vehicleTypes)") && ad.includes("partitionDriversByInstallAndKyc(drivers, vehicleTypes)");
+    return names && resolve && ui && prob;
   }],
   ["ONE VEHICLE PICKER EVERYWHERE (owner 2026-11-10: 'make this consistent throughout the Admin and Driver, in every form and section where category are entered'): the Driver KYC form, BOTH Admin driver edit forms (KYC approval + driver list) and the fleet Add-vehicle form use the ONE VehicleModelPicker (company -> model, weight from the sheet; 'not listed' -> a weight category; 'keep current vehicle' only while the saved weight is sane 300..35000); no free vehicle-type dropdown, no typed weight, no separate weight-category select; a saved weight outside 300..35000 (1.7, 250000) is never kept", () => {
     const adm = stripComments(read("src/AdminPanel.jsx"), "AdminPanel.jsx"), fo = stripComments(read("src/FleetOwner.jsx"), "FleetOwner.jsx"), a = stripComments(read("src/App.jsx"), "App.jsx");

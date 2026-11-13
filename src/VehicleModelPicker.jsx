@@ -1,7 +1,7 @@
 // "Which vehicle do you drive?" -- (owner 2026-11-13: NO company dropdown any more -- ONE list of "Company Model" rows, each with its weight, and a search box; the same picker everywhere.) -- (the company's models show as a list with their weights below the company box, not a second dropdown) -- the ONE picker used by the Driver KYC form and by Admin's driver edit forms (owner 2026-11-10). Company -> Model, from the sheet
 // (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. (owner 2026-11-10: the "My model is not listed" option was removed -- a vehicle must be picked from the list.) It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
 import React, { useMemo, useState } from "react";
-import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, vehicleModelChoice, isSaneCapacityKg } from "./vehicleModels.js";
+import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, vehicleModelChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 
@@ -13,7 +13,8 @@ export default function VehicleModelPicker({
   inputCls, inputStyle, labelColor, requiredColor, okColor,
 }) {
   const [query, setQuery] = useState("");
-  const hasSaved = !!(saved && String(saved.name || "").trim() && isSaneCapacityKg(saved.kg));
+  const savedNameJunk = !!(saved && String(saved.name || "").trim() && !looksLikeVehicleName(saved.name)); // 2026-11-13: free text typed before 10 Nov is never offered back
+  const hasSaved = !!(saved && String(saved.name || "").trim() && !savedNameJunk && isSaneCapacityKg(saved.kg));
   const lbl = "text-xs font-semibold mb-1 block";
   const req = <span style={{ color: requiredColor }}> *</span>;
   const border = inputStyle.border || "1px solid #D5DCE8";
@@ -28,6 +29,11 @@ export default function VehicleModelPicker({
       <input data-vehicle-search value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls} style={{ ...inputStyle, marginBottom: 8 }}
         placeholder={T(lang, "Search: Tata, Ace, Eicher, 1700 ...", "खोजें: Tata, Ace, Eicher, 1700 ...", "शोधा: Tata, Ace, Eicher, 1700 ...")} />
       {/* ONE list: every "Company Model" with the weight it carries -- tap one (no company step). */}
+      {savedNameJunk && (
+        <div data-vehicle-junk-note className="rounded-lg px-3 py-2 mb-2 text-xs font-semibold break-words" style={{ background: "#FDECEA", color: requiredColor, border: "1px solid #F5B7B1" }}>
+          {T(lang, "The saved vehicle name is not a valid vehicle. Please pick your vehicle from the list below.", "सेव की हुई गाड़ी का नाम सही गाड़ी नहीं है। कृपया नीचे की सूची से अपनी गाड़ी चुनें।", "सेव्ह केलेले गाडीचे नाव योग्य गाडी नाही. कृपया खालील यादीतून तुमची गाडी निवडा.")}
+        </div>
+      )}
       <div data-vehicle-model-list role="radiogroup" className="rounded-lg overflow-y-auto mb-2.5" style={{ border, maxHeight: 300 }}>
         {hasSaved && (
           <button type="button" role="radio" aria-checked={choice === VEHICLE_CHOICE_SAVED} data-vehicle-keep onClick={() => setChoice(VEHICLE_CHOICE_SAVED)}
