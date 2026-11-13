@@ -3,6 +3,17 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import { GoogleMapsProvider } from "./googleMapsContext.jsx";
 import "./index.css";
+import { Capacitor } from "@capacitor/core";
+import { parseEntryLink, playStoreUrlFor } from "./entryLink.js";
+
+// DEEP LINKS (owner 2026-11-13): https://<site>/customer and /driver. An ANDROID BROWSER (the app is not what opened the link) is sent straight to the Play Store with the role + source in the
+// Play "referrer", which the app reads on its first launch. The installed app (Capacitor WebView / its Chrome wrapper), iPhones and desktops carry on into the app itself, where the link locks the role.
+let sentToPlayStore = false;
+try {
+  const entry = parseEntryLink(window.location.pathname, window.location.search);
+  const inApp = Capacitor.isNativePlatform() || document.referrer.startsWith("android-app://com.apnatransport.app");
+  if (entry && !inApp && /android/i.test(navigator.userAgent)) { sentToPlayStore = true; window.location.replace(playStoreUrlFor(entry)); }
+} catch { /* never block the app over a redirect */ }
 
 // Registers the service worker as soon as the app loads, so the app-shell
 // caching benefit (instant repeat visits, works on a flaky/offline
@@ -71,7 +82,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+if (!sentToPlayStore) ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
       <GoogleMapsProvider>

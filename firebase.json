@@ -5,6 +5,8 @@
     "ignore": ["firebase.json", "**/.*", "!**/.well-known/**", "**/node_modules/**"],
     "predeploy": ["npm run verify:quiet", "npm run build"],
     "rewrites": [
+      { "source": "/wa/customer", "function": { "functionId": "waClick", "region": "asia-south1" } },
+      { "source": "/wa/driver", "function": { "functionId": "waClick", "region": "asia-south1" } },
       {
         "source": "**",
         "destination": "/index.html"

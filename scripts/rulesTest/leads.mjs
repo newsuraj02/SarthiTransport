@@ -1,0 +1,27 @@
+// LEADS (owner 2026-11-13) -- Firestore rules regression test, run in the local emulator like customerFlow.mjs. Every line must say "ok".
+import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
+import { readFileSync } from "node:fs";
+import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc } from "firebase/firestore";
+const env = await initializeTestEnvironment({ projectId: "demo-test", firestore: { rules: readFileSync(new URL("../../firestore.rules", import.meta.url).pathname, "utf8") } });
+const memo = new Map(); const fs = (k, mk) => { if (!memo.has(k)) memo.set(k, mk().firestore()); return memo.get(k); };
+const drv = (m) => fs("d" + m, () => env.authenticatedContext("d" + m, { email: `${m}@driver.apnatransport.local` }));
+const cus = (m) => fs("c" + m, () => env.authenticatedContext("c" + m, { email: `${m}@customer.apnatransport.local` }));
+const adm = () => fs("a1", () => env.authenticatedContext("a1", { admin: true }));
+const seed = async (docs) => env.withSecurityRulesDisabled(async (c) => { const f = c.firestore(); for (const [col, id, d] of docs) await setDoc(doc(f, col, id), d); });
+const out = []; const t = async (name, docs, fn, expectOk) => { await env.clearFirestore(); await seed(docs); let ok; try { await fn(); ok = true; } catch { ok = false; } out.push([ok === expectOk ? "ok  " : "BUG ", name]); };
+const M = "7043758986";
+const LEAD = { name: "Ravi", mobile: "9000000001", type: "customer", kind: "whatsapp", atMs: 1 };
+const SEEDED = [["leads", "L1", LEAD], ["leadClicks", "C1", { role: "driver", kind: "whatsapp", atMs: 1 }]];
+await t("Admin adds an enquiry", [], () => setDoc(doc(adm(), "leads", "L1"), LEAD), true);
+await t("Admin reads and edits enquiries", SEEDED, async () => { await getDocs(collection(adm(), "leads")); await updateDoc(doc(adm(), "leads", "L1"), { type: "driver" }); }, true);
+await t("Admin deletes an enquiry", SEEDED, () => deleteDoc(doc(adm(), "leads", "L1")), true);
+await t("a customer cannot add an enquiry", [], () => setDoc(doc(cus(M), "leads", "L1"), LEAD), false);
+await t("a driver cannot read enquiries", SEEDED, () => getDocs(collection(drv(M), "leads")), false);
+await t("a customer cannot read one enquiry", SEEDED, () => getDoc(doc(cus(M), "leads", "L1")), false);
+await t("Admin reads the WhatsApp clicks", SEEDED, () => getDocs(collection(adm(), "leadClicks")), true);
+await t("Admin cannot write a click by hand (only the function does)", [], () => setDoc(doc(adm(), "leadClicks", "C9"), { role: "driver" }), false);
+await t("a customer cannot write a click", [], () => setDoc(doc(cus(M), "leadClicks", "C9"), { role: "customer" }), false);
+await t("a customer cannot read the clicks", SEEDED, () => getDocs(collection(cus(M), "leadClicks")), false);
+await t("a customer's own profile can carry leadSource", [["customers", M, { name: "K", mobile: M }]], () => updateDoc(doc(cus(M), "customers", M), { leadSource: { kind: "deeplink", link: "customer", at: 1 } }), true);
+await t("a driver's own profile can carry leadSource", [["drivers", M, { name: "K", mobile: M, kyc: "Pending", blacklisted: false, wallet: 0, heldCredit: 0, bonus: 0, createdAt: 1 }]], () => updateDoc(doc(drv(M), "drivers", M), { leadSource: { kind: "ad", link: "driver", at: 1 } }), true);
+console.log(out.map((r) => r.join("  ")).join("\n")); await env.cleanup(); process.exit(out.some((r) => r[0] !== "ok  ") ? 1 : 0);
