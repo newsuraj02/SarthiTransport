@@ -598,3 +598,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-13 -- Customer activity: per-customer Delete + blank Book for Customer (owner 2026-11-13)
 - changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-13 -- No duplicate menu shortcuts: removed View Current/Advance Booking from customer + driver menus (owner 2026-11-13)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp
