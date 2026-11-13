@@ -584,3 +584,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-13 -- Deep links + lead source: /customer /driver role lock, Play Store redirect, waClick WhatsApp links, leadSource on accounts, Admin Leads (owner 2026-11-13)
 - changed (14): file:firestore.rules, file:firebase.json, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firebase.json, code:firestore.rules, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#App, code:src/main.jsx
 - added (16): fn:waClick, code:functions/index.js#fn:waClick, code:functions/leadClick.js, code:scripts/rulesTest/leads.mjs, code:src/AdminLeads.jsx#imports, code:src/AdminLeads.jsx#T, code:src/AdminLeads.jsx#pad, code:src/AdminLeads.jsx#dateText, code:src/AdminLeads.jsx#timeText, code:src/AdminLeads.jsx#toMs, code:src/AdminLeads.jsx#SITE_BASE, code:src/AdminLeads.jsx#KIND_COLOR, code:src/AdminLeads.jsx#buildLeadRows, code:src/AdminLeads.jsx#clickCounts, code:src/AdminLeads.jsx#AdminLeads, code:src/entryLink.js
+
+## 2026-11-13 -- Customer vehicle list offers every category when the phone has no usable location (Nasir Ahmed 500 kg bug, 2026-11-13)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerBooking
+- added (1): code:src/categoryList.js

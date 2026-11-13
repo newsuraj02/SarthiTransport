@@ -28,6 +28,7 @@ import {
 } from "./firestoreStore";
 import { createFlowRecorder, tapLabel } from "./customerFlow";
 import { parseEntryLink, parseEntryUrl, storedLeadSource, leadSourceForAccount } from "./entryLink.js";
+import { mergeListGroups } from "./categoryList.js";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
@@ -7607,12 +7608,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // VEHICLE-FIRST (owner 2026-11-12): the list can exist before the route is known. With nobody to list yet (no location, nobody near) the full set of categories shows without
   // "N min away"; a category the customer picked that has no vehicle near the real pickup stays as an empty card so the Pickup / Drop form under it does not vanish mid-flow.
   const showFares = placesReady; // the fare needs the route
-  const listGroups = (() => {
-    let g = groupByCustomerListCategory(nearbyDrivers);
-    if (!placesReady && g.length === 0) g = Array.from({ length: CUSTOMER_LIST_CATEGORY_KG.length + 1 }, (_, index) => ({ index, entries: [] }));
-    if (selectedCategory != null && !g.some((x) => x.index === selectedCategory)) g = [...g, { index: selectedCategory, entries: [] }].sort((a, b) => a.index - b.index);
-    return g;
-  })();
+  // Before Pickup is chosen a phone WITHOUT a usable location is offered EVERY category (2026-11-13 fix: it listed only a transporter's big vehicles, so the 500 kg row never showed) -- src/categoryList.js.
+  const listGroups = mergeListGroups(groupByCustomerListCategory(nearbyDrivers), { placesReady, hasLocation: !!(pickupCoords || customerLocation), selectedCategory, categoryCount: CUSTOMER_LIST_CATEGORY_KG.length + 1 });
   const orderedListGroups = (() => { const all = listGroups; const first = selectedCategory == null ? null : all.find((g) => g.index === selectedCategory); return first ? [first, ...all.filter((g) => g !== first)] : all; })();
   // After a pick the card jumps to the top of the list: bring it into view (the page may be scrolled further down).
   useEffect(() => {
