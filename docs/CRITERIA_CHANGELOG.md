@@ -580,3 +580,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-12 -- No cut-off text: all truncate -> wrapping, customer activity row name on its own line, invoice table wraps (owner 2026-11-12)
 - changed (23): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminExpenses, code:src/App.jsx#BillDocumentsModal, code:src/App.jsx#CustomerBooking, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#CustomerApp, code:src/App.jsx#TripBreakdownTable, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverWallet, code:src/App.jsx#DriverKyc, code:src/App.jsx#SetFareForm, code:src/FleetOwner.jsx#FleetSetup, code:src/FleetOwner.jsx#AdminFleetVehicles
+
+## 2026-11-13 -- Vehicle picker: removed the Company step, one flat model list with weights (owner 2026-11-13)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx
