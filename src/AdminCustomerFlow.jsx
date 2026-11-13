@@ -4,6 +4,7 @@
 // how far they got (vehicle / Pickup / Drop / day / Book tapped / Booked), whether it is still going, finished or abandoned, and -- behind the arrow -- the whole timeline of taps
 // and steps. ONE ENTRY PER CUSTOMER (owner 2026-11-12: "a single entry for every customer and all the tries inside it"): the customer's tries (sessions) are listed INSIDE their one entry;
 // one customer open at a time, and one try's timeline open at a time, like the Customer / Driver lists.
+import { useBackHandler } from "./backButton.js";
 import React, { useMemo, useState } from "react";
 import { Phone, ChevronDown, Trash2 } from "lucide-react";
 import { C, vehicleCategoryText } from "./App.jsx";
@@ -36,6 +37,7 @@ const STATUS_META = {
 };
 
 export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor, onDeleteSessions, onClose }) {
+  useBackHandler(true, onClose, 20); // Android Back = Close (owner 2026-11-13)
   const [tab, setTab] = useState("all");           // all | current | currentReturn | advance | advanceReturn
   const [range, setRange] = useState("7d");        // today | 7d | all (of the newest sessions loaded)
   const [openMobile, setOpenMobile] = useState(null);   // the one customer entry that is open

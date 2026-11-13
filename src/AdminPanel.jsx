@@ -18,6 +18,7 @@ import { AdminFleetVehicles } from "./FleetOwner.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
+import { useBackHandler } from "./backButton.js";
 import AdminLeads from "./AdminLeads.jsx";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
@@ -693,6 +694,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // its own Back button) showing the live record list behind that count —
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
+  useBackHandler(!!detailView, () => setDetailView(null), 10); // Android Back = the page's back arrow (owner 2026-11-13)
 
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
@@ -3238,6 +3240,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // Same lists as before (gpsOn/gpsOff, complete/incomplete, online/offDuty, lowWallet).
   const [boxPick, setBoxPick] = useState({ gps: "on", kyc: "incomplete", status: "on" });
   const [openBox, setOpenBox] = useState(null); // null = the boxes screen | gps | kyc | status | wallet | all
+  useBackHandler(!!openBox, () => setOpenBox(null), 10);
   // MESSAGE ALL (owner 2026-11-03, handwritten note: "in Admin -> Drivers add a message option for off duty, KYC incomplete and
   // uninstalled"): the KYC "Incomplete" and Status "Off Duty" sides get one bulk WhatsApp button (the approved MSG91 templates
   // driver_kyc_incomplete / driver_off_duty, see sendBulkDriverWhatsApp). Drivers already messaged TODAY are skipped; the count is shown first.
@@ -4706,7 +4709,9 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
 export function AdminPanel({ flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
+  useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
+  useBackHandler(showTransporters, () => setShowTransporters(false), 10);
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
   // a separate "Pending KYC approvals" tile.

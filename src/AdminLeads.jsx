@@ -4,6 +4,7 @@
 //   - enquiries Admin typed in by hand (`leads`) -- plain WhatsApp has no API, so a WhatsApp message can only be added by Admin,
 //   - WhatsApp-link clicks (`leadClicks`, written by the waClick function): counted per day, no person is known.
 // The screen also shows the four links Admin hands out (app links + WhatsApp links, plain and "?src=ad" for advertisements) with Copy buttons.
+import { useBackHandler } from "./backButton.js";
 import React, { useMemo, useState } from "react";
 import { Phone, Copy } from "lucide-react";
 import { C } from "./App.jsx";
@@ -35,6 +36,7 @@ export function clickCounts(clicks, days = 7, now = Date.now()) {
 }
 
 export default function AdminLeads({ customers, drivers, leads, leadClicks, lang, onClose }) {
+  useBackHandler(true, onClose, 20); // Android Back = Close (owner 2026-11-13)
   const [type, setType] = useState("all");         // all | customer | driver
   const [kind, setKind] = useState("all");         // all | ad | deeplink | whatsapp | organic
   const [range, setRange] = useState("30d");       // 7d | 30d | all

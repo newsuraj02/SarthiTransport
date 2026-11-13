@@ -604,3 +604,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-13 -- Admin Meta CSV button no longer navigates the app away when the pop-up is blocked (owner 2026-11-13 bug hunt)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminSettings
+
+## 2026-11-13 -- Android Back button goes one step back (owner 2026-11-13, bug hunt follow-up)
+- changed (22): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminLeads.jsx#imports, code:src/AdminLeads.jsx#AdminLeads, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#CustomerBooking, code:src/App.jsx#ActiveRide, code:src/App.jsx#CustomerHistory, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp, code:src/App.jsx#App
+- added (1): code:src/backButton.js

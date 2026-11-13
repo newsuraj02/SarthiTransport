@@ -41,6 +41,7 @@ import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } 
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { useBackHandler, runBackHandlers } from "./backButton.js";
 
 // Custom native plugin (android/app + android-admin/app:
 // FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
@@ -4916,6 +4917,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // identical either way and already figures out on its own (via
   // hasProfile) whether this number needs the registration form or not.
   const [mode, setMode] = useState(null); // null | "login" | "signup"
+  useBackHandler(true, () => { if (mode) { setMode(null); resetForm(); } else onLogout?.(); }, 10); // Android Back = the visible back arrow
 
   // Step 1 — mobile + PIN. "stage" is purely local UI progression (moving
   // from the mobile field to the PIN field costs nothing — unlike the old
@@ -5477,6 +5479,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // where the visitor is always an already-registered driver completing
   // KYC, so there's no real "new here?" choice to ask).
   const [mode, setMode] = useState(forceMode); // null | "login" | "signup"
+  useBackHandler(true, () => { if (mode) { setMode(null); resetForm(); } else onLogout?.(); }, 10); // Android Back = the visible back arrow
 
   // Sign-up name. NOT remembered (owner 2026-10-28): Back wipes the whole
   // sign-up so it always starts blank (see resetForm).
@@ -7495,6 +7498,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const [selectedCategory, setSelectedCategory] = useState(null);
   // TWO SCREENS (owner 2026-11-12): "vehicle" = the vehicle list with Book now under the picked category; "places" = the Pickup / Drop screen it leads to.
   const [flowStep, setFlowStep] = useState("vehicle");
+  useBackHandler(flowStep === "places", () => { if (!sendingKey) setFlowStep("vehicle"); }, 20); // Android Back on the Pickup / Drop screen = "Change vehicle"
   // "Selected" = coordinates are known (a suggestion / current location / map tap / recent trip, or typed text
   // that has geocoded). Without Google Maps (no way to geocode) typed text of 3+ characters counts.
   const pickupTyping = typingField === "pickup" && !pickupFromPlaceRef.current; // still typing by hand: not chosen yet
@@ -8244,6 +8248,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
+  useBackHandler(showDocs, () => setShowDocs(false), 30);
   const docsSent = !!b.documents?.file?.url;
   // "Ringing on N driver phones" climbs to N instead of jumping.
   const ringCount = Math.round(useCountUp(b.ringDeliveredCount || 0, 800));
@@ -8463,6 +8468,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   const bookingsLoaded = useBookingsLoaded();
   const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
   const [docsBooking, setDocsBooking] = useState(null);
+  useBackHandler(!!docsBooking, () => setDocsBooking(null), 30);
   const statusMeta = lang === "en"
     ? { Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
@@ -8761,6 +8767,12 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // (between the hamburger menu and Home button) instead of a hamburger-menu
   // entry — replaces the old "Advance Bookings" menu item.
   const [rideView, setRideView] = useState("current");
+  // ANDROID BACK (owner 2026-11-13, src/backButton.js): one step back, the same as the visible back arrows -- menu, then a settings page, then the advance list, then
+  // "add another", then the Advance booking mode; nothing left = the app minimises.
+  useBackHandler(menuOpen, () => setMenuOpen(false), 10);
+  useBackHandler(!!settingsView, () => setSettingsView(null), 10);
+  useBackHandler(rideView === "advance", () => { if (selectedAdvanceId) setSelectedAdvanceId(null); else setRideView("current"); }, 5);
+  useBackHandler(advanceOpen, () => setAdvanceOpen(false), 0);
   // CUSTOMER FLOW TRACKING (owner 2026-11-12: "track the Customer screen end to end, even a single tap", every entry put in its category -- Current / Current Return /
   // Advance / Advance Return): one recorder per signed-in customer (src/customerFlow.js). Every tap on this app's screens is logged by name (never the text in a box) and
   // the booking screen reports each step (vehicle, Pickup, Drop, day, Round trip, Book). A failed write never breaks the app. Admin -> Bookings -> "Customer activity".
@@ -8839,6 +8851,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // return to the booking form. Cleared the moment a new booking actually
   // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
+  useBackHandler(addingAnother, () => setAddingAnother(false), 5);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable via the Current/Advance
@@ -11801,6 +11814,10 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   // whenever the menu itself closes, so it's always collapsed on reopen.
   const [shareNoteOpen, setShareNoteOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
+  useBackHandler(setFareOpen, () => setSetFareOpen(false), 30);
+  useBackHandler(menuOpen, () => { setMenuOpen(false); setShareNoteOpen(false); }, 10);
+  useBackHandler(!!settingsView, () => setSettingsView(null), 10);
+  useBackHandler(tab !== "home", () => setTab("home"), 5);
   // "Add new vehicle" in My Profile (owner 2026-11-09): becomes an owner first (server), then opens My Fleet straight on the add-vehicle form. Returns a message to show, or null.
   const [fleetOpenForm, setFleetOpenForm] = useState(false);
   const addVehicleFromProfile = async () => {
@@ -12614,6 +12631,15 @@ export default function App() {
     window.location.reload();
   };
   const [showTerms, setShowTerms] = useState(false);
+  useBackHandler(showTerms, () => setShowTerms(false), 40);
+  // The phone's Back button (native app only): one step back through whatever is open, else minimise (never kill the app, the driver's GPS service keeps running either way).
+  useEffect(() => {
+    if (!isNativeApp) return undefined;
+    let handle = null; let gone = false;
+    CapacitorApp.addListener("backButton", () => { if (!runBackHandlers()) CapacitorApp.minimizeApp().catch(() => {}); })
+      .then((h) => { if (gone) h.remove(); else handle = h; }).catch(() => {});
+    return () => { gone = true; if (handle) handle.remove(); };
+  }, []);
 
   // ---------------------------------------------------------------------
   // Shared pilot state — synced live across every tester's device via

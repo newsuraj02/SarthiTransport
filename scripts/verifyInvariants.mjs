@@ -827,6 +827,30 @@ const checks = [
     const bad = assigns.filter((a) => !/tel:/.test(a));
     return bad.length === 0 && !stripComments(admin, "AdminPanel.jsx").includes("|| (window.location.href = res.url)") && stripComments(admin, "AdminPanel.jsx").includes("const opened = window.open(res.url, \"_blank\"); if (opened) return;");
   }],
+  ["ANDROID BACK BUTTON GOES ONE STEP BACK (owner 2026-11-13: 'fix all of the above' -- the bug hunt found Back had no handling and closed the app from any sub-screen): src/backButton.js registry -- the highest priority handler wins, ties go to the latest registered, a handler returning false passes the press on, nothing handled = the root minimises the app (never kills it); the customer, driver and Admin screens register the same step as their visible back arrows", async () => {
+    const m = await import(pathToFileURL(join(root, "src", "backButton.js")).href);
+    const log = [];
+    const off1 = m.registerBackHandler(() => { log.push("low"); }, 0);
+    const off2 = m.registerBackHandler(() => { log.push("high"); }, 20);
+    const off3 = m.registerBackHandler(() => { log.push("mid-a"); return false; }, 10);
+    const off4 = m.registerBackHandler(() => { log.push("mid-b"); return false; }, 10);
+    const r1 = m.runBackHandlers(); // high handles
+    off2();
+    const r2 = m.runBackHandlers(); // mid-b (false) -> mid-a (false) -> low handles
+    off1();
+    const r3 = m.runBackHandlers(); // only the two "false" ones -> not handled
+    off3(); off4();
+    const r4 = m.runBackHandlers();
+    const throwing = m.registerBackHandler(() => { throw new Error("boom"); }, 1);
+    const origErr = console.error; console.error = () => {}; const r5 = m.runBackHandlers(); console.error = origErr; throwing();
+    const logic = r1 === true && log.slice(0, 1).join() === "high" && r2 === true && log.slice(1, 4).join() === "mid-b,mid-a,low" && r3 === false && r4 === false && r5 === true && m.backHandlerCount() === 0;
+    const a = stripComments(app, "App.jsx"), ap = stripComments(admin, "AdminPanel.jsx");
+    const root_ = a.includes('CapacitorApp.addListener("backButton", () => { if (!runBackHandlers()) CapacitorApp.minimizeApp()') && a.includes("if (!isNativeApp) return undefined;");
+    const screens = a.includes("useBackHandler(menuOpen, () => setMenuOpen(false), 10)") && a.includes("useBackHandler(!!settingsView, () => setSettingsView(null), 10)") && a.includes('useBackHandler(flowStep === "places"') && a.includes("useBackHandler(advanceOpen, () => setAdvanceOpen(false), 0)") && a.includes('useBackHandler(tab !== "home", () => setTab("home"), 5)') && a.includes("useBackHandler(setFareOpen, () => setSetFareOpen(false), 30)") && a.includes("useBackHandler(showTerms, () => setShowTerms(false), 40)") && a.includes("useBackHandler(true, () => { if (mode) { setMode(null); resetForm(); } else onLogout?.(); }, 10)")
+      && ap.includes('useBackHandler(tab !== "fleet", () => setTab("fleet"), 0)') && ap.includes("useBackHandler(!!detailView") && ap.includes("useBackHandler(!!openBox") && ap.includes("useBackHandler(showTransporters")
+      && ["AdminCustomerFlow", "AdminLeads", "AdminBookForCustomer"].every((f) => stripComments(read("src/" + f + ".jsx"), f + ".jsx").includes("useBackHandler(true, onClose,"));
+    return logic && root_ && screens;
+  }],
   ["JUNK VEHICLE NAMES ARE NEVER KEPT OR OFFERED (owner 2026-11-13: a driver's vehicle read 'meri maujuda gaadi nhi hai.......' -- typed into the free-text box that existed until 2026-11-10): looksLikeVehicleName rejects sentences / filler words / dot runs / digits-only and accepts catalogue labels and real older names; 'Keep my current vehicle' is not offered for a junk name (picker, driver KYC default, both Admin forms, resolveVehicleChoice); a driver whose saved vehicle name is junk lands in Admin's wrong-details bucket with a clear reason", async () => {
     const vm = await import(pathToFileURL(join(root, "src", "vehicleModels.js")).href);
     const bad = ["meri maujuda gaadi nhi hai.......", "nahi hai", "nhi", "123", "my vehicle is not here", "x".repeat(60), "koi nahi", "...", "gaadi nhi hai"];

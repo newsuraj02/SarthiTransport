@@ -5,6 +5,7 @@
 // listed, each with a Call button and a Book button: Admin phones the driver, and if the driver agrees, Book creates the trip ALREADY ASSIGNED to that driver
 // (functions/index.js adminBookForCustomer -- nobody else is rung). The customer pays the driver directly; nothing is charged to Admin.
 // Also (second step, same day): a ROUND TRIP (fare = one-way + return, the customer's own rule) and a TRANSPORTER's vehicle -- the owner's trip, the vehicle's driver (no app) gets it on WhatsApp.
+import { useBackHandler } from "./backButton.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Phone } from "lucide-react";
 import {
@@ -54,6 +55,7 @@ function failText(res, lang) {
 }
 
 export default function AdminBookForCustomer({ drivers, fleetVehicles = [], fleetPrivate = [], fareTiers, adminRouteFares, dieselPricePerLitre, returnPct = 0, prefill = null, lang, onClose }) {
+  useBackHandler(true, onClose, 30); // Android Back = Close (owner 2026-11-13)
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
   // PREFILL (owner 2026-11-12): opened from Customer activity, the form starts with what the customer had entered (mobile, name, Pickup, Drop, vehicle category, day, Round trip).
