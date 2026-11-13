@@ -58,6 +58,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
   const mapsReady = mapsHasKey && mapsLoaded;
   // PREFILL (owner 2026-11-12): opened from Customer activity, the form starts with what the customer had entered (mobile, name, Pickup, Drop, vehicle category, day, Round trip).
   const pf = prefill || {};
+  const hasPrefill = !!prefill && !prefill.blank; // { blank: true } = "Book for Customer" at the top of Customer activity: a customer who called and started nothing
   const [customerMobile, setCustomerMobile] = useState(digitsOnly(pf.mobile || "", 10));
   const [customerName, setCustomerName] = useState(cleanNameInput(pf.name || ""));
   const [pickup, setPickup] = useState(pf.pickup || ""); const [pickupCoords, setPickupCoords] = useState(null); const [pickupPlaceId, setPickupPlaceId] = useState(null);
@@ -194,7 +195,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
             </div>
           ) : (
             <>
-              {prefill && (
+              {hasPrefill && (
                 <div data-admin-book-prefilled className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold" style={{ background: "rgba(0,82,204,0.10)", color: C.navy }}>
                   {T(lang, "Filled in from what the customer entered -- check it with the customer on the call.", "ग्राहक ने जो भरा था वही भर दिया है — कॉल पर ग्राहक से जाँच लें।", "ग्राहकाने जे भरले तेच भरले आहे — कॉलवर ग्राहकाकडून तपासा.")}
                 </div>
@@ -212,7 +213,7 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   <input data-admin-book-name className={inputCls} style={inputStyle} value={customerName} onChange={(e) => setCustomerName(cleanNameInput(e.target.value))} />
                 </div>
               </div>
-              {prefill && (
+              {hasPrefill && (
                 <div data-admin-book-entered-weight className="rounded-lg px-3 py-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
                   <div className={label} style={{ color: C.inkSoft }}>{T(lang, "Weight entered by the customer", "ग्राहक द्वारा भरा गया वज़न", "ग्राहकाने भरलेले वजन")}</div>
                   <div className="flex items-center justify-between gap-2">

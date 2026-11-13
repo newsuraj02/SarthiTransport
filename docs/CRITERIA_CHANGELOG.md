@@ -595,3 +595,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-13 -- Junk vehicle names (owner 2026-11-13): looksLikeVehicleName guard in picker, KYC default, Admin forms; vehicleName wrong-details reason
 - changed (13): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#adminVehicleDraft, code:src/AdminPanel.jsx#AdminFleet, code:src/App.jsx#imports, code:src/App.jsx#driverKycDetailsProblem, code:src/App.jsx#kycProblemText, code:src/App.jsx#partitionDriversByInstallAndKyc, code:src/App.jsx#DriverKyc, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
 - added (1): code:scripts/verifyInvariants.mjs#VM_ALL_LABELS
+
+## 2026-11-13 -- Customer activity: per-customer Delete + blank Book for Customer (owner 2026-11-13)
+- changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App

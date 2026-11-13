@@ -13138,6 +13138,8 @@ export default function App() {
     return bulkDeleteDocs("bookings", ids);
   };
   // Admin's "select what to delete" (owner 2026-11-11): only the picked ids, and only if they are still finished rides -- a live trip is never deleted, even if its id is passed in.
+  // Customer activity "Delete" (owner 2026-11-13): removes the given customerFlow sessions (tries) -- Admin only (firestore.rules: customerFlow delete = isAdmin).
+  const deleteCustomerFlowSessions = (ids) => bulkDeleteDocs("customerFlow", (ids || []).filter(Boolean));
   const deleteSelectedRides = (ids) => {
     const finished = new Set(bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id));
     return bulkDeleteDocs("bookings", (ids || []).filter((id) => finished.has(id)));
@@ -13846,7 +13848,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel flowSessions={flowSessions} leads={leads} leadClicks={leadClicks} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} leads={leads} leadClicks={leadClicks} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}

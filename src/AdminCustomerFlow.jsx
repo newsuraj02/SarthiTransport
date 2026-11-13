@@ -5,7 +5,7 @@
 // and steps. ONE ENTRY PER CUSTOMER (owner 2026-11-12: "a single entry for every customer and all the tries inside it"): the customer's tries (sessions) are listed INSIDE their one entry;
 // one customer open at a time, and one try's timeline open at a time, like the Customer / Driver lists.
 import React, { useMemo, useState } from "react";
-import { Phone, ChevronDown } from "lucide-react";
+import { Phone, ChevronDown, Trash2 } from "lucide-react";
 import { C, vehicleCategoryText } from "./App.jsx";
 import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer, calledAdmin, bookingPrefillFromTries } from "./customerFlow.js";
 
@@ -35,11 +35,14 @@ const STATUS_META = {
   abandoned: { en: "Not finished", hi: "अधूरा छोड़ा", mr: "अपूर्ण सोडले", bg: "#E89828", fg: "#FFFFFF" },
 };
 
-export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor, onClose }) {
+export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor, onDeleteSessions, onClose }) {
   const [tab, setTab] = useState("all");           // all | current | currentReturn | advance | advanceReturn
   const [range, setRange] = useState("7d");        // today | 7d | all (of the newest sessions loaded)
   const [openMobile, setOpenMobile] = useState(null);   // the one customer entry that is open
   const [openTry, setOpenTry] = useState(null);         // the one try (session) whose timeline is open
+  const [confirmDelete, setConfirmDelete] = useState(null); // mobile of the customer entry whose Delete is waiting for its second tap
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const now = Date.now();
   const titles = {
     current: T(lang, "Current", "करन्ट", "करंट"), currentReturn: T(lang, "Current Return", "करन्ट रिटर्न", "करंट रिटर्न"),
@@ -130,6 +133,27 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
             <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
           </button>
         </div>
+        {onDeleteSessions && (
+          <div className="px-3 pb-3">
+            {confirmDelete === c.mobile ? (
+              <div data-flow-delete-confirm className="rounded-lg p-2.5 space-y-2" style={{ background: "#FDECEA", border: "1px solid #F5B7B1" }}>
+                <div className="text-[11px] font-bold break-words" style={{ color: C.safety }}>
+                  {T(lang, `Delete ${c.tries.length} ${c.tries.length === 1 ? "try" : "tries"} of this customer from Customer activity? This cannot be undone. (Their account and bookings are not touched.)`, `इस ग्राहक की ${c.tries.length} कोशिशें ग्राहक गतिविधि से हटाएँ? यह वापस नहीं होगा। (उनका अकाउंट और बुकिंग नहीं हटेंगे।)`, `या ग्राहकाचे ${c.tries.length} प्रयत्न ग्राहक हालचालीतून काढायचे? हे परत येणार नाही. (त्यांचे खाते आणि बुकिंग तसेच राहतील.)`)}
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" data-flow-delete-yes disabled={deleting} onClick={async () => { setDeleting(true); setDeleteError(""); try { await onDeleteSessions(c.tries.map((t) => t.id)); setConfirmDelete(null); if (openMobile === c.mobile) setOpenMobile(null); } catch (e) { setDeleteError(T(lang, "Couldn't delete -- try again.", "हटा नहीं सके — फिर कोशिश करें।", "काढता आले नाही — पुन्हा प्रयत्न करा.")); } finally { setDeleting(false); } }}
+                    className="flex-1 rounded-lg py-2 text-xs font-extrabold" style={{ background: C.safety, color: "#FFFFFF", opacity: deleting ? 0.6 : 1 }}>{T(lang, "Yes, delete", "हाँ, हटाएँ", "होय, काढा")}</button>
+                  <button type="button" data-flow-delete-no disabled={deleting} onClick={() => { setConfirmDelete(null); setDeleteError(""); }} className="flex-1 rounded-lg py-2 text-xs font-extrabold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>{T(lang, "No", "नहीं", "नाही")}</button>
+                </div>
+                {deleteError && <div data-flow-delete-error className="text-[11px] font-bold" style={{ color: C.safety }}>{deleteError}</div>}
+              </div>
+            ) : (
+              <button type="button" data-flow-delete onClick={() => { setConfirmDelete(c.mobile); setDeleteError(""); }} className="w-full rounded-lg py-2 text-xs font-extrabold flex items-center justify-center gap-1.5" style={{ background: C.paper, border: `1px solid ${C.safety}`, color: C.safety }}>
+                <Trash2 size={13} /> {T(lang, "Delete", "हटाएँ", "काढा")}
+              </button>
+            )}
+          </div>
+        )}
         {onBookFor && (
           <div className="px-3 pb-3">
             <button type="button" data-flow-book-for onClick={() => onBookFor(bookingPrefillFromTries(c))} className="w-full rounded-lg py-2 text-xs font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>
@@ -175,6 +199,11 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
             {totals.booked} {T(lang, "booked", "बुक", "बुक")} · {totals.abandoned} {T(lang, "not finished", "अधूरी", "अपूर्ण")} · {totals.active} {T(lang, "active", "चालू", "सुरू")}
           </div>
         </div>
+        {onBookFor && (
+          <button type="button" data-flow-book-blank onClick={() => onBookFor({ blank: true })} className="w-full rounded-xl py-3 text-sm font-extrabold shadow-sm" style={{ background: C.navy, color: "#FFFFFF" }}>
+            {T(lang, "Book for Customer", "ग्राहक के लिए बुक करें", "ग्राहकासाठी बुक करा")}
+          </button>
+        )}
         {list.length === 0
           ? <div className="rounded-xl p-6 text-center text-sm font-semibold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.inkSoft }}>{T(lang, "Nothing in this category yet.", "इस श्रेणी में अभी कुछ नहीं।", "या श्रेणीत अजून काही नाही.")}</div>
           : <div className="space-y-2">{list.slice(0, 100).map(customerRow)}</div>}
