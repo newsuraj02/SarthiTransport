@@ -601,3 +601,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-13 -- No duplicate menu shortcuts: removed View Current/Advance Booking from customer + driver menus (owner 2026-11-13)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp
+
+## 2026-11-13 -- Admin Meta CSV button no longer navigates the app away when the pop-up is blocked (owner 2026-11-13 bug hunt)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminSettings

@@ -821,6 +821,12 @@ const checks = [
     const a = stripComments(app, "App.jsx");
     return !a.includes('"View Current Booking/s"') && !a.includes('"View Advance Booking"') && a.includes('setRideView("advance"); setSelectedAdvanceId(null); }}') && a.includes('setRideView("current"); setAddingAnother(false); }}') && a.includes("advanceBookings.length > 0 && (");
   }],
+  ["NO TAP REPLACES THE WHOLE APP WITH A WEB PAGE (owner 2026-11-13: 'certain clicks that lead to a webpage'): no `window.location.href = <https url>` / `window.location.assign|replace(` in the screens except the tel: dial fallback and the language / refresh reloads; Admin's Meta CSV button falls back to the in-page download + copy box when the pop-up is blocked (it used to navigate the Admin app away to the raw signed URL)", () => {
+    const code = ["App.jsx", "AdminPanel.jsx", "FleetOwner.jsx", "AdminLeads.jsx", "AdminBookForCustomer.jsx", "AdminCustomerFlow.jsx"].map((f) => stripComments(read("src/" + f), f)).join("\n");
+    const assigns = (code.match(/(?:window\.)?location\.(?:href\s*=|assign\(|replace\()[^;\n]*/g) || []);
+    const bad = assigns.filter((a) => !/tel:/.test(a));
+    return bad.length === 0 && !stripComments(admin, "AdminPanel.jsx").includes("|| (window.location.href = res.url)") && stripComments(admin, "AdminPanel.jsx").includes("const opened = window.open(res.url, \"_blank\"); if (opened) return;");
+  }],
   ["JUNK VEHICLE NAMES ARE NEVER KEPT OR OFFERED (owner 2026-11-13: a driver's vehicle read 'meri maujuda gaadi nhi hai.......' -- typed into the free-text box that existed until 2026-11-10): looksLikeVehicleName rejects sentences / filler words / dot runs / digits-only and accepts catalogue labels and real older names; 'Keep my current vehicle' is not offered for a junk name (picker, driver KYC default, both Admin forms, resolveVehicleChoice); a driver whose saved vehicle name is junk lands in Admin's wrong-details bucket with a clear reason", async () => {
     const vm = await import(pathToFileURL(join(root, "src", "vehicleModels.js")).href);
     const bad = ["meri maujuda gaadi nhi hai.......", "nahi hai", "nhi", "123", "my vehicle is not here", "x".repeat(60), "koi nahi", "...", "gaadi nhi hai"];

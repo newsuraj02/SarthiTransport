@@ -4036,7 +4036,8 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
     setMetaPreparing(true);
     const res = await createCsvDownloadLink(metaExport.csv, fileName);
     setMetaPreparing(false);
-    if (res?.ok && res.url) { window.open(res.url, "_blank") || (window.location.href = res.url); return; }
+    // A blocked pop-up used to fall back to window.location.href = res.url, which REPLACES the whole Admin app with the raw download link (nothing to tap back to); now it falls through to the in-page download + copy box below.
+    if (res?.ok && res.url) { const opened = window.open(res.url, "_blank"); if (opened) return; }
     try {
       const blob = new Blob([metaExport.csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
