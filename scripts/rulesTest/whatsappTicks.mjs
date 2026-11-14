@@ -1,0 +1,22 @@
+// WHATSAPP DELIVERY TICKS (owner 2026-11-14) -- Firestore rules regression test, run in the local emulator like customerFlow.mjs. Every line must say "ok".
+import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
+import { readFileSync } from "node:fs";
+import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc } from "firebase/firestore";
+const env = await initializeTestEnvironment({ projectId: "demo-test", firestore: { rules: readFileSync(new URL("../../firestore.rules", import.meta.url).pathname, "utf8") } });
+const memo = new Map(); const fs = (k, mk) => { if (!memo.has(k)) memo.set(k, mk().firestore()); return memo.get(k); };
+const drv = (m) => fs("d" + m, () => env.authenticatedContext("d" + m, { email: `${m}@driver.apnatransport.local` }));
+const cus = (m) => fs("c" + m, () => env.authenticatedContext("c" + m, { email: `${m}@customer.apnatransport.local` }));
+const adm = () => fs("a1", () => env.authenticatedContext("a1", { admin: true }));
+const seed = async (docs) => env.withSecurityRulesDisabled(async (c) => { const f = c.firestore(); for (const [col, id, d] of docs) await setDoc(doc(f, col, id), d); });
+const out = []; const t = async (name, docs, fn, expectOk) => { await env.clearFirestore(); await seed(docs); let ok; try { await fn(); ok = true; } catch { ok = false; } out.push([ok === expectOk ? "ok  " : "BUG ", name]); };
+const M = "7043758986";
+const REC = { mobile: "9000000001", lastKind: "offDuty", updatedAt: 1, byKind: { offDuty: { status: "read" } } };
+const SEEDED = [["whatsappStatus", "9000000001", REC]];
+await t("Admin reads the ticks", SEEDED, () => getDocs(collection(adm(), "whatsappStatus")), true);
+await t("Admin reads one driver's ticks", SEEDED, () => getDoc(doc(adm(), "whatsappStatus", "9000000001")), true);
+await t("Admin cannot write a tick by hand (only the function does)", [], () => setDoc(doc(adm(), "whatsappStatus", "9000000009"), REC), false);
+await t("Admin cannot edit a tick", SEEDED, () => updateDoc(doc(adm(), "whatsappStatus", "9000000001"), { lastKind: "x" }), false);
+await t("a driver cannot read the ticks", SEEDED, () => getDocs(collection(drv(M), "whatsappStatus")), false);
+await t("a customer cannot read the ticks", SEEDED, () => getDoc(doc(cus(M), "whatsappStatus", "9000000001")), false);
+await t("a driver cannot write a tick (not even their own number)", [], () => setDoc(doc(drv("9000000001"), "whatsappStatus", "9000000001"), REC), false);
+console.log(out.map((r) => r.join("  ")).join("\n")); await env.cleanup(); process.exit(out.some((r) => r[0] !== "ok  ") ? 1 : 0);

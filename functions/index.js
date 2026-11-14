@@ -207,6 +207,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // isn't removed along with the rest.
 const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
+const wa = require("./whatsappStatus");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
 const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
@@ -260,6 +261,22 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
 
   let sent = 0;
   let failure = null; // the last real reason a chunk did not go out -- returned to Admin so a failure is never just "try again"
+  const batchId = `${Date.now()}`;
+  // Delivery ticks (owner 2026-11-14, src/AdminPanel.jsx WaTicks): one record per driver, written the moment MSG91 answers; the Sent / Delivered / Read news arrives later on msg91WhatsAppStatus.
+  const recordState = async (mobilesList, stateFor) => {
+    try {
+      const at = Date.now();
+      const batch = db.batch();
+      mobilesList.forEach((m) => {
+        const mob = wa.mobile10(m);
+        if (mob.length !== 10) return;
+        const ref = db.collection("whatsappStatus").doc(mob);
+        batch.set(ref, { mobile: mob, lastKind: kind, updatedAt: at }, { merge: true });
+        batch.update(ref, { [`byKind.${kind}`]: stateFor(at) }); // replaces the WHOLE record of this kind: a new send starts its ticks over (old read / delivered stamps gone)
+      });
+      await batch.commit();
+    } catch (e) { console.error(`[whatsapp bulk:${kind}] could not record ticks:`, e.message); }
+  };
   for (const chunk of chunks) {
     const to_and_components = chunk.map((mobile) => ({
       to: [`91${mobile}`],
@@ -291,16 +308,65 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
       if (!verdict.ok) {
         console.error(`[whatsapp bulk:${kind}] rejected by MSG91 (HTTP ${res.status}):`, bodyText);
         failure = { reason: "msg91_rejected", detail: verdict.detail };
+        await recordState(chunk, (at) => wa.failedSendState(batchId, verdict.detail, at));
         continue;
       }
       console.log(`[whatsapp bulk:${kind}] MSG91 response (HTTP ${res.status}):`, bodyText);
       sent += chunk.length;
+      const requestId = wa.requestIdFromReply(bodyText);
+      await recordState(chunk, (at) => wa.submittedState(batchId, requestId, at));
     } catch (e) {
       console.error(`[whatsapp bulk:${kind}] send failed:`, e.message);
       failure = { reason: "send_failed", detail: String(e.message || e).slice(0, 220) };
+      await recordState(chunk, (at) => wa.failedSendState(batchId, failure.detail, at));
     }
   }
   return { ok: sent > 0, sent, requested: list.length, ...(sent < list.length && failure ? failure : {}) };
+});
+
+// ---- WhatsApp delivery ticks (owner 2026-11-14) ---------------------------------------------------------------------------------------------------------------
+// MSG91 posts one report per recipient (Sent / Delivered / Read / Failed) to this URL once Admin pastes it into MSG91 -> Webhooks -> WhatsApp "Outbound Report"
+// (Admin -> Settings -> "WhatsApp delivery ticks" shows the exact URL with a Copy button). The URL carries a token made from MSG91_AUTH_KEY, so nobody else can post ticks.
+// Whatever MSG91 posts is read by whatsappStatus.parseMsg91Reports; the last raw body is kept (Admin-only doc) so a wording difference can be seen and fixed.
+exports.msg91WhatsAppStatus = onRequest({ region: "asia-south1", cors: false, secrets: [MSG91_AUTH_KEY] }, async (req, res) => {
+  const authKey = MSG91_AUTH_KEY.value();
+  if (!authKey || !wa.tokenMatches(req.query && req.query.k, authKey)) { res.status(403).send("forbidden"); return; }
+  if (req.method !== "POST") { res.status(200).send("ok"); return; }
+  const body = req.body;
+  let events = [];
+  try { events = wa.parseMsg91Reports(body); } catch (e) { console.error("[whatsapp status] unreadable report:", e.message); }
+  let applied = 0;
+  for (const ev of events) {
+    const ref = db.collection("whatsappStatus").doc(ev.mobile);
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return; // a message this app did not send (or the send record is not written yet): nothing to tick
+        const d = snap.data() || {};
+        const byKind = d.byKind || {};
+        const kindOf = ev.requestId ? Object.keys(byKind).find((k) => byKind[k] && byKind[k].requestId === ev.requestId) : null;
+        const kind = kindOf || d.lastKind;
+        if (!kind) return;
+        tx.set(ref, { updatedAt: Date.now(), byKind: { [kind]: wa.mergeMessageState(byKind[kind], ev) } }, { merge: true });
+        applied += 1;
+      });
+    } catch (e) { console.error("[whatsapp status] could not apply:", e.message); }
+  }
+  try {
+    await db.collection("whatsappStatus").doc("_webhook").set({ lastAt: Date.now(), count: FieldValue.increment(1), lastEvents: events.length, lastApplied: applied, lastRaw: JSON.stringify(body == null ? null : body).slice(0, 3500) }, { merge: true });
+  } catch (e) { console.error("[whatsapp status] could not log:", e.message); }
+  res.status(200).send("ok");
+});
+
+// Admin-only: the webhook URL to paste into MSG91, and whether MSG91 has called it yet.
+exports.getWhatsAppWebhookInfo = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY] }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const authKey = MSG91_AUTH_KEY.value();
+  if (!authKey) throw new HttpsError("failed-precondition", "MSG91_AUTH_KEY is not set.");
+  const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+  const snap = await db.collection("whatsappStatus").doc("_webhook").get();
+  const w = snap.exists ? snap.data() : {};
+  return { url: `https://asia-south1-${project}.cloudfunctions.net/msg91WhatsAppStatus?k=${wa.webhookToken(authKey)}`, lastAt: w.lastAt || null, count: w.count || 0, lastEvents: w.lastEvents || 0, lastApplied: w.lastApplied || 0 };
 });
 
 // Full-screen "incoming call" ring alert -- see AppFirebaseMessagingService.java/

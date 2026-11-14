@@ -276,6 +276,12 @@ service cloud.firestore {
 
     // LEADS (owner 2026-11-13): `leads` = enquiries Admin types in by hand (a WhatsApp message from a number the app has never seen); `leadClicks` = one doc per click on the
     // WhatsApp links, written ONLY by the waClick Cloud Function (Admin SDK bypasses rules). Both are read / written by Admin only; nobody else can touch them.
+    // WHATSAPP DELIVERY TICKS (owner 2026-11-14): one doc per driver number (+ "_webhook" = the last report MSG91 posted), written ONLY by the Cloud Functions (Admin SDK);
+    // Admin reads them for the Sent / Delivered / Read ticks. Nobody can write them from an app.
+    match /whatsappStatus/{mobile} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     match /leads/{id} {
       allow read, write: if isAdmin();
     }

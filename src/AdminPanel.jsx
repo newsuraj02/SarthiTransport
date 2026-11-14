@@ -19,6 +19,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { useBackHandler } from "./backButton.js";
+import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx";
 import AdminLeads from "./AdminLeads.jsx";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
@@ -853,7 +854,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
           <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{d.name}</div>
         </div>
-        <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}{driverPlateText(d, lang) && driverPlateText(d, lang) !== "—" ? ` · ${driverPlateText(d, lang)}` : ""}</div>
+        <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}{driverPlateText(d, lang) && driverPlateText(d, lang) !== "—" ? ` · ${driverPlateText(d, lang)}` : ""}<span className="ml-1.5 align-middle"><WaTicks mobile={d.mobile} lang={lang} compact /></span></div>
         {reasonText ? <div className="text-[10px] font-bold mt-0.5" style={{ color: reasonColor }}>{reasonText}</div> : null}
       </div>
       {d.mobile && <a href={`tel:${d.mobile}`} className="shrink-0 p-2 rounded-full" style={{ background: C.navy }} aria-label="Call"><Phone size={14} color="#FFFFFF" /></a>}
@@ -891,6 +892,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
             </div>
           )}
+          <WaSummary mobiles={offDutyDrivers.map((x) => x.mobile)} kind="offDuty" lang={lang} />
           {bulkSendResult?.kind === "offDuty" && (
             <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
               {bulkSendResult.ok
@@ -904,7 +906,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: C.ink }}>{d.name}<WaTicks mobile={d.mobile} lang={lang} compact /></div>
             <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-0.5">
@@ -966,6 +968,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
             </div>
           ))}
+          <WaSummary mobiles={uninstalledDrivers.map((x) => x.mobile)} kind="reinstall" lang={lang} />
           {bulkSendResult?.kind === "reinstall" && (
             <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
               {bulkSendResult.ok
@@ -996,7 +999,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                     : (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
                 </span>
               </div>
-              <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+              <div className="text-[10px] flex items-center gap-1.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}<WaTicks mobile={d.mobile} lang={lang} compact /></div>
               <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
             </div>
             {d.blacklisted ? (
@@ -3347,7 +3350,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           <SafeImage src={d.photo?.url || d.docs?.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{d.name || "—"}</div>
-            <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.mobile}</div>
+            <div className="text-[10px] font-bold flex items-center gap-1.5" style={{ color: C.ink, fontFamily: monoFont }}>{d.mobile}<WaTicks mobile={d.mobile} lang={lang} compact /></div>
           </div>
           {called ? (
             <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: "#9AA3B0" }}>
@@ -3547,6 +3550,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 {L3("Everyone messaged today", "आज सर्वांना मेसेज केला", "आज सभी को मेसेज किया गया")}
               </div>
             )}
+            {msgKind && <WaSummary mobiles={shownList.map((x) => x.mobile)} kind={msgKind} lang={lang} />}
             {msgResult?.kind === msgKind && (
               <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: msgResult.ok ? C.success : C.safety, color: "#fff" }}>
                 {msgResult.ok
@@ -4095,6 +4099,8 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
         <input type="text" placeholder="https://..." value={draft.adminUpdateUrl} onChange={(e) => updateDraft({ adminUpdateUrl: e.target.value })}
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
+
+      <div className="mt-2 mb-4"><WaSetupCard lang={lang} /></div>
 
       <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Export app users for ads (Meta)" : lang === "mr" ? "जाहिरातींसाठी अ‍ॅप वापरकर्ते एक्सपोर्ट करा (Meta)" : "विज्ञापनों के लिए ऐप यूज़र एक्सपोर्ट करें (Meta)"}</div>
@@ -4707,7 +4713,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ waStatus, flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
@@ -4717,6 +4723,7 @@ export function AdminPanel({ flowSessions, deleteCustomerFlowSessions, leads, le
   // a separate "Pending KYC approvals" tile.
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["settings", "सिस्टम सेटिंग्स", Settings2]];
   return (
+    <WaStatusContext.Provider value={waStatus || {}}>
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -4766,5 +4773,6 @@ export function AdminPanel({ flowSessions, deleteCustomerFlowSessions, leads, le
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
+    </WaStatusContext.Provider>
   );
 }

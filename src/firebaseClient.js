@@ -675,3 +675,17 @@ export async function listenForegroundPush(onMessageReceived) {
   if (!messaging) return null;
   return onMessage(messaging, onMessageReceived);
 }
+
+// WhatsApp delivery ticks (owner 2026-11-14; functions/index.js: getWhatsAppWebhookInfo). Admin only. Never throws: { ok, url?, lastAt?, count?, reason? }.
+export async function getWhatsAppWebhookInfo() {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "getWhatsAppWebhookInfo");
+    const result = await call({});
+    return { ok: true, ...result.data };
+  } catch (e) {
+    console.error("[whatsapp webhook info] callable failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 200) };
+  }
+}
