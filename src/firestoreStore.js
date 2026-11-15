@@ -1,6 +1,6 @@
 import {
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, limit, where, serverTimestamp, writeBatch,
-  runTransaction, arrayUnion,
+  runTransaction, arrayUnion, deleteField,
 } from "firebase/firestore";
 import { getDb, hasConfig } from "./firebaseClient";
 
@@ -131,6 +131,12 @@ export async function replaceDoc(name, id, data) {
 // Updates only the given fields, leaving everything else (incl. createdAt)
 // untouched — used for status flips like "Pending" -> "Approved".
 export async function patchDoc(name, id, patch) {
+  await withRetry(() => updateDoc(doc(getDb(), name, id), patch));
+}
+
+// Removes named fields from a doc (dotted paths allowed, e.g. "vehicleSpec.length"); nothing else on the doc changes.
+export async function removeDocFields(name, id, paths) {
+  const patch = Object.fromEntries(paths.map((f) => [f, deleteField()]));
   await withRetry(() => updateDoc(doc(getDb(), name, id), patch));
 }
 

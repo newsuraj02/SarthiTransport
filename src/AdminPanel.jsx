@@ -707,9 +707,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     setApprovalEditDraft({
       ...adminVehicleDraft(d, vehicleTypes),
       vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
-      length: d.vehicleSpec?.length || "",
-      width: d.vehicleSpec?.width || "",
-      height: d.vehicleSpec?.height || "",
     });
     setApprovalEditError("");
   };
@@ -723,7 +720,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     await updateDriverVehicleSpec(d.id, {
       ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: approvalEditDraft.vehicleNumber.trim().toUpperCase(),
-      length: approvalEditDraft.length.trim(), width: approvalEditDraft.width.trim(), height: approvalEditDraft.height.trim(),
     });
     cancelApprovalEdit();
   };
@@ -1217,7 +1213,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                             )}
                             <div className="text-[11px] mb-2" style={{ color: C.ink }}>
                               <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{dr.vehicleSpec.vehicleNumber || "—"}</span><br />
-                              <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {dr.vehicleSpec.capacityKg ? vehicleCategoryText(dr.vehicleSpec.capacityKg, lang) : "—"} · {dr.vehicleSpec.length || "—"}×{dr.vehicleSpec.width || "—"}×{dr.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                              <b>{lang === "en" ? "Capacity" : lang === "mr" ? "क्षमता" : "क्षमता"}:</b> {dr.vehicleSpec.capacityKg ? vehicleCategoryText(dr.vehicleSpec.capacityKg, lang) : "—"}
                             </div>
                             <button onClick={() => startApprovalEdit(dr)} className="text-[11px] font-bold underline mb-1" style={{ color: C.navy }}>
                               {lang === "en" ? "Edit details" : lang === "mr" ? "माहिती बदला" : "विवरण बदलें"}
@@ -1241,21 +1237,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
                               </label>
                               
-                              <label className="text-[11px]">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
-                                <input value={approvalEditDraft.length} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, length: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                              </label>
-                              <label className="text-[11px]">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
-                                <input value={approvalEditDraft.width} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, width: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                              </label>
-                              <label className="text-[11px]">
-                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
-                                <input value={approvalEditDraft.height} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, height: e.target.value }))}
-                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                              </label>
                             </div>
                             {approvalEditError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{approvalEditError}</p>}
                             <div className="flex justify-end gap-2">
@@ -3213,9 +3194,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     setEditDraft({
       ...adminVehicleDraft(d, vehicleTypes),
       vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
-      length: d.vehicleSpec?.length || "",
-      width: d.vehicleSpec?.width || "",
-      height: d.vehicleSpec?.height || "",
     });
     setEditError("");
   };
@@ -3229,7 +3207,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     await updateDriverVehicleSpec(d.id, {
       ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
-      length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
     });
     cancelEdit();
   };
@@ -3396,21 +3373,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                   className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
               </label>
               
-              <label className="text-[11px]">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
-                <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-              </label>
-              <label className="text-[11px]">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
-                <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-              </label>
-              <label className="text-[11px]">
-                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
-                <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-              </label>
             </div>
             {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
             <div className="flex justify-end">
@@ -3440,7 +3402,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             {d.vehicleSpec && (
               <div className="text-[11px] mb-2" style={{ color: C.ink }}>
                 <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? vehicleCategoryText(d.vehicleSpec.capacityKg, lang) : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                <b>{lang === "en" ? "Capacity" : lang === "mr" ? "क्षमता" : "क्षमता"}:</b> {d.vehicleSpec.capacityKg ? vehicleCategoryText(d.vehicleSpec.capacityKg, lang) : "—"}
               </div>
             )}
             {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}

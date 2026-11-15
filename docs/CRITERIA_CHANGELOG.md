@@ -658,3 +658,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- re-point two older pins (driver create rule, driver-list KYC badge) for N34
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-15 -- Select vehicle dropdown in the one vehicle picker; driver-entered vehicle sizes removed from Admin forms and purged from stored records (owner 2026-11-15)
+- changed (10): file:src/firestoreStore.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/App.jsx#imports, code:src/App.jsx#App, code:src/VehicleModelPicker.jsx, code:src/firestoreStore.js#imports
+- added (1): code:src/firestoreStore.js#removeDocFields

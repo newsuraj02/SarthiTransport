@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
-  claimBooking, addDeclinedBy, subscribeWhere, mergeDoc, subscribeRecent,
+  claimBooking, addDeclinedBy, subscribeWhere, mergeDoc, subscribeRecent, removeDocFields,
 } from "./firestoreStore";
 import { createFlowRecorder, tapLabel } from "./customerFlow";
 import { parseEntryLink, parseEntryUrl, storedLeadSource, leadSourceForAccount } from "./entryLink.js";
@@ -12788,6 +12788,21 @@ export default function App() {
       }
     });
   }, [drivers, firestoreReady]);
+  // Vehicle sizes are gone (owner 2026-11-15: "remove it completely even for the ones who entered it during the previous KYC"): when Admin's app sees a driver whose vehicle record still carries
+  // length / width / height, it deletes exactly those three fields (nothing else on the record). Once per driver per session; idempotent; nobody but Admin ever runs it.
+  const purgedSizesRef = useRef(new Set());
+  useEffect(() => {
+    if (!(firestoreReady && role === "admin" && adminAuth)) return;
+    drivers.forEach((d) => {
+      const vs = d && d.vehicleSpec;
+      const id = d && (d.mobile || d.id);
+      if (!vs || !id || purgedSizesRef.current.has(id)) return;
+      const paths = ["length", "width", "height"].filter((k) => vs[k] !== undefined).map((k) => `vehicleSpec.${k}`);
+      if (!paths.length) return;
+      purgedSizesRef.current.add(id);
+      removeDocFields("drivers", id, paths).catch((e) => { purgedSizesRef.current.delete(id); console.error(e); });
+    });
+  }, [drivers, role, adminAuth]);
   // Only Admin needs the full customer list (profile/address oversight).
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);

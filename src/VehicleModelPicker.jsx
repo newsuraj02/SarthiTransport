@@ -16,41 +16,25 @@ export default function VehicleModelPicker({
   const hasSaved = !!(saved && String(saved.name || "").trim() && !savedNameJunk && isSaneCapacityKg(saved.kg));
   const lbl = "text-xs font-semibold mb-1 block";
   const req = <span style={{ color: requiredColor }}> *</span>;
-  const border = inputStyle.border || "1px solid #D5DCE8";
-  const rows = FLAT_MODELS; // no search box (owner 2026-11-15): the driver scrolls the list and picks
-  const radio = (on) => (
-    <span aria-hidden className="shrink-0 inline-flex items-center justify-center rounded-full" style={{ width: 16, height: 16, border: `2px solid ${on ? okColor : "#94A3B8"}` }}>{on && <span className="rounded-full" style={{ width: 8, height: 8, background: okColor }} />}</span>
-  );
+  const rows = FLAT_MODELS;
   return (
     <div data-vehicle-picker>
       <label className={lbl} style={{ color: labelColor }}>{T(lang, "Vehicle (company and model)", "गाड़ी (कंपनी और मॉडल)", "गाडी (कंपनी आणि मॉडेल)")}{req}</label>
-      {/* ONE list: every "Company Model" with the weight it carries -- tap one (no company step). */}
-      {savedNameJunk && (
+            {savedNameJunk && (
         <div data-vehicle-junk-note className="rounded-lg px-3 py-2 mb-2 text-xs font-semibold break-words" style={{ background: "#FDECEA", color: requiredColor, border: "1px solid #F5B7B1" }}>
           {T(lang, "The saved vehicle name is not a valid vehicle. Please pick your vehicle from the list below.", "सेव की हुई गाड़ी का नाम सही गाड़ी नहीं है। कृपया नीचे की सूची से अपनी गाड़ी चुनें।", "सेव्ह केलेले गाडीचे नाव योग्य गाडी नाही. कृपया खालील यादीतून तुमची गाडी निवडा.")}
         </div>
       )}
-      <div data-vehicle-model-list role="radiogroup" className="rounded-lg overflow-y-auto mb-2.5" style={{ border, maxHeight: 300 }}>
+      {/* ONE "Select vehicle" dropdown (owner 2026-11-15): every vehicle is an option, only the picked one shows while it is closed. A native select = the phone's own picker, identical in every form. */}
+      <select data-vehicle-select value={choice || ""} onChange={(e) => setChoice(e.target.value)} className={`${inputCls} mb-2.5`} style={inputStyle}>
+        <option value="">{T(lang, "Select vehicle", "गाड़ी चुनें", "गाडी निवडा")}</option>
         {hasSaved && (
-          <button type="button" role="radio" aria-checked={choice === VEHICLE_CHOICE_SAVED} data-vehicle-keep onClick={() => setChoice(VEHICLE_CHOICE_SAVED)}
-            className="w-full flex items-center justify-between gap-2 text-left px-3 py-2.5 text-sm"
-            style={{ background: choice === VEHICLE_CHOICE_SAVED ? "#E8F7EE" : "transparent", color: inputStyle.color, fontWeight: choice === VEHICLE_CHOICE_SAVED ? 700 : 500 }}>
-            <span className="flex items-center gap-2 min-w-0">{radio(choice === VEHICLE_CHOICE_SAVED)}<span className="break-words">{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {saved.name}</span></span>
-            <span className="shrink-0 text-xs font-extrabold rounded-md px-2 py-0.5" style={{ background: choice === VEHICLE_CHOICE_SAVED ? okColor : "#E5EAF2", color: choice === VEHICLE_CHOICE_SAVED ? "#fff" : "#475569" }}>{saved.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</span>
-          </button>
+          <option value={VEHICLE_CHOICE_SAVED} data-vehicle-keep>{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {saved.name} · {saved.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</option>
         )}
-        {rows.map((r, n) => {
-          const on = choice === r.choice;
-          return (
-            <button type="button" key={r.choice} role="radio" aria-checked={on} data-vehicle-model={r.label} data-vehicle-model-kg={r.kg} onClick={() => setChoice(r.choice)}
-              className="w-full flex items-center justify-between gap-2 text-left px-3 py-2.5 text-sm"
-              style={{ background: on ? "#E8F7EE" : "transparent", color: inputStyle.color, borderTop: n || hasSaved ? border : "none", fontWeight: on ? 700 : 500 }}>
-              <span className="flex items-center gap-2 min-w-0">{radio(on)}<span className="break-words">{r.label}</span></span>
-              <span className="shrink-0 text-xs font-extrabold rounded-md px-2 py-0.5" style={{ background: on ? okColor : "#E5EAF2", color: on ? "#fff" : "#475569" }}>{r.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</span>
-            </button>
-          );
-        })}
-      </div>
+        {rows.map((r) => (
+          <option key={r.choice} value={r.choice} data-vehicle-model={r.label} data-vehicle-model-kg={r.kg}>{r.label} · {r.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</option>
+        ))}
+      </select>
 
       {resolved && (
         <>
