@@ -671,3 +671,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- CLAUDE.md: design refresh scope is Admin panel only; customer, driver and vehicle icons untouched (owner 2026-11-15)
 - changed (1): code:CLAUDE.md
+
+## 2026-11-15 -- CLAUDE.md: design refresh shelved, nothing built (owner 2026-11-15)
+- changed (1): code:CLAUDE.md
