@@ -2848,6 +2848,16 @@ const kycFieldLabel = (key, lang) => {
   const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);
   return f ? (lang === "en" ? f.en : lang === "mr" ? f.mr : f.hi) : key;
 };
+// NO ACCOUNT WITHOUT THE COMPLETED FORM (owner 2026-11-15: "until the new driver has filled all the entries it won't open Create Account or create an account indirectly"): the Create Account
+// button is disabled until the form is complete, AND createAccountAndSubmit asks this before it touches Firebase, so no other way of calling it can create an account either.
+// `values` is exactly what DriverKyc (deferred) hands over: the three photos (File + preview, held in memory), the picked vehicle, the vehicle number in the AB12AB1234 shape and the ticked clause.
+function driverSignupFormIncomplete(values) {
+  const v = values || {};
+  if (getKycMissingFromValues({ photo: v.photo, dl: v.dl, vehicleName: v.vehicleTypeName, vehicleNumber: v.vehicleNumber, capacityKg: v.capacityKg, vehicleSide: v.vehiclePhotoSide }).length > 0) return true;
+  if (!(v.photo && v.photo.file && v.dl && v.dl.file && v.vehiclePhotoSide && v.vehiclePhotoSide.file)) return true;
+  if (!isValidVehicleNumber(v.vehicleNumber)) return true;
+  return v.acceptedTerms !== true;
+}
 // END driver KYC completeness helpers
 
 function changedProfileFields(prev, next) {
@@ -5648,6 +5658,11 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // profile in one go.
   const createAccountAndSubmit = async (values) => {
     if (mobile.length !== 10 || pin.length !== 4 || pin !== pinConfirm || !detailsValid || sending) return;
+    // Nothing is created unless EVERY item is filled and the clause is ticked (owner 2026-11-15) -- checked here, not only by the disabled button.
+    if (driverSignupFormIncomplete(values)) {
+      setError(lang === "en" ? "Please fill every item, upload all photos and tick the box before creating the account." : lang === "mr" ? "खाते तयार करण्यापूर्वी प्रत्येक माहिती भरा, सर्व फोटो अपलोड करा आणि बॉक्स टिक करा." : "अकाउंट बनाने से पहले हर जानकारी भरें, सभी फोटो अपलोड करें और बॉक्स टिक करें।");
+      return;
+    }
     if (!authInstance) {
       setError(lang === "en" ? "Sign-up isn't available right now — please try again in a moment." : lang === "mr" ? "साइन-अप सध्या उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "साइन-अप अभी उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।");
       return;
@@ -10833,35 +10848,20 @@ function KycIncompleteNotice({ lang, missing }) {
   );
 }
 
-// Gentle version of KycIncompleteNotice for APPROVED drivers whose saved KYC
-// is still missing something (owner rule, 2026-10-27: approved drivers stay
-// approved and are never blocked). Shown at the top of the idle home screen
-// only; "Later" hides just this banner until the app is next opened, "Complete
-// now" opens the KYC form. Nothing else is ever locked behind it.
-function KycReminderBanner({ lang, missing, onComplete, onDismiss }) {
+// The row an APPROVED driver with any missing KYC item sees at the top of the main screen, just below the hamburger row (owner 2026-11-15: "Incomplete KYC. Kindly fill first to accept loads"
+// with a Fill button at the right end, "make it evidently visible"). REPLACES the old dismissible orange reminder (it had a "Later" button): this one has NO dismiss -- it stays until the
+// KYC form is complete. Nothing is locked behind it (approved drivers are never blocked, owner 2026-10-27); "Fill" opens the KYC form.
+function KycIncompleteBar({ lang, onFill }) {
   const t = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   return (
-    <div className="mx-5 mt-3 rounded-xl p-3.5 shadow-md" style={{ background: C.marigoldDeep }}>
-      <div className="flex items-center gap-2 mb-1">
-        <AlertTriangle size={18} color="#FFFFFF" />
-        <h2 className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{t("Your KYC form is incomplete", "आपका KYC फॉर्म अधूरा है", "तुमचा KYC फॉर्म अपूर्ण आहे")}</h2>
-      </div>
-      <p className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
-        {t("Please add the missing documents so we can verify you.", "कृपया बाकी दस्तावेज़ जोड़ें ताकि हम आपको वेरीफाई कर सकें।", "कृपया उर्वरित कागदपत्रे जोडा, म्हणजे आम्ही तुम्हाला व्हेरिफाय करू शकू.")}
+    <div data-kyc-incomplete-bar role="alert" className="relative z-20 shrink-0 mx-4 mt-1 mb-2 rounded-2xl px-3 py-3 flex items-center gap-3 shadow-lg" style={{ background: C.safety, border: "2px solid #FFFFFF", outline: `2px solid ${C.safety}` }}>
+      <div className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><AlertTriangle size={24} color={C.safety} /></div>
+      <p className="flex-1 min-w-0 break-words text-sm font-extrabold leading-snug" style={{ color: "#FFFFFF" }}>
+        {t("Incomplete KYC. Kindly fill first to accept loads.", "KYC अधूरी है। लोड स्वीकार करने के लिए पहले भरें।", "KYC अपूर्ण आहे. लोड स्वीकारण्यासाठी आधी भरा.")}
       </p>
-      <div className="flex flex-wrap gap-1.5 mt-2">
-        {missing.map((k) => (
-          <span key={k} className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.22)", color: "#FFFFFF" }}>{kycFieldLabel(k, lang)}</span>
-        ))}
-      </div>
-      <div className="flex items-center gap-2 mt-3">
-        <button onClick={onComplete} className="flex-1 rounded-lg py-2.5 text-sm font-extrabold" style={{ background: "#FFFFFF", color: C.marigoldDeep }}>
-          {t("Complete now", "अभी पूरा करें", "आता पूर्ण करा")}
-        </button>
-        <button onClick={onDismiss} className="rounded-lg px-4 py-2.5 text-sm font-bold" style={{ background: "rgba(255,255,255,0.22)", color: "#FFFFFF" }}>
-          {t("Later", "बाद में", "नंतर")}
-        </button>
-      </div>
+      <button data-kyc-incomplete-fill onClick={onFill} className="shrink-0 rounded-xl px-5 py-2.5 text-base font-extrabold ring-pulse-yellow" style={{ background: "#FFFFFF", color: C.safety }}>
+        {t("Fill", "भरें", "भरा")}
+      </button>
     </div>
   );
 }
@@ -11033,7 +11033,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const submit = () => {
     if (!canSubmit) return;
     if (deferred) {
-      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim(), vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null });
+      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim(), vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null, acceptedTerms: !termsMissing });
       return;
     }
     setDriver({
@@ -11802,10 +11802,6 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
     return null;
   };
   useEffect(() => { if (tab !== "fleet" && fleetOpenForm) setFleetOpenForm(false); }, [tab, fleetOpenForm]);
-  // "Later" on the incomplete-KYC reminder (see KycReminderBanner) -- plain
-  // component state on purpose: it hides the banner for this app session
-  // only and it's back the next time the app is opened, until the form is done.
-  const [kycReminderDismissed, setKycReminderDismissed] = useState(false);
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // 'current' (default) shows the driver's own trip/bidding activity
   // automatically; 'advance' is the driver's own accepted advance bookings,
@@ -11963,6 +11959,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             )}
           </div>
         )}
+      {realHamburgerVisible && !isDriverKycComplete(driver) && <KycIncompleteBar lang={lang} onFill={() => setSettingsView("kyc")} />}
       <div className={`flex-1 overflow-y-auto relative${realHamburgerVisible ? " flex flex-col" : ""}`}>
         {/* This whole row (menu, advance badge) is for the idle main
             dashboard only -- Wallet, My Trips, and the Advance Ride/s view
@@ -12048,9 +12045,6 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             </div>
             <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
-        )}
-        {realHamburgerVisible && !kycReminderDismissed && !isDriverKycComplete(driver) && (
-          <KycReminderBanner lang={lang} missing={getDriverKycMissing(driver)} onComplete={() => setSettingsView("kyc")} onDismiss={() => setKycReminderDismissed(true)} />
         )}
         {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles}/>}
         {tab === "home" && rideView === "advance" && (

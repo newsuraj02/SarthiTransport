@@ -637,3 +637,14 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- Much bigger camera icon on every photo box (owner 2026-11-15)
 - changed (8): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:src/AdminPanel.jsx#AdminExpenses, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#CustomerProfileEdit, code:src/App.jsx#DriverKyc, code:src/App.jsx#DriverProfileEdit, code:src/FleetOwner.jsx#PhotoPick
+
+## 2026-11-15 -- Incomplete-KYC row under the hamburger row + no account before the form is complete (owner 2026-11-15)
+- changed (4): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#DriverKyc, code:src/App.jsx#DriverApp
+- added (2): code:src/App.jsx#driverSignupFormIncomplete, code:src/App.jsx#KycIncompleteBar
+- removed (1): code:src/App.jsx#KycReminderBanner
+
+## 2026-11-15 -- Incomplete-KYC row + no account before the form is complete: invariant window
+- changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-15 -- Incomplete-KYC row + no-account guard docs (owner 2026-11-15)
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
