@@ -22,7 +22,7 @@ function PhotoPick({ label, file, onFile, required, lang }) {
       <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{label}{required ? " *" : ""}</div>
       <div className="rounded-lg flex items-center justify-center overflow-hidden" style={{ background: C.bg, border: `1px dashed ${file ? C.success : C.line}`, minHeight: 72 }}>
         {url ? <img src={url} alt="" className="w-full" style={{ maxHeight: 120, objectFit: "cover" }} />
-          : <span className="flex flex-col items-center gap-1 py-3 text-xs font-semibold" style={{ color: C.inkSoft }}><Camera size={30} color={C.inkSoft} />{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
+          : <span className="flex flex-col items-center gap-1 py-3 text-xs font-semibold" style={{ color: C.inkSoft }}><Camera size={52} color={C.inkSoft} />{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
       </div>
       <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); }} />
     </label>

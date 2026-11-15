@@ -5222,7 +5222,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
                 {photoUploading
                   ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
-                  : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={36} color={C.marigoldDeep} />} />}
+                  : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={52} color={C.marigoldDeep} />} />}
               </div>
             </PhotoPicker>
           </div>
@@ -5375,7 +5375,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
-              <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={36} color={C.marigoldDeep} />} />
+              <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={52} color={C.marigoldDeep} />} />
             </div>
           </PhotoPicker>
         </div>
@@ -8591,7 +8591,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               {photoUploading
                 ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
-                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={36} color={C.marigoldDeep} />} />}
+                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={52} color={C.marigoldDeep} />} />}
             </div>
           </PhotoPicker>
         </div>
@@ -11105,7 +11105,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     className="w-full h-16 object-cover photo-zoom-in"
                     fallback={
                       <div className="p-2 flex flex-col items-center justify-center">
-                        <Camera size={30} color={C.inkSoft} />
+                        <Camera size={52} color={C.inkSoft} />
                         <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
                       </div>
                     }
@@ -11171,7 +11171,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     className="w-full h-24 rounded-lg object-cover photo-zoom-in"
                     fallback={
                       <>
-                        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={28} color="#FFFFFF" /></div>
+                        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={46} color="#FFFFFF" /></div>
                         <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}</div>
                       </>
                     }
@@ -11296,7 +11296,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
-            <SafeImage src={driver?.photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={46} color={C.marigoldDeep} />} />
+            <SafeImage src={driver?.photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={68} color={C.marigoldDeep} />} />
           </div>
         </div>
         <div>
