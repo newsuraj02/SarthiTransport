@@ -1687,6 +1687,14 @@ exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (requ
         console.error("[forgotPin] role lookup failed:", e2.message);
         return { ok: false, reason: "reset_failed" };
       }
+      // NO DRIVER ACCOUNT WITHOUT THE COMPLETED FORM (owner 2026-11-15: drivers appeared with no documents): Forgot PIN used to CREATE a brand-new driver login for any number that
+      // had none. A new driver account may only come from the final "Create Account" of the completed documents form. A driver who already exists as a profile (Admin-added, or an
+      // older phone-login driver) may still get a PIN login here; a number with no driver profile gets "no_account" and must Sign Up.
+      if (toRole === "driver") {
+        let hasProfile = false;
+        try { hasProfile = (await db.collection("drivers").doc(mobile).get()).exists; } catch (e3) { console.error("[forgotPin] driver profile lookup failed:", e3.message); return { ok: false, reason: "reset_failed" }; }
+        if (!hasProfile) return { ok: false, reason: "no_account" };
+      }
       await getAuth().createUser({ email, password: newPin });
     } else {
       console.error("[forgotPin] reset failed:", e.message);

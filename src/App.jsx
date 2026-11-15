@@ -5773,7 +5773,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     const result = await resetPinAfterPhoneVerify("driver", pinToPassword(forgotNewPin));
     setForgotSending(false);
     if (!result.ok) {
-      setForgotError(result.reason === "other_role" ? numberOtherRoleMsg(lang, "driver") : lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
+      setForgotError(result.reason === "other_role" ? numberOtherRoleMsg(lang, "driver") : result.reason === "no_account" ? (lang === "en" ? "No driver account found for this number. Please go back and Sign Up first." : lang === "mr" ? "या नंबरवर ड्रायव्हर खाते सापडले नाही. कृपया मागे जा आणि आधी साइन अप करा." : "इस नंबर पर ड्राइवर खाता नहीं मिला। कृपया पीछे जाकर पहले साइन अप करें।") : lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
       return;
     }
     // Already phone-verified for real just above -- straight into the app,

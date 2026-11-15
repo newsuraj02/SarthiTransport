@@ -615,3 +615,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-14 -- re-apply ring commit after WhatsApp ticks
 - changed (7): app:isDriverBroadcastEligible, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js#evaluateNewLoadDriver, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+
+## 2026-11-15 -- Forgot PIN no longer creates a driver account (owner 2026-11-15)
+- changed (6): fn:resetPinAfterPhoneVerify, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverOnboarding
+- added (1): code:scripts/serverTests/driverForgotPin.cjs
+
+## 2026-11-15 -- Forgot PIN no longer creates a driver account (owner 2026-11-15); one-role pin window widened
+- changed (1): code:scripts/verifyInvariants.mjs#checks
