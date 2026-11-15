@@ -668,3 +668,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- docs for photo picker rule
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-15 -- CLAUDE.md: design refresh scope is Admin panel only; customer, driver and vehicle icons untouched (owner 2026-11-15)
+- changed (1): code:CLAUDE.md

@@ -189,6 +189,11 @@ What is frozen (the detailed rules are the paragraphs "ONE FARE EVERYWHERE" and 
 - VEHICLE CATEGORIES: the 15 categories -- `CUSTOMER_LIST_CATEGORY_KG` + `CUSTOMER_LIST_CATEGORY_NAMES` (en/hi/mr, incl. "20 ton container" at 20000 kg), the server's `RING_CATEGORY_MAX_KG`, `bookingCategoryText` / `vehicleCategoryText` / `formatKgLabel` (always "<name> · <N kg>"), and the Admin calculator's picker (exactly these 15, one row each).
 Do not add, rename, re-order or re-weigh a category, change a fare/distance formula or rounding, or add another fare/distance calculation unless the owner asks. The machine enforcement covers it: `npm run verify:invariants` fails if these blocks change without `npm run criteria:accept` (and the invariant "FARE, DISTANCE AND VEHICLE CATEGORIES ARE FROZEN" fails if this section is removed). Do not "accept" a change here on your own initiative.
 
+## Design refresh scope — ADMIN PANEL ONLY (owner 2026-11-15)
+
+The owner asked for a more aesthetic / easier look of the app (Figma mockups: "Apna Transport – Redesign mockups", fileKey `fMNsmd1qrQH9CPIDMyQc35`), then narrowed it: **"Do not touch the Customer flow and Driver workflow, leave it as it is. Also, leave the vehicle icons that already exist for each category."**
+So: only `src/AdminPanel.jsx` (and shared styles it alone uses) may be restyled. The Customer app, the Driver app, the role / login / sign-up screens and every vehicle picture (`CategoryVehicleArt`, `src/vehicleArt.jsx`, the row icons) stay exactly as they are -- no colour, spacing, copy or layout change there, not even "for consistency". Shared tokens (`C`, `index.css`, `tailwind.config.js`) must not change in a way that alters a Customer / Driver screen. Nothing is removed from any screen until the owner approves the specific item. No Admin screen has been changed in code yet (mockups only).
+
 ## Don't trigger a new native build/versionCode unless it's mandatory
 
 The user has explicitly said too many versionCodes were built in a short
