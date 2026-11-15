@@ -4,7 +4,7 @@
 // Loaded lazily from App.jsx / AdminPanel.jsx (they import from here, this imports from App.jsx -- lazy keeps the cycle harmless).
 import React, { useState } from "react";
 import { ChevronDown, Phone, Camera } from "lucide-react";
-import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from "./App.jsx";
+import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText, PhotoPicker } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
 import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
@@ -15,17 +15,19 @@ const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi)
 const digits = (v, n) => digitsOnly(v, n);
 const newVehicleId = (owner) => `${owner}_${Date.now().toString(36)}${Math.floor(Math.random() * 36 ** 2).toString(36)}`;
 
+// Every photo box asks "Take Photo" or "Choose from Library" (owner 2026-11-15) -- the same PhotoPicker sheet as the rest of the app, not a bare file input.
 function PhotoPick({ label, file, onFile, required, lang }) {
   const url = file ? URL.createObjectURL(file) : null;
   return (
-    <label className="block">
+    <div className="block">
       <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{label}{required ? " *" : ""}</div>
-      <div className="rounded-lg flex items-center justify-center overflow-hidden" style={{ background: C.bg, border: `1px dashed ${file ? C.success : C.line}`, minHeight: 72 }}>
-        {url ? <img src={url} alt="" className="w-full" style={{ maxHeight: 120, objectFit: "cover" }} />
-          : <span className="flex flex-col items-center gap-1 py-3 text-xs font-semibold" style={{ color: C.inkSoft }}><Camera size={52} color={C.inkSoft} />{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
-      </div>
-      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); }} />
-    </label>
+      <PhotoPicker label={label} lang={lang} onSelect={onFile}>
+        <div className="rounded-lg flex items-center justify-center overflow-hidden cursor-pointer" style={{ background: C.bg, border: `1px dashed ${file ? C.success : C.line}`, minHeight: 72 }}>
+          {url ? <img src={url} alt="" className="w-full" style={{ maxHeight: 120, objectFit: "cover" }} />
+            : <span className="flex flex-col items-center gap-1 py-3 text-xs font-semibold" style={{ color: C.inkSoft }}><Camera size={52} color={C.inkSoft} />{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
+        </div>
+      </PhotoPicker>
+    </div>
   );
 }
 
