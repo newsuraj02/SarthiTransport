@@ -648,3 +648,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- Incomplete-KYC row + no-account guard docs (owner 2026-11-15)
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-15 -- Incomplete KYC cannot accept a load (owner 2026-11-15)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#App

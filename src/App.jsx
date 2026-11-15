@@ -13242,6 +13242,9 @@ export default function App() {
       addDeclinedBy("bookings", bookingId, driver.name).catch((e) => console.error(e));
       return null;
     }
+    // INCOMPLETE KYC CANNOT ACCEPT (owner 2026-11-15: "block accepting loads until KYC is complete"): every Accept -- the in-app card, the native ring screen's Accept, a parked ring tap --
+    // comes through here, so one check covers them all. A Reject / decline above stays open. The red "Incomplete KYC ... Fill" row (KycIncompleteBar) is the way out.
+    if (!isDriverKycComplete(driver)) return lang === "en" ? "Incomplete KYC. Please complete your KYC first to accept loads." : lang === "mr" ? "KYC अपूर्ण आहे. लोड स्वीकारण्यासाठी आधी तुमचे KYC पूर्ण करा." : "KYC अधूरी है। लोड स्वीकार करने के लिए पहले अपनी KYC पूरी करें।";
     // FLEET OWNER (owner 2026-11-08): Accept never claims by itself -- it opens the "which vehicle?" sheet (every entry point: the in-app card, the native ring screen's
     // Accept). The claim happens in fleetClaimWithVehicle once a free vehicle is picked. "Reject" above stays today's behaviour: a decline only; the booking is cancelled
     // only when nobody accepts.
@@ -13336,7 +13339,7 @@ export default function App() {
     if (verdict === "wait") return;
     pendingRingActionRef.current = null;
     if (verdict !== "go") return;
-    driverRespondBookingRef.current(pending.bookingId, pending.accept).catch((e) => console.error("[ringingBridge] respond", e));
+    driverRespondBookingRef.current(pending.bookingId, pending.accept).then((err) => { if (err && !isDriverKycComplete(driverLatestRef.current)) window.alert(err); /* the refusal for an incomplete KYC is shown, never silent (owner 2026-11-15); other outcomes behave exactly as before */ }).catch((e) => console.error("[ringingBridge] respond", e));
   };
   // Whenever the bookings (or the driver) change, give a parked ring tap another chance.
   useEffect(() => { settleRingActionNow(); }, [bookings, driver?.mobile]);
