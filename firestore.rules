@@ -90,7 +90,7 @@ service cloud.firestore {
         request.resource.data.get('wallet', 0) == resource.data.get('wallet', 0) &&
         request.resource.data.get('heldCredit', 0) == resource.data.get('heldCredit', 0) &&
         request.resource.data.get('bonus', 0) <= resource.data.get('bonus', 0) &&
-        request.resource.data.createdAt == resource.data.createdAt;
+        request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null);
     }
 
     // Vehicle types (the unused `materials` collection and its rule were removed in the 2026-11-09 audit): anyone signed in may ADD an entry (a driver typing a new vehicle name at sign-up creates one) but
@@ -127,14 +127,19 @@ service cloud.firestore {
       // ONE ROLE PER MOBILE NUMBER (owner 2026-11-12): a number that already has a customers/{mobile} profile can't CREATE a driver profile (Admin may).
       // This is the server-side backstop behind the app's own check (functions checkMobileRegistered), so an older or hand-made client can't slip a second role in.
       // Only CREATE is limited: numbers that already hold both profiles keep working (updates / deletes are unchanged).
-      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/customers/$(mobile))) || isAdmin();
+      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/customers/$(mobile)) && request.resource.data.get('fleetOwner', false) != true) || isAdmin();
       // The KYC-portal branch (vehicleSpec == null) stays unconditional --
       // it's the one legitimate place kyc/wallet/etc. get set for the
       // first time. Everywhere else, a driver's own session can change
       // anything on their doc EXCEPT the protected fields above.
+      // NO DRIVER WITHOUT THE FORM, ON THE SERVER TOO (owner 2026-11-15: drivers appeared with no documents / vehicle number / weight): an OLD or hand-made app can no longer make itself a
+      // fleet owner at sign-up -- `fleetOwner` is never changed by a driver's own session or the KYC-portal link (only Admin, or the server callable convertDriverToFleetOwner, which
+      // writes with the Admin SDK) -- and the empty-profile branch (KYC portal link) no longer lets anyone set kyc to Approved, touch wallet / bonus / blacklisted: the same protected
+      // fields as the owning phone's branch. The portal's legitimate writes (name, photo, docs, vehicleSpec, kyc 'Pending') are unchanged.
       allow update: if isAdmin()
-        || resource.data.vehicleSpec == null
-        || (isOwnPhone(mobile) && driverProtectedFieldsUnchanged());
+        || ((resource.data.vehicleSpec == null || isOwnPhone(mobile))
+            && driverProtectedFieldsUnchanged()
+            && request.resource.data.get('fleetOwner', false) == resource.data.get('fleetOwner', false));
       allow delete: if isOwnPhone(mobile) || isAdmin();
     }
 

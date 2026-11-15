@@ -651,3 +651,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- Incomplete KYC cannot accept a load (owner 2026-11-15)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#App
+
+## 2026-11-15 -- No driver without the form: server rules + Admin Documents missing / Approve disabled (owner 2026-11-15)
+- changed (11): app:getDriverKycMissing, app:isDriverKycComplete, file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/App.jsx#getDriverKycMissing, code:src/App.jsx#isDriverKycComplete
+- added (1): code:scripts/rulesTest/driverSignup.mjs
+
+## 2026-11-15 -- re-point two older pins (driver create rule, driver-list KYC badge) for N34
+- changed (1): code:scripts/verifyInvariants.mjs#checks

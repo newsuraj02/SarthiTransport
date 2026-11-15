@@ -2831,7 +2831,7 @@ function getKycMissingFromValues(v = {}) {
   if (!kycHasPhoto(v.vehicleSide)) missing.push("vehicleSide");
   return missing;
 }
-function getDriverKycMissing(driver) {
+export function getDriverKycMissing(driver) {
   if (!driver) return DRIVER_KYC_FIELDS.map((f) => f.key);
   // A fleet owner's "KYC" is the vehicle loop (FleetOwner.jsx): done once they answered "no more vehicles" with at least one vehicle added (owner 2026-11-08).
   if (driver.fleetOwner) return driver.fleetSetupDone && Number(driver.fleetVehicleCount) >= 1 ? [] : ["fleetVehicle"];
@@ -2842,7 +2842,7 @@ function getDriverKycMissing(driver) {
     vehicleSide: spec.photoSide,
   });
 }
-const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
+export const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
 const kycFieldLabel = (key, lang) => {
   if (key === "fleetVehicle") return lang === "en" ? "Add your vehicles and drivers" : lang === "mr" ? "तुमच्या गाड्या व ड्रायव्हर जोडा" : "अपनी गाड़ियाँ और ड्राइवर जोड़ें";
   const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);

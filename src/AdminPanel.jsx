@@ -32,7 +32,7 @@ import {
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate, categoryLoadCapacityKg,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
-  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText,
+  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText, isDriverKycComplete,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
@@ -1092,8 +1092,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
     const driverStatusBadge = (d) => {
       if (!d.vehicleSpec) return { text: lang === "en" ? "Form not completed" : lang === "mr" ? "फॉर्म पूर्ण नाही" : "फॉर्म पूरा नहीं", bg: "#E5EAF2", color: C.inkSoft };
-      if (d.kyc === "Approved") return { text: lang === "en" ? "Approved" : lang === "mr" ? "अप्रूव्ह्ड" : "अप्रूव्ड", bg: C.metallicGreen, color: "#FFFFFF" };
       if (d.kyc === "Rejected") return { text: lang === "en" ? "Rejected" : lang === "mr" ? "नाकारले" : "रिजेक्टेड", bg: C.safety, color: "#FFFFFF" };
+      // owner 2026-11-15: "Form completed" was shown for drivers whose documents, vehicle number and weight were all empty (a profile with a vehicle record but nothing in it) -- never again:
+      // a driver with ANY mandatory item missing reads "Documents missing", whatever the KYC status says (same single definition as the driver app).
+      if (!isDriverKycComplete(d)) return { text: lang === "en" ? "Documents missing" : lang === "mr" ? "कागदपत्रे अपूर्ण" : "दस्तावेज़ अधूरे", bg: "#D92D20", color: "#FFFFFF" };
+      if (d.kyc === "Approved") return { text: lang === "en" ? "Approved" : lang === "mr" ? "अप्रूव्ह्ड" : "अप्रूव्ड", bg: C.metallicGreen, color: "#FFFFFF" };
       return { text: lang === "en" ? "Form completed — Pending" : lang === "mr" ? "फॉर्म पूर्ण — प्रलंबित" : "फॉर्म पूरा — लंबित", bg: C.marigoldDeep, color: "#FFFFFF" };
     };
     return (
@@ -1279,12 +1282,17 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                             </button>
                           </div>
                         )}
+                        {canDecide && confirmRejectId !== dr.id && !isDriverKycComplete(dr) && (
+                          <p data-admin-cannot-approve className="mt-2 pt-2 text-xs font-extrabold" style={{ borderTop: `1px solid ${C.line}`, color: "#D92D20" }}>
+                            {lang === "en" ? "Cannot approve: documents / details are missing. Ask the driver to complete the KYC first." : lang === "mr" ? "मंजूर करता येत नाही: कागदपत्रे / माहिती अपूर्ण आहे. आधी ड्रायव्हरला KYC पूर्ण करायला सांगा." : "अप्रूव नहीं कर सकते: दस्तावेज़ / जानकारी अधूरी है। पहले ड्राइवर से KYC पूरी करवाएँ।"}
+                          </p>
+                        )}
                         {canDecide && confirmRejectId !== dr.id && (
                           <div className="flex gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                             <button onClick={() => setConfirmRejectId(dr.id)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>
                               {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "रिजेक्ट करें"}
                             </button>
-                            <button onClick={() => updateDriverKyc(dr.mobile, "Approved")} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                            <button data-admin-approve onClick={() => updateDriverKyc(dr.mobile, "Approved")} disabled={!isDriverKycComplete(dr)} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: isDriverKycComplete(dr) ? C.metallicGreen : "#9AA3B0" }}>
                               {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
                             </button>
                           </div>
