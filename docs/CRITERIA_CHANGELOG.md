@@ -631,3 +631,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- Driver sign-up form rules docs (owner 2026-11-15)
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-15 -- Bigger camera icon on every photo box (owner 2026-11-15)
+- changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:src/AdminPanel.jsx#AdminExpenses, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#CustomerProfileEdit, code:src/App.jsx#DriverKyc, code:src/App.jsx#DriverProfileEdit, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#PhotoPick

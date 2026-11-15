@@ -3,7 +3,7 @@
 // phone, vehicle number, document photos -- owner + Admin only). Rules: firestore.rules. Logic of who is rung / listed: functions/tripLock.js + fleetPseudoDrivers (App.jsx).
 // Loaded lazily from App.jsx / AdminPanel.jsx (they import from here, this imports from App.jsx -- lazy keeps the cycle harmless).
 import React, { useState } from "react";
-import { ChevronDown, Phone } from "lucide-react";
+import { ChevronDown, Phone, Camera } from "lucide-react";
 import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
@@ -22,7 +22,7 @@ function PhotoPick({ label, file, onFile, required, lang }) {
       <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{label}{required ? " *" : ""}</div>
       <div className="rounded-lg flex items-center justify-center overflow-hidden" style={{ background: C.bg, border: `1px dashed ${file ? C.success : C.line}`, minHeight: 72 }}>
         {url ? <img src={url} alt="" className="w-full" style={{ maxHeight: 120, objectFit: "cover" }} />
-          : <span className="text-xs font-semibold py-5" style={{ color: C.inkSoft }}>{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
+          : <span className="flex flex-col items-center gap-1 py-3 text-xs font-semibold" style={{ color: C.inkSoft }}><Camera size={30} color={C.inkSoft} />{T(lang, "Tap to add photo", "फोटो जोड़ने के लिए टैप करें", "फोटो जोडण्यासाठी टॅप करा")}</span>}
       </div>
       <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); }} />
     </label>

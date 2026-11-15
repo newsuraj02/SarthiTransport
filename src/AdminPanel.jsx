@@ -4572,7 +4572,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
         </button>
         <PhotoPicker label={lang === "en" ? "Attach a bill photo" : lang === "mr" ? "बिलाचा फोटो जोडा" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
           <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: C.safety }}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Camera size={16} color={C.safety} /></div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Camera size={26} color={C.safety} /></div>
             <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : lang === "mr" ? "कॅमेरा / बिल" : "कैमरा / बिल"}</span>
           </div>
         </PhotoPicker>
