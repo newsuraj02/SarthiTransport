@@ -7,7 +7,7 @@ import { ChevronDown, Phone } from "lucide-react";
 import { C, uploadPhoto, customerListCategoryOptions, vehicleCategoryText } from "./App.jsx";
 import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
-import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
+import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { resolveVehicleChoice, categoryIndexForKg } from "./vehicleModels.js";
 
@@ -42,7 +42,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   const missing = [];
   if (!isValidPersonName(v.driverName)) missing.push(T(lang, "driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव"));
   if (digits(v.driverMobile, 10).length !== 10) missing.push(T(lang, "driver's 10-digit mobile", "ड्राइवर का 10 अंकों का मोबाइल", "ड्रायव्हरचा 10 अंकी मोबाइल"));
-  if (!v.vehicleNumber.trim()) missing.push(T(lang, "vehicle number", "गाड़ी नंबर", "गाडी नंबर"));
+  if (!isValidVehicleNumber(v.vehicleNumber)) missing.push(T(lang, "vehicle number (AB12AB1234)", "गाड़ी नंबर (AB12AB1234)", "गाडी नंबर (AB12AB1234)")); // the same rule as the driver KYC form (owner 2026-11-15)
   // Vehicle (owner 2026-11-10: the SAME company -> model picker as the driver KYC and Admin's edit forms; "not listed" -> a weight category). The weight comes from the pick, never typed;
   // the vehicle is listed / rung in the category its weight falls in (categoryIndexForKg).
   const categories = customerListCategoryOptions(lang);
@@ -53,6 +53,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   if (!picked) missing.push(T(lang, "vehicle (company + model, or weight category)", "गाड़ी (कंपनी + मॉडल, या वज़न वर्ग)", "गाडी (कंपनी + मॉडेल, किंवा वजन वर्ग)"));
   if (!files.driverPhoto) missing.push(T(lang, "driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो"));
   if (!files.dl) missing.push(T(lang, "driving licence photo", "ड्राइविंग लाइसेंस की फोटो", "ड्रायव्हिंग लायसन्स फोटो"));
+  if (!files.vehicleSide) missing.push(T(lang, "vehicle photo", "गाड़ी की फोटो", "गाडीचा फोटो")); // mandatory like every other item (owner 2026-11-15: "each and everything we fill in must be MANDATORY")
 
   const save = async () => {
     if (missing.length || saving) return;
@@ -86,7 +87,8 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
       <input value={v.driverName} onChange={(e) => set("driverName", cleanNameInput(e.target.value))} className={field} style={fieldStyle} placeholder={T(lang, "Driver name", "ड्राइवर का नाम", "ड्रायव्हरचे नाव")} />
       <input value={v.driverMobile} onChange={(e) => set("driverMobile", digits(e.target.value, 10))} inputMode="numeric" className={field} style={fieldStyle}
         placeholder={T(lang, "Driver's mobile number (gets the trip on WhatsApp)", "ड्राइवर का मोबाइल नंबर (ट्रिप WhatsApp पर मिलेगी)", "ड्रायव्हरचा मोबाइल (ट्रिप WhatsApp वर मिळेल)")} />
-      <input value={v.vehicleNumber} onChange={(e) => set("vehicleNumber", e.target.value)} className={field} style={fieldStyle} placeholder={T(lang, "Vehicle number (e.g. MH12AB1234)", "गाड़ी नंबर (जैसे MH12AB1234)", "गाडी नंबर (उदा. MH12AB1234)")} />
+      <input value={v.vehicleNumber} maxLength={10} autoCapitalize="characters" autoComplete="off" data-fleet-vehicle-number onChange={(e) => set("vehicleNumber", cleanVehicleNumberInput(e.target.value))} className={field} style={{ ...fieldStyle, textTransform: "uppercase" }} placeholder={T(lang, "Vehicle number (e.g. MH12AB1234)", "गाड़ी नंबर (जैसे MH12AB1234)", "गाडी नंबर (उदा. MH12AB1234)")} />
+      <p className="text-[10px] -mt-2" style={{ color: C.inkSoft }}>{vehicleNumberHint(lang)}</p>
 <div data-fleet-vehicle-picker>
         <VehicleModelPicker lang={lang} choice={v.vehicleChoice} setChoice={(c) => set("vehicleChoice", c)} categoryIndex={v.categoryIndex} setCategoryIndex={(i) => set("categoryIndex", i)}
           categoryOptions={customerListCategoryOptions("en").map((o, i) => ({ ...o, label: categories[i].label }))} saved={null} resolved={picked}
@@ -96,7 +98,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
         <PhotoPick lang={lang} required label={T(lang, "Driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो")} file={files.driverPhoto} onFile={(f) => setFiles((p) => ({ ...p, driverPhoto: f }))} />
         <PhotoPick lang={lang} required label={T(lang, "Driving licence", "ड्राइविंग लाइसेंस", "ड्रायव्हिंग लायसन्स")} file={files.dl} onFile={(f) => setFiles((p) => ({ ...p, dl: f }))} />
       </div>
-      <PhotoPick lang={lang} label={T(lang, "Vehicle photo (optional)", "गाड़ी की फोटो (वैकल्पिक)", "गाडीचा फोटो (ऐच्छिक)")} file={files.vehicleSide} onFile={(f) => setFiles((p) => ({ ...p, vehicleSide: f }))} />
+      <PhotoPick lang={lang} required label={T(lang, "Vehicle photo", "गाड़ी की फोटो", "गाडीचा फोटो")} file={files.vehicleSide} onFile={(f) => setFiles((p) => ({ ...p, vehicleSide: f }))} />
       {missing.length > 0 && <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{T(lang, "Still needed: ", "अभी चाहिए: ", "अजून हवे: ")}{missing.join(", ")}</div>}
       {error && <div className="text-xs font-bold" style={{ color: C.safety }}>{error}</div>}
       <div className="flex gap-2">

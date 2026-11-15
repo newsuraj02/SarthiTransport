@@ -33,7 +33,7 @@ import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
-import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
+import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
@@ -5504,13 +5504,10 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile"); // "checking" | "mobile" | "pin"
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  // Sign Up step 2 starts with "who are you": one driver with his own vehicle (the documents form below) or a FLEET OWNER with several vehicles driven by people who have
-  // no app (owner 2026-11-08) -- the fleet owner gets the account straight away and adds every vehicle + driver in the app (FleetOwner.jsx).
-  const [accountKind, setAccountKind] = useState(null); // null | "self" | "fleet"
   // Back arrow = start over (owner 2026-10-28): nothing typed is kept. Only
   // reachable before the account exists (the documents form unmounts with it).
   const resetForm = () => {
-    setName(""); setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError(""); setAccountKind(null);
+    setName(""); setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError("");
     pendingSignupRef.current = null;
   };
 
@@ -5684,16 +5681,6 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     (async () => {
       try {
         const ref = new URLSearchParams(window.location.search).get("ref");
-        if (pendingSignupRef.current.fleet) {
-          // Fleet owner: no documents here -- the vehicle loop (FleetOwner.jsx) is the "KYC". A placeholder vehicleSpec keeps every existing gate working (it is only
-          // ever read for capacity by the single-driver paths, which a fleet owner never takes: fleetPseudoDrivers / evaluateFleetOwnerVehicles do the fleet rule).
-          setDriver({ ...driver, name: pendingSignupRef.current.name, referredBy: ref && ref !== driver.mobile ? ref : null, referralCredited: false, kyc: "Pending",
-            fleetOwner: true, fleetVehicleCount: 0, fleetSetupDone: false, vehicleSpec: { type: "fleet", photo: null, photoFront: null, photoSide: null, capacityKg: null, vehicleNumber: null, fleet: true } });
-          setName("");
-          setFinalizeState("applied");
-          onFirstSignupComplete?.();
-          return;
-        }
         await runDriverSignupFinalize(pendingSignupRef.current, driver, {
           uploadPhoto: (file, path, onFail) => uploadPhoto(file, path, 900, 0.72, null, onFail),
           classifyPhoto: async (file, docType) => {
@@ -6028,35 +6015,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
           </button>
         </div>
         <div className="px-5 pb-1"><StepDots step={2} total={2} /></div>
-        {accountKind === null && (
-          <div className="px-5 pt-3 space-y-3" data-account-kind>
-            <h3 className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Who are you?" : lang === "mr" ? "तुम्ही कोण आहात?" : "आप कौन हैं?"}</h3>
-            <button data-account-kind-self onClick={() => setAccountKind("self")} className="w-full text-left rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "I drive my own vehicle" : lang === "mr" ? "मी स्वतःची गाडी चालवतो" : "मैं अपनी गाड़ी खुद चलाता हूँ"}</div>
-              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "One driver, one vehicle — documents next." : lang === "mr" ? "एक ड्रायव्हर, एक गाडी — पुढे कागदपत्रे." : "एक ड्राइवर, एक गाड़ी — आगे दस्तावेज़।"}</div>
-            </button>
-            <button data-account-kind-fleet onClick={() => setAccountKind("fleet")} className="w-full text-left rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "I own several vehicles (fleet owner / transporter)" : lang === "mr" ? "माझ्याकडे अनेक गाड्या आहेत (फ्लीट ओनर / ट्रान्सपोर्टर)" : "मेरे पास कई गाड़ियाँ हैं (फ्लीट ओनर / ट्रांसपोर्टर)"}</div>
-              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Only you use the app; your drivers get each trip on WhatsApp." : lang === "mr" ? "फक्त तुम्ही अ‍ॅप वापरता; ड्रायव्हरना प्रत्येक ट्रिप WhatsApp वर मिळते." : "सिर्फ़ आप ऐप चलाते हैं; ड्राइवरों को हर ट्रिप WhatsApp पर मिलती है।"}</div>
-            </button>
-          </div>
-        )}
-        {accountKind === "fleet" && (
-          <div className="px-5 pt-3 space-y-3" data-account-kind-fleet-confirm>
-            <div className="rounded-xl p-4" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-              <div className="text-sm font-extrabold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fleet owner account" : lang === "mr" ? "फ्लीट ओनर अकाउंट" : "फ्लीट ओनर अकाउंट"}</div>
-              <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Next you will add each vehicle with its driver's name, mobile, photo and licence. Admin approves them, then booking requests ring only your phone." : lang === "mr" ? "पुढे तुम्ही प्रत्येक गाडी ड्रायव्हरचे नाव, मोबाइल, फोटो व लायसन्ससह जोडाल. अ‍ॅडमिन मंजुरी देतो, मग बुकिंग फक्त तुमच्या फोनवर वाजते." : "आगे आप हर गाड़ी को उसके ड्राइवर के नाम, मोबाइल, फोटो और लाइसेंस के साथ जोड़ेंगे। एडमिन मंज़ूरी देगा, फिर बुकिंग सिर्फ़ आपके फोन पर बजेगी।"}</div>
-            </div>
-            {error && <div className="text-xs font-bold" style={{ color: C.safety }}>{error}</div>}
-            <button data-fleet-create-account onClick={() => createAccountAndSubmit({ fleet: true })} disabled={sending} className="w-full rounded-lg py-3.5 text-base font-extrabold text-white" style={{ background: sending ? "#9AA3B0" : C.success }}>
-              {sending ? "…" : (lang === "mr" ? "अकाउंट तयार करा" : lang === "en" ? "Create Account" : "अकाउंट बनाएँ")}
-            </button>
-            <button onClick={() => setAccountKind(null)} className="w-full text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"}</button>
-          </div>
-        )}
-        {accountKind === "self" && <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+        <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
-          onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />}
+          onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />
       </div>
     );
   }
@@ -11050,6 +11011,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // the Incomplete screen and the admin KYC badge use, so Submit can never
   // accept less than what the app later treats as "complete".
   const draftMissing = getKycMissingFromValues({ photo, dl, vehicleName: vehicleTypeName, vehicleNumber, capacityKg: capacityKgStr, vehicleSide: vehiclePhotoSide });
+  // Vehicle number must be the full AB12AB1234 pattern (owner 2026-11-15) -- a half-typed or other-shaped number is "still needed" too.
+  if (!draftMissing.includes("vehicleNumber") && !isValidVehicleNumber(vehicleNumber)) draftMissing.push("vehicleNumber");
   const termsMissing = needsTerms && !acceptedTerms;
   const canSubmit = draftMissing.length === 0 && !termsMissing && !anyUploading && !submitting;
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
@@ -11174,8 +11137,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 
       <GuidedStep {...kycStepProps(2)} lang={lang}>
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : lang === "mr" ? "गाडी रजिस्टर्ड नंबर" : "गाड़ी रजिस्टर्ड नंबर"} <span style={{ color: C.safety }}>*</span></label>
-        <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
-          onChange={(e) => setVehicleNumber(e.target.value)} />
+        <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 4 }} placeholder="MH12AB1234" value={vehicleNumber} maxLength={10} autoCapitalize="characters" autoComplete="off" data-vehicle-number
+          onChange={(e) => setVehicleNumber(cleanVehicleNumberInput(e.target.value))} />
+        <p data-vehicle-number-hint className="text-[10px] mb-3" style={{ color: C.inkSoft }}>{vehicleNumberHint(lang)}</p>
       </GuidedStep>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>

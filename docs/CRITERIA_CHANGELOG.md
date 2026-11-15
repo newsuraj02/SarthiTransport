@@ -622,3 +622,12 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- Forgot PIN no longer creates a driver account (owner 2026-11-15); one-role pin window widened
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-15 -- Driver sign-up form rules (owner 2026-11-15): no Who-are-you question, vehicle number AB12AB1234, no search box, fleet vehicle photo mandatory
+- changed (8): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#DriverKyc, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#FleetVehicleForm, code:src/VehicleModelPicker.jsx, code:src/inputRules.js
+
+## 2026-11-15 -- Driver sign-up form rules (owner 2026-11-15); invariant re-pointed
+- changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-15 -- Driver sign-up form rules docs (owner 2026-11-15)
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md

@@ -1,6 +1,6 @@
 // "Which vehicle do you drive?" -- (owner 2026-11-13: NO company dropdown any more -- ONE list of "Company Model" rows, each with its weight, and a search box; the same picker everywhere.) -- (the company's models show as a list with their weights below the company box, not a second dropdown) -- the ONE picker used by the Driver KYC form and by Admin's driver edit forms (owner 2026-11-10). Company -> Model, from the sheet
 // (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. (owner 2026-11-10: the "My model is not listed" option was removed -- a vehicle must be picked from the list.) It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, vehicleModelChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
@@ -12,22 +12,18 @@ export default function VehicleModelPicker({
   lang, choice, setChoice, categoryIndex, setCategoryIndex, categoryOptions, saved, resolved,
   inputCls, inputStyle, labelColor, requiredColor, okColor,
 }) {
-  const [query, setQuery] = useState("");
   const savedNameJunk = !!(saved && String(saved.name || "").trim() && !looksLikeVehicleName(saved.name)); // 2026-11-13: free text typed before 10 Nov is never offered back
   const hasSaved = !!(saved && String(saved.name || "").trim() && !savedNameJunk && isSaneCapacityKg(saved.kg));
   const lbl = "text-xs font-semibold mb-1 block";
   const req = <span style={{ color: requiredColor }}> *</span>;
   const border = inputStyle.border || "1px solid #D5DCE8";
-  const q = query.trim().toLowerCase();
-  const rows = useMemo(() => (q ? FLAT_MODELS.filter((r) => `${r.label} ${r.kg}`.toLowerCase().includes(q)) : FLAT_MODELS), [q]);
+  const rows = FLAT_MODELS; // no search box (owner 2026-11-15): the driver scrolls the list and picks
   const radio = (on) => (
     <span aria-hidden className="shrink-0 inline-flex items-center justify-center rounded-full" style={{ width: 16, height: 16, border: `2px solid ${on ? okColor : "#94A3B8"}` }}>{on && <span className="rounded-full" style={{ width: 8, height: 8, background: okColor }} />}</span>
   );
   return (
     <div data-vehicle-picker>
       <label className={lbl} style={{ color: labelColor }}>{T(lang, "Vehicle (company and model)", "गाड़ी (कंपनी और मॉडल)", "गाडी (कंपनी आणि मॉडेल)")}{req}</label>
-      <input data-vehicle-search value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls} style={{ ...inputStyle, marginBottom: 8 }}
-        placeholder={T(lang, "Search: Tata, Ace, Eicher, 1700 ...", "खोजें: Tata, Ace, Eicher, 1700 ...", "शोधा: Tata, Ace, Eicher, 1700 ...")} />
       {/* ONE list: every "Company Model" with the weight it carries -- tap one (no company step). */}
       {savedNameJunk && (
         <div data-vehicle-junk-note className="rounded-lg px-3 py-2 mb-2 text-xs font-semibold break-words" style={{ background: "#FDECEA", color: requiredColor, border: "1px solid #F5B7B1" }}>
@@ -54,7 +50,6 @@ export default function VehicleModelPicker({
             </button>
           );
         })}
-        {rows.length === 0 && <div data-vehicle-no-match className="px-3 py-3 text-xs" style={{ color: "#64748B" }}>{T(lang, "No vehicle matches. Try another word.", "कोई गाड़ी नहीं मिली। दूसरा शब्द लिखें।", "कोणतीही गाडी सापडली नाही. दुसरा शब्द लिहा.")}</div>}
       </div>
 
       {resolved && (
