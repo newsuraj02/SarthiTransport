@@ -678,3 +678,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-18 -- Customer booking map 25vh + list header; Admin Live Map framed once, view remembered, indicators above the map (owner 2026-11-18)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminLiveMap, code:src/App.jsx#CustomerBooking
 - added (1): code:src/AdminPanel.jsx#adminLiveMapView
+
+## 2026-11-18 -- Added manual CI workflow check-16kb.yml (debug apk, no versionCode) to find the non-16KB-aligned native dependency behind Google Play's '16 KB devices' warning; contract N38
+- changed (1): code:docs/SYSTEM_CONTRACTS.md
+- added (1): code:.github/workflows/check-16kb.yml

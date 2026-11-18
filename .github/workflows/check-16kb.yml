@@ -1,0 +1,61 @@
+name: Check 16 KB page-size support (no release, no versionCode)
+
+# Manually triggered. Google Play warns "Your app may crash on 16 KB devices".
+# Only native (.so) libraries matter; this app has none of its own, so the
+# offender is a dependency's .so. This job builds a DEBUG apk (no keystore,
+# no versionCode, nothing is uploaded to Play) and lists every .so in it with
+# its ELF LOAD alignment and its zip alignment. A library passes when its
+# LOAD segments are aligned to >= 0x4000 (16 KB) AND, if stored uncompressed,
+# its zip offset is a multiple of 16384. Read-only: changes nothing.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build debug apk
+        working-directory: android
+        run: ./gradlew assembleDebug
+      - name: Audit native libraries
+        run: |
+          set -u
+          APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -1)
+          echo "APK: $APK"
+          rm -rf /tmp/apk && mkdir /tmp/apk && unzip -q "$APK" -d /tmp/apk
+          READELF=$(ls $ANDROID_HOME/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf 2>/dev/null | head -1 || true)
+          [ -z "$READELF" ] && READELF=$(command -v readelf || command -v llvm-readelf)
+          echo "readelf: $READELF"
+          echo "--- every .so in the APK (with the dependency it most likely came from) ---"
+          FAIL=0
+          for f in $(find /tmp/apk/lib -name '*.so' | sort); do
+            abi=$(basename "$(dirname "$f")")
+            align=$("$READELF" -lW "$f" | awk '$1=="LOAD"{print $NF}' | sort -u | tr '\n' ' ')
+            ok=OK
+            for a in $align; do
+              if [ $((a)) -lt 16384 ]; then ok=UNALIGNED; fi
+            done
+            echo "$ok  $abi/$(basename "$f")  LOAD align: $align"
+            [ "$ok" = UNALIGNED ] && FAIL=1
+          done
+          echo "--- zipalign 16 KB check ---"
+          ZIPALIGN=$(ls $ANDROID_HOME/build-tools/*/zipalign | sort -V | tail -1)
+          "$ZIPALIGN" -c -P 16 -v 4 "$APK" | grep -E 'lib/.*\.so|Verification' || true
+          echo "--- dependency tree: who pulls in androidx.datastore ---"
+          (cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath | grep -iE 'datastore|crashlytics|sessions' | sort -u) || true
+          if [ "$FAIL" = 1 ]; then echo "::error::At least one native library is NOT 16 KB aligned (see UNALIGNED lines above)."; exit 1; fi
+          echo "All native libraries are 16 KB aligned."
