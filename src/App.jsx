@@ -7832,7 +7832,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
 
   const mapEl = mapHidden ? null : (
       <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
-        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
+        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="25vh" lang={lang} onMapClick={onMapClick}
           activeOnly={listStage || flowStep === "vehicle"} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
   );
@@ -7862,6 +7862,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           and "N min away" (measured from the customer's current location); the FARE appears once Pickup + Drop are chosen. Tapping a row picks the category, moves it to the top and
           shows "Book now" right under it, which leads to screen 2 (Pickup and Drop). Category booking, the ring and every fare are unchanged. */}
       <div className="px-5 pt-3 pb-4 space-y-2.5">
+                  {/* LIST HEADER (owner 2026-11-18: "a small header of 'Choose vehicle according to the requirement' and 'zarurat ke hissab se gaadi book kre' above the vehicle list"): one small line in the app's language. */}
+                  <p data-list-header className="text-sm font-extrabold" style={{ color: C.ink }}>
+                    {lang === "en" ? "Choose vehicle according to the requirement" : lang === "mr" ? "गरजेनुसार गाडी बुक करा" : "ज़रूरत के हिसाब से गाड़ी बुक करें"}
+                  </p>
                   {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
                   const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category

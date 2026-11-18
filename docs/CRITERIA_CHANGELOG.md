@@ -674,3 +674,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-15 -- CLAUDE.md: design refresh shelved, nothing built (owner 2026-11-15)
 - changed (1): code:CLAUDE.md
+
+## 2026-11-18 -- Customer booking map 25vh + list header; Admin Live Map framed once, view remembered, indicators above the map (owner 2026-11-18)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminLiveMap, code:src/App.jsx#CustomerBooking
+- added (1): code:src/AdminPanel.jsx#adminLiveMapView

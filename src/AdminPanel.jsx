@@ -205,6 +205,8 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
   );
 }
 
+let adminLiveMapView = null; // the Admin's own zoom / centre on the Live Map, kept for this session (see AdminLiveMap)
+
 function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const [mapInstance, setMapInstance] = useState(null);
@@ -216,12 +218,28 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
   const offline = located.filter((d) => !d.online);
   const center = online[0]?.lastKnownLocation || offline[0]?.lastKnownLocation || NEARBY_MAP_DEFAULT_CENTER;
 
+  // Owner 2026-11-18 ("In Admin Live map, Map zoom in/out stays constant, dont readjust"): the map is framed ONCE (the first time it has vehicles to show), never again --
+  // a GPS update, a vehicle going on / off duty or a re-render no longer moves or zooms it. The view the Admin leaves it in is remembered (`adminLiveMapView`) so reopening
+  // the screen keeps it too; the zoom +/- buttons and dragging work as before.
+  const framedRef = useRef(false);
   useEffect(() => {
-    if (!mapInstance || !window.google?.maps || located.length === 0) return;
+    if (!mapInstance || !window.google?.maps || framedRef.current) return;
+    if (adminLiveMapView) { mapInstance.setCenter(adminLiveMapView.center); mapInstance.setZoom(adminLiveMapView.zoom); framedRef.current = true; return; }
+    if (located.length === 0) return;
     const bounds = new window.google.maps.LatLngBounds();
     located.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
     mapInstance.fitBounds(bounds, 48);
-  }, [mapInstance, located.length, located.map((d) => `${d.lastKnownLocation.lat},${d.lastKnownLocation.lng}`).join("|")]);
+    framedRef.current = true;
+  }, [mapInstance, located.length]);
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return undefined;
+    const l = mapInstance.addListener("idle", () => {
+      if (!framedRef.current) return; // ignore the idle that follows the very first framing
+      const c = mapInstance.getCenter(); const z = mapInstance.getZoom();
+      if (c && z != null) adminLiveMapView = { center: { lat: c.lat(), lng: c.lng() }, zoom: z };
+    });
+    return () => l.remove();
+  }, [mapInstance]);
 
   const mapTrips = tripsOnMap(bookings);
   const selectedTrip = mapTrips.find((b) => b.id === selectedTripId) || null;
@@ -233,7 +251,7 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
   const markerTitle = (d) => `${d.name || d.mobile} · ${statusLabel(statusOf(d))} · ${staleMinutes(d)}${lang === "en" ? "m ago" : " मिनट पहले"}`;
   const statusCounts = located.reduce((acc, d) => { const k = statusOf(d); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
   const statusLegend = (
-    <div className="absolute top-2 right-2 rounded-lg px-2 py-1.5 shadow-sm flex flex-col gap-0.5" style={{ background: "rgba(255,255,255,0.95)", border: "1px solid #ddd" }}>
+    <div data-map-legend className="rounded-lg px-2.5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5" style={{ background: "#FFFFFF", border: "1px solid #ddd" }}>
       {["trip", "free", "stale", "off"].map((k) => (
         <span key={k} className="text-[10px] font-bold flex items-center gap-1" style={{ color: "#222" }}>
           <span style={{ width: 9, height: 9, borderRadius: 9, background: VEHICLE_STATUS[k].color, display: "inline-block" }} />
@@ -263,10 +281,28 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
     (offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : "") +
     (neverLocated.length > 0 ? ` · ${neverLocated.length} ${lang === "en" ? "no location yet" : "अभी तक लोकेशन नहीं"}` : "");
 
+  // Owner 2026-11-18 ("the indicators must be above the map not inside the map box"): the vehicle counts, the "N online" summary and the trip-route hint sit in a block
+  // ABOVE the map (`data-map-indicators`), in normal flow, so nothing is drawn over the map itself (only the map's own zoom buttons / the selected-trip card are).
+  const indicators = (
+    <div data-map-indicators className="mb-2 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: C.navy, color: "#fff" }}>{mapSummaryLabel}</span>
+        {mapTrips.length > 0 && !selectedTrip && (
+          <span data-trip-hint className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "#FFFFFF", border: "1px solid #ddd", color: "#222" }}>
+            🛣 {mapTrips.length} {lang === "en" ? "trip route(s) — tap a route for details" : lang === "mr" ? "ट्रिप मार्ग — तपशीलासाठी मार्गावर टॅप करा" : "ट्रिप रूट — विवरण के लिए रूट पर टैप करें"}
+          </span>
+        )}
+      </div>
+      {statusLegend}
+    </div>
+  );
+
   if (!hasKey || !isLoaded) {
     const scale = 900;
     const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
     return (
+      <div>
+      {indicators}
       <div className="relative overflow-hidden rounded-lg" style={{ height: "60vh", background: "#E5E5E5" }}>
         <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
           {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
@@ -277,15 +313,14 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
             return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={VEHICLE_STATUS[statusOf(d)].color} stroke="#fff" strokeWidth="0.6"><title>{markerTitle(d)}</title></circle>;
           })}
         </svg>
-        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-          {mapSummaryLabel}
-        </div>
-        {statusLegend}
+      </div>
       </div>
     );
   }
 
   return (
+    <div>
+    {indicators}
     <div className="relative rounded-lg overflow-hidden" style={{ height: "60vh" }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
@@ -303,16 +338,8 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
           <AdminTripRouteLine key={"trip-" + b.id} booking={b} driver={tripDriverOf(b)} selected={selectedTripId === b.id} onSelect={setSelectedTripId} mapsOk={isLoaded} />
         ))}
       </GoogleMap>
-      <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-        {mapSummaryLabel}
-      </div>
-      {mapTrips.length > 0 && !selectedTrip && (
-        <div data-trip-hint className="absolute top-9 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(255,255,255,0.95)", border: "1px solid #ddd", color: "#222" }}>
-          🛣 {mapTrips.length} {lang === "en" ? "trip route(s) — tap a route for details" : lang === "mr" ? "ट्रिप मार्ग — तपशीलासाठी मार्गावर टॅप करा" : "ट्रिप रूट — विवरण के लिए रूट पर टैप करें"}
-        </div>
-      )}
-      {statusLegend}
       {selectedTrip && <AdminTripDetailCard booking={selectedTrip} driver={tripDriverOf(selectedTrip)} lang={lang} onClose={() => setSelectedTripId(null)} />}
+    </div>
     </div>
   );
 }
