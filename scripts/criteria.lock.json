@@ -153,6 +153,7 @@
   "code:.github/workflows/build-capacitor-admin.yml": "bea1efb584eead30",
   "code:.github/workflows/build-capacitor.yml": "83010e9b9c0e1ade",
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
+  "code:.github/workflows/check-16kb.yml": "aad711246a4158e2",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
   "code:CLAUDE.md": "a1f41774aada9925",
@@ -336,7 +337,7 @@
   "code:apna-transport-native/settings.gradle": "faa7e8618f636a89",
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
-  "code:docs/SYSTEM_CONTRACTS.md": "1f8694b01b5d10a0",
+  "code:docs/SYSTEM_CONTRACTS.md": "ef28977fc974316d",
   "code:firebase.json": "900e217b868337c1",
   "code:firestore.rules": "04bb126ebdc6ccc6",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -1279,7 +1280,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:.github/workflows/check-16kb.yml": "aad711246a4158e2"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

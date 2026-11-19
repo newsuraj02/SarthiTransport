@@ -682,3 +682,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-18 -- Added manual CI workflow check-16kb.yml (debug apk, no versionCode) to find the non-16KB-aligned native dependency behind Google Play's '16 KB devices' warning; contract N38
 - changed (1): code:docs/SYSTEM_CONTRACTS.md
 - added (1): code:.github/workflows/check-16kb.yml
+
+## 2026-11-19 -- Recorded the 16 KB audit result in contract N38 (current source compliant, no code change)
+- changed (1): code:docs/SYSTEM_CONTRACTS.md
