@@ -209,6 +209,7 @@ const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const wa = require("./whatsappStatus");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
+const { planRoleSwitch, plainSnapshot } = require("./roleSwitch");
 const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
@@ -1734,6 +1735,59 @@ async function mobileHasRoleAccount(mobile, role) {
   const snap = await db.collection(role === "driver" ? "drivers" : "customers").doc(mobile).get();
   return snap.exists;
 }
+
+// ADMIN SWITCH ROLE (owner 2026-11-19: "a Switch button, only Admin can switch": Driver -> Customer and Customer -> Driver, one tap + a confirm in every row). All decisions are in
+// functions/roleSwitch.js (a Driver is only switched when nothing is left to settle: trips, money, fleet; a Customer becomes a Driver with an EMPTY KYC). Order of work, so a
+// failure never leaves the number half-moved or a ghost profile: (1) read + check everything, (2) copy the old profile into `roleSwitchLog`, (3) move the PIN login to the other role by changing its
+// e-mail (same uid, same PIN), (4) CREATE the new-role profile (this also makes firestore.rules refuse a stale old-role phone from re-creating its profile), (5) delete the old-role
+// profile and sign every device out. Written with the Admin SDK, so firestore.rules need no change.
+exports.adminSwitchRole = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { mobile, to } = request.data || {};
+  if (typeof mobile !== "string" || !/^\d{10}$/.test(mobile) || (to !== "customer" && to !== "driver")) throw new HttpsError("invalid-argument", "A 10-digit mobile and a target role are required.");
+  const fromRole = to === "customer" ? "driver" : "customer";
+  const fromCol = fromRole === "driver" ? "drivers" : "customers";
+  const toCol = to === "driver" ? "drivers" : "customers";
+  try {
+    const fromRef = db.collection(fromCol).doc(mobile), toRef = db.collection(toCol).doc(mobile);
+    const [fromSnap, toSnap] = await Promise.all([fromRef.get(), toRef.get()]);
+    let fromUser = null, toUser = null;
+    for (const [role, assign] of [[fromRole, (u) => { fromUser = u; }], [to, (u) => { toUser = u; }]]) {
+      try { assign(await getAuth().getUserByEmail(pinAuthEmail(mobile, role))); } catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+    }
+    const statusesOf = (snap) => snap.docs.map((x) => String(x.data().status || ""));
+    let openTrips = [], openBookings = [], pendingMoney = 0, fleetVehicles = 0;
+    if (fromRole === "driver") {
+      const [trips, wd, rc, fleet] = await Promise.all([
+        db.collection("bookings").where("driverMobile", "==", mobile).get(),
+        db.collection("withdrawals").where("driverMobile", "==", mobile).get(),
+        db.collection("rechargeRequests").where("driverMobile", "==", mobile).get(),
+        db.collection("fleetVehicles").where("ownerMobile", "==", mobile).get(),
+      ]);
+      openTrips = statusesOf(trips);
+      pendingMoney = [...wd.docs, ...rc.docs].filter((x) => x.data().status === "Pending").length;
+      fleetVehicles = fleet.size;
+    } else {
+      openBookings = statusesOf(await db.collection("bookings").where("customerMobile", "==", mobile).get());
+    }
+    const plan = planRoleSwitch({
+      to, mobile, from: { exists: fromSnap.exists || !!fromUser, data: fromSnap.exists ? fromSnap.data() : {} },
+      otherExists: toSnap.exists || !!toUser, openTrips, openBookings, pendingMoney, fleetVehicles,
+    });
+    if (!plan.ok) return { ok: false, reason: plan.reason, issues: plan.issues || [] };
+
+    const logRef = db.collection("roleSwitchLog").doc();
+    await logRef.set({ mobile, from: fromRole, to, by: request.auth.token.email || request.auth.uid, at: FieldValue.serverTimestamp(), oldProfile: plainSnapshot(fromSnap.exists ? fromSnap.data() : null) });
+    if (fromUser) await getAuth().updateUser(fromUser.uid, { email: pinAuthEmail(mobile, to) }); // first: if THIS fails nothing else has changed
+    await toRef.set({ ...plan.newDoc, createdAt: FieldValue.serverTimestamp(), switchedFromRole: fromRole, switchedAt: FieldValue.serverTimestamp() });
+    if (fromSnap.exists) await fromRef.delete();
+    if (fromUser) await getAuth().revokeRefreshTokens(fromUser.uid);
+    return { ok: true, to, logId: logRef.id, hadLogin: !!fromUser };
+  } catch (e) {
+    console.error("[adminSwitchRole] failed:", e.message);
+    return { ok: false, reason: "error", message: String(e.message || "").slice(0, 200) };
+  }
+});
 
 // ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12): Admin phones a driver; if the driver agrees, Admin presses Book. The trip is created ALREADY ASSIGNED to that
 // driver (status Ongoing, driver + vehicle filled in, pickup OTP made -- what the driver's own Accept would produce), so nobody else is rung and the ring code is not

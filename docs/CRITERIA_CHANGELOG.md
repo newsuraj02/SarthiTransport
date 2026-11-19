@@ -685,3 +685,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-19 -- Recorded the 16 KB audit result in contract N38 (current source compliant, no code change)
 - changed (1): code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-19 -- Admin Switch Role (Driver <-> Customer): callable adminSwitchRole + functions/roleSwitch.js + AdminSwitchRole button in Customer rows, Driver rows, Customer activity and Leads; contract N39, CLAUDE.md paragraph
+- changed (12): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminLeads.jsx#imports, code:src/AdminLeads.jsx#AdminLeads, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers
+- added (6): fn:adminSwitchRole, code:functions/index.js#fn:adminSwitchRole, code:src/firebaseClient.js#adminSwitchRole, code:functions/roleSwitch.js, code:scripts/serverTests/adminSwitchRole.cjs, code:src/AdminSwitchRole.jsx

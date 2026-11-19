@@ -9,6 +9,7 @@ import React, { useMemo, useState } from "react";
 import { Phone, ChevronDown, Trash2 } from "lucide-react";
 import { C, vehicleCategoryText } from "./App.jsx";
 import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer, calledAdmin, bookingPrefillFromTries } from "./customerFlow.js";
+import AdminSwitchRole from "./AdminSwitchRole.jsx";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const pad = (n) => String(n).padStart(2, "0");
@@ -156,6 +157,7 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
             )}
           </div>
         )}
+        <div className="px-3 pb-3" data-switch-role-slot="customer"><AdminSwitchRole mobile={c.mobile} name={c.name} role="customer" lang={lang} /></div>
         {onBookFor && (
           <div className="px-3 pb-3">
             <button type="button" data-flow-book-for onClick={() => onBookFor(bookingPrefillFromTries(c))} className="w-full rounded-lg py-2 text-xs font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>

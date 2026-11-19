@@ -22,6 +22,7 @@ import { useBackHandler } from "./backButton.js";
 import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx";
 import AdminLeads from "./AdminLeads.jsx";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
+import AdminSwitchRole from "./AdminSwitchRole.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
@@ -3387,6 +3388,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
               {d.fleetOwner && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.navy }}>{driverPlateText(d, lang)}</span>}
               {d.blacklisted && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.safety }}>⛔ {lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड"}</span>}
             </div>
+            <div className="mb-3" data-switch-role-slot="driver"><AdminSwitchRole mobile={d.mobile} name={d.name} role="driver" lang={lang} /></div>
             <div className="text-[11px] mb-1" style={{ color: C.ink }}>
               <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.mobile}</span>
             </div>
@@ -3747,6 +3749,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
 
               {expanded && (
                 <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="mb-3" data-switch-role-slot="customer"><AdminSwitchRole mobile={c.mobile} name={c.name} role="customer" lang={lang} /></div>
                   <div className="text-[11px] mb-3" style={{ color: C.ink }}>
                     <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span>
                   </div>

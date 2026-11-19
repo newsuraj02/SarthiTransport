@@ -11,6 +11,7 @@ import { C } from "./App.jsx";
 import { replaceDoc, removeDoc } from "./firestoreStore";
 import { LEAD_KINDS, leadKindLabel } from "./entryLink.js";
 import { cleanNameInput, digitsOnly } from "./inputRules.js";
+import AdminSwitchRole from "./AdminSwitchRole.jsx";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const pad = (n) => String(n).padStart(2, "0");
@@ -148,6 +149,7 @@ export default function AdminLeads({ customers, drivers, leads, leadClicks, lang
                       <span data-lead-kind-pill className="rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: KIND_COLOR[r.kind], color: "#FFFFFF" }}>{leadKindLabel(r.kind, lang)}</span>
                     </div>
                     <div data-lead-when className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{r.atMs ? `${dateText(r.atMs)} · ${timeText(r.atMs)}` : "—"}</div>
+                    {!r.manual && r.mobile && <div className="mt-2" data-switch-role-slot={r.type}><AdminSwitchRole mobile={r.mobile} name={r.name} role={r.type} lang={lang} compact /></div>}
                   </div>
                   {r.mobile && <a href={`tel:+91${r.mobile}`} data-lead-call className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#FFFFFF" }} aria-label="Call"><Phone size={16} /></a>}
                   {r.manual && <button type="button" data-lead-delete onClick={() => { if (window.confirm(T(lang, "Delete this enquiry?", "यह पूछताछ हटाएँ?", "ही चौकशी हटवायची?"))) removeDoc("leads", r.docId).catch((e) => console.error(e)); }} className="shrink-0 px-2 py-1 text-[11px] font-bold rounded-lg" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>✕</button>}

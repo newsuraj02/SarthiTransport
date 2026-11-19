@@ -252,6 +252,21 @@ export async function adminBookForCustomer(data) {
   }
 }
 
+// ADMIN SWITCH ROLE (owner 2026-11-19; functions/index.js: adminSwitchRole, decisions in functions/roleSwitch.js): moves a number between Driver and Customer. Never throws:
+// { ok, to?, reason?, issues? } -- reason "driver-not-settled" / "customer-has-booking" / "has-both-roles" / "not-found" / "error"; `issues` lists what a Driver still has to settle.
+export async function adminSwitchRole(mobile, to) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "adminSwitchRole");
+    const result = await call({ mobile, to });
+    return result.data;
+  } catch (e) {
+    console.error("[adminSwitchRole] callable failed", e);
+    return { ok: false, reason: "error", message: String(e?.message || "").slice(0, 200) };
+  }
+}
+
 // "Add new vehicle" in My Profile (owner 2026-11-09): asks the server to turn this driver into a fleet owner (functions/index.js: convertDriverToFleetOwner). Never throws:
 // { ok, already?, vehicleId?, reason? } -- reason is "trip-running" / "no-vehicle" / "blocked" / "no-profile" or a short error code.
 export async function convertToFleetOwner() {
