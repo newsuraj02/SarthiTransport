@@ -24,6 +24,15 @@ const LANG_ALIASES = {
   bengali: "bn", "বাংলা": "bn",
 };
 
+// PICKUP / DROP MUST BE A SPECIFIC PLACE (owner 2026-11-22: "Pune, India" / "Chennai, India" were accepted). MIRRORS src/placeSpecificity.js (an invariant compares them).
+const GENERIC_PLACE_TYPES = ["country", "administrative_area_level_1", "administrative_area_level_2", "administrative_area_level_3", "administrative_area_level_4", "administrative_area_level_5", "locality", "colloquial_area", "postal_town", "postal_code", "continent"];
+const SPECIFIC_PLACE_TYPES = ["establishment", "point_of_interest", "premise", "subpremise", "street_address", "route", "intersection", "neighborhood", "transit_station", "airport", "plus_code"];
+function isGenericPlaceTypes(types) {
+  if (!Array.isArray(types) || !types.length) return false;
+  if (!types.some((t) => GENERIC_PLACE_TYPES.includes(t))) return false;
+  return !types.some((t) => SPECIFIC_PLACE_TYPES.includes(t) || String(t).startsWith("sublocality"));
+}
+
 class GeoError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
@@ -87,7 +96,7 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     const qs = new URLSearchParams({ languageCode: lang, regionCode: "IN" });
     if (sessionToken) qs.set("sessionToken", sessionToken);
     const r = await fetchFn(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?${qs}`, {
-      headers: { "X-Goog-Api-Key": mapsKey(), "X-Goog-FieldMask": "id,displayName,formattedAddress,location" },
+      headers: { "X-Goog-Api-Key": mapsKey(), "X-Goog-FieldMask": "id,displayName,formattedAddress,location,types" },
     });
     const j = await r.json();
     if (!r.ok) throw new GeoError("not-found", j.error?.message || "Place not found");
@@ -97,6 +106,7 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
       address: await toScript(stripPlusCode(j.formattedAddress || ""), lang),
       lat: j.location?.latitude,
       lng: j.location?.longitude,
+      types: Array.isArray(j.types) ? j.types : [],
     };
     await cache.set(cacheId, { place, lang });
     return place;
@@ -133,7 +143,8 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     const hasPoint = typeof lat === "number" && typeof lng === "number";
     const list = await autocompleteOnce(input, lang, sessionToken, lat, lng, hasPoint ? { biasKm: BIAS_KM } : null);
     const seen = new Set(); const preds = [];
-    for (const p of list) { if (p?.placeId && !seen.has(p.placeId)) { seen.add(p.placeId); preds.push(p); } }
+    // A city / district / state / country on its own ("Pune, India") is not a pickup or drop point: left out. A prediction with no types is kept (cannot be judged).
+    for (const p of list) { if (p?.placeId && !seen.has(p.placeId) && !isGenericPlaceTypes(p.types)) { seen.add(p.placeId); preds.push(p); } }
     return Promise.all(preds.slice(0, MAX_RESULTS).map(async (p) => ({
       placeId: p.placeId,
       main: await toScript(stripPlusCode(p.structuredFormat?.mainText?.text || p.text?.text || ""), lang),
@@ -146,4 +157,4 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
   return { getAddress, getPlace, searchPlaces, toScript };
 }
 
-module.exports = { createAddressService, normalizeLang, resolveLang, GeoError, SUPPORTED, DEFAULT_LANG };
+module.exports = { createAddressService, normalizeLang, resolveLang, GeoError, SUPPORTED, DEFAULT_LANG, GENERIC_PLACE_TYPES, SPECIFIC_PLACE_TYPES, isGenericPlaceTypes };

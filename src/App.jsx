@@ -34,6 +34,7 @@ import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
+import { isGenericPlaceTypes, isGenericPlaceName } from "./placeSpecificity.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
@@ -2145,7 +2146,7 @@ export function formatDistanceExact(km, lang) {
 // Autocomplete suggestion, so pickupCoords/dropCoords (and therefore the
 // distance estimate and the booking's saved lat/lng) don't stay empty just
 // because they didn't pick from the dropdown.
-export function geocodeAddress(text) {
+export function geocodeAddress(text, specificOnly = false) {
   return new Promise((resolve) => {
     if (!window.google?.maps?.Geocoder || !text?.trim()) { resolve(null); return; }
     // Biases (doesn't hard-restrict) results toward the app's actual
@@ -2166,6 +2167,8 @@ export function geocodeAddress(text) {
       { address: text, componentRestrictions: { country: "in" }, bounds: bias },
       (results, status) => {
         const loc = status === "OK" && results?.[0]?.geometry?.location;
+        // Pickup / Drop must be a SPECIFIC place (owner 2026-11-22): typed text that Google reads as only a city / district / state ("Pune, India") is not accepted.
+        if (loc && specificOnly && isGenericPlaceTypes(results[0].types)) { resolve({ generic: true }); return; }
         resolve(loc ? { lat: loc.lat(), lng: loc.lng() } : null);
       }
     );
@@ -6699,7 +6702,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
         (preds, status) => {
           if (cancelled) return;
           if (status !== "OK" || !preds) { setPredictions([]); return; }
-          const withKm = preds.map((q) => ({ ...q, distanceKm: typeof q.distance_meters === "number" ? Math.round(q.distance_meters / 100) / 10 : null }));
+          const withKm = preds.filter((q) => citiesOnly || !isGenericPlaceTypes(q.types)).map((q) => ({ ...q, distanceKm: typeof q.distance_meters === "number" ? Math.round(q.distance_meters / 100) / 10 : null }));
           setPredictions(withKm);
         }
       );
@@ -7270,16 +7273,25 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // the typed text after a short pause so the distance estimate (and the
   // coordinates actually saved on the booking) are still based on the real
   // location, not left empty or guessed.
+  // PICKUP / DROP MUST BE A SPECIFIC PLACE (owner 2026-11-22): typed text Google reads as only a city / district / state ("Pune, India") is NOT accepted --
+  // the coordinates stay empty (so the form cannot go on) and `pickupTooGeneric` / `dropTooGeneric` show a note asking for an area, landmark, building or street.
+  const [pickupTooGeneric, setPickupTooGeneric] = useState(false);
+  const [dropTooGeneric, setDropTooGeneric] = useState(false);
   useEffect(() => {
     if (!mapsReady || pickupCoords || !pickup.trim()) return;
-    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    const t = setTimeout(() => { geocodeAddress(pickup, true).then((loc) => { if (loc && loc.generic) setPickupTooGeneric(true); else if (loc) { setPickupTooGeneric(false); setPickupCoords(loc); } }); }, 900);
     return () => clearTimeout(t);
   }, [pickup, pickupCoords, mapsReady]);
   useEffect(() => {
     if (!mapsReady || dropCoords || !drop.trim()) return;
-    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    const t = setTimeout(() => { geocodeAddress(drop, true).then((loc) => { if (loc && loc.generic) setDropTooGeneric(true); else if (loc) { setDropTooGeneric(false); setDropCoords(loc); } }); }, 900);
     return () => clearTimeout(t);
   }, [drop, dropCoords, mapsReady]);
+  useEffect(() => { if (!pickup.trim() || pickupCoords) setPickupTooGeneric(false); }, [pickup, pickupCoords]);
+  useEffect(() => { if (!drop.trim() || dropCoords) setDropTooGeneric(false); }, [drop, dropCoords]);
+  const tooGenericNote = lang === "en" ? "Please choose a specific place -- an area, landmark, building or street -- not just a city."
+    : lang === "mr" ? "कृपया नेमकी जागा निवडा — परिसर, लँडमार्क, इमारत किंवा रस्ता — फक्त शहर नाही."
+    : "कृपया सटीक जगह चुनें — इलाका, लैंडमार्क, बिल्डिंग या सड़क — सिर्फ़ शहर नहीं।";
 
   // Customer's own live position for the nearby-vehicles map at the top of
   // this page — polled every 5s (repeated one-shot getCurrentPosition,
@@ -7696,6 +7708,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               biasLat={customerLocation?.lat ?? undefined} biasLng={customerLocation?.lng ?? undefined}
               ref={pickupFieldRef}
             />
+            {pickupTooGeneric && <p data-place-too-generic="pickup" className="text-[11px] font-bold mt-1 px-1" style={{ color: C.safety }}>{tooGenericNote}</p>}
           </div>
           {/* Separate box next to Pickup -- blue/white blink (see
               .current-location-blink, index.css) until tapped or Pickup
@@ -7759,6 +7772,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           biasLat={(pickupCoords?.lat ?? customerLocation?.lat) ?? undefined} biasLng={(pickupCoords?.lng ?? customerLocation?.lng) ?? undefined}
           ref={dropFieldRef}
         />
+        {dropTooGeneric && <p data-place-too-generic="drop" className="text-[11px] font-bold mt-1 px-1" style={{ color: C.safety }}>{tooGenericNote}</p>}
         </div>
         </SmoothCollapse>
 
@@ -8794,7 +8808,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   const seenPickupNames = new Set();
   for (const b of myBookings) {
     const name = b.pickup?.trim();
-    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null) continue;
+    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null || isGenericPlaceName(name)) continue;
     seenPickupNames.add(name);
     recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
     if (recentPickups.length >= 5) break;
@@ -8804,7 +8818,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   const seenTripKeys = new Set();
   for (const b of myBookings) {
     const pickupName = b.pickup?.trim(), dropName = b.drop?.trim();
-    if (!pickupName || !dropName || b.pickupLat == null || b.pickupLng == null || b.dropLat == null || b.dropLng == null) continue;
+    if (!pickupName || !dropName || b.pickupLat == null || b.pickupLng == null || b.dropLat == null || b.dropLng == null || isGenericPlaceName(pickupName) || isGenericPlaceName(dropName)) continue;
     // Same trip = same place ids (text differs by language); text only for older bookings without ids.
     const key = `${b.pickupPlaceId || pickupName}|${b.dropPlaceId || dropName}`;
     if (seenTripKeys.has(key)) continue;
@@ -8821,7 +8835,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   outer: for (const b of myBookings) {
     for (const [name0, lat, lng] of [[b.pickup, b.pickupLat, b.pickupLng], [b.drop, b.dropLat, b.dropLng]]) {
       const name = name0?.trim();
-      if (!name || seenPlaceNames.has(name) || lat == null || lng == null) continue;
+      if (!name || seenPlaceNames.has(name) || lat == null || lng == null || isGenericPlaceName(name)) continue;
       seenPlaceNames.add(name);
       recentPlaces.push({ name, lat, lng });
       if (recentPlaces.length >= 8) break outer;

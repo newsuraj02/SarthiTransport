@@ -695,3 +695,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-22 -- contract A6 wording: 15 km Current radius
 - changed (1): code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-22 -- Pickup/Drop must be a specific place: placeSpecificity.js + addressLang.js (types filter) + customer typed-text check + recents filter; contract N41, CLAUDE.md paragraph
+- changed (11): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:functions/addressLang.js#exportsList, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#geocodeAddress, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking, code:src/App.jsx#CustomerApp
+- added (4): code:functions/addressLang.js#GENERIC_PLACE_TYPES, code:functions/addressLang.js#SPECIFIC_PLACE_TYPES, code:functions/addressLang.js#isGenericPlaceTypes, code:src/placeSpecificity.js
