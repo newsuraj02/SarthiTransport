@@ -35,6 +35,7 @@ import { useGoogleMaps } from "./googleMapsContext.jsx";
 import CategoryVehicleArt from "./vehicleArt.jsx";
 import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
 import { isGenericPlaceTypes, isGenericPlaceName } from "./placeSpecificity.js";
+import { isInsidePune } from "./serviceArea.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
@@ -7277,9 +7278,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // the coordinates stay empty (so the form cannot go on) and `pickupTooGeneric` / `dropTooGeneric` show a note asking for an area, landmark, building or street.
   const [pickupTooGeneric, setPickupTooGeneric] = useState(false);
   const [dropTooGeneric, setDropTooGeneric] = useState(false);
+  // PICKUP ONLY INSIDE PUNE (owner 2026-11-22, src/serviceArea.js): a Pickup outside Pune is not accepted (its coordinates stay empty, so the form cannot go on) and
+  // `pickupOutsidePune` shows the "currently unavailable" note. Drop is never checked (anywhere in India).
+  const [pickupOutsidePune, setPickupOutsidePune] = useState(false);
   useEffect(() => {
     if (!mapsReady || pickupCoords || !pickup.trim()) return;
-    const t = setTimeout(() => { geocodeAddress(pickup, true).then((loc) => { if (loc && loc.generic) setPickupTooGeneric(true); else if (loc) { setPickupTooGeneric(false); setPickupCoords(loc); } }); }, 900);
+    const t = setTimeout(() => { geocodeAddress(pickup, true).then((loc) => { if (loc && loc.generic) setPickupTooGeneric(true); else if (loc && !isInsidePune(loc.lat, loc.lng)) { setPickupTooGeneric(false); setPickupOutsidePune(true); } else if (loc) { setPickupTooGeneric(false); setPickupOutsidePune(false); setPickupCoords(loc); } }); }, 900);
     return () => clearTimeout(t);
   }, [pickup, pickupCoords, mapsReady]);
   useEffect(() => {
@@ -7287,11 +7291,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     const t = setTimeout(() => { geocodeAddress(drop, true).then((loc) => { if (loc && loc.generic) setDropTooGeneric(true); else if (loc) { setDropTooGeneric(false); setDropCoords(loc); } }); }, 900);
     return () => clearTimeout(t);
   }, [drop, dropCoords, mapsReady]);
-  useEffect(() => { if (!pickup.trim() || pickupCoords) setPickupTooGeneric(false); }, [pickup, pickupCoords]);
+  useEffect(() => { if (!pickup.trim() || pickupCoords) { setPickupTooGeneric(false); setPickupOutsidePune(false); } }, [pickup, pickupCoords]);
   useEffect(() => { if (!drop.trim() || dropCoords) setDropTooGeneric(false); }, [drop, dropCoords]);
   const tooGenericNote = lang === "en" ? "Please choose a specific place -- an area, landmark, building or street -- not just a city."
     : lang === "mr" ? "कृपया नेमकी जागा निवडा — परिसर, लँडमार्क, इमारत किंवा रस्ता — फक्त शहर नाही."
     : "कृपया सटीक जगह चुनें — इलाका, लैंडमार्क, बिल्डिंग या सड़क — सिर्फ़ शहर नहीं।";
+  const outsidePuneNote = lang === "en" ? "Currently unavailable here -- pickups are accepted only inside Pune for now."
+    : lang === "mr" ? "सध्या येथे उपलब्ध नाही — सध्या फक्त पुण्यातील पिकअप स्वीकारले जातात."
+    : "फ़िलहाल यहाँ उपलब्ध नहीं — अभी सिर्फ़ पुणे के अंदर से पिकअप लिया जाता है।";
 
   // Customer's own live position for the nearby-vehicles map at the top of
   // this page — polled every 5s (repeated one-shot getCurrentPosition,
@@ -7352,6 +7359,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     else { setActiveField(null); requestFocus("date"); } // no weight step any more: Pickup + Drop lead straight to the vehicle list (keyboard down)
   };
   const onPickupPlaceSelected = (p) => {
+    // Outside Pune: keep what was chosen on screen with the "currently unavailable" note, but accept no coordinates and do not move on.
+    if (!isInsidePune(p.lat, p.lng)) { setPickup(p.name); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false; setFromTrip(false); setPickupTooGeneric(false); setPickupOutsidePune(true); return; }
+    setPickupOutsidePune(false);
     setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
     // Owner 2026-10-31: once BOTH places were explicitly chosen (suggestion / current location / map tap -- not just typed
     // text) the boxes tuck away exactly like after a recent-trip tap (`fromTrip` / `tripHidden`), leaving the vehicle list.
@@ -7425,7 +7435,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     clearAfterDrop();
   };
   const onPickupTyped = (text) => {
-    setPickup(text); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false; setFromTrip(false);
+    setPickup(text); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false; setFromTrip(false); setPickupOutsidePune(false);
     setBookedMsg(false);
     clearAfterPickup();
   };
@@ -7708,6 +7718,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               biasLat={customerLocation?.lat ?? undefined} biasLng={customerLocation?.lng ?? undefined}
               ref={pickupFieldRef}
             />
+            {pickupOutsidePune && <p data-pickup-outside-pune className="text-[11px] font-bold mt-1 px-1" style={{ color: C.safety }}>{outsidePuneNote}</p>}
             {pickupTooGeneric && <p data-place-too-generic="pickup" className="text-[11px] font-bold mt-1 px-1" style={{ color: C.safety }}>{tooGenericNote}</p>}
           </div>
           {/* Separate box next to Pickup -- blue/white blink (see
@@ -7876,9 +7887,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           and "N min away" (measured from the customer's current location); the FARE appears once Pickup + Drop are chosen. Tapping a row picks the category, moves it to the top and
           shows "Book now" right under it, which leads to screen 2 (Pickup and Drop). Category booking, the ring and every fare are unchanged. */}
       <div className="px-5 pt-3 pb-4 space-y-2.5">
-                  {/* LIST HEADER (owner 2026-11-18: "a small header of 'Choose vehicle according to the requirement' and 'zarurat ke hissab se gaadi book kre' above the vehicle list"): one small line in the app's language. */}
+                  {/* LIST HEADER (owner 2026-11-18 added a "Choose vehicle according to the requirement" line; owner 2026-11-22: "Replace the note 'zarurat ke hisaab se gaadi chune' with 'Pickup' as header"): the header over the vehicle list now reads "Pickup" (hi / mr "पिकअप"). */}
                   <p data-list-header className="text-sm font-extrabold" style={{ color: C.ink }}>
-                    {lang === "en" ? "Choose vehicle according to the requirement" : lang === "mr" ? "गरजेनुसार गाडी बुक करा" : "ज़रूरत के हिसाब से गाड़ी बुक करें"}
+                    {lang === "en" ? "Pickup" : "पिकअप"}
                   </p>
                   {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
@@ -8808,7 +8819,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   const seenPickupNames = new Set();
   for (const b of myBookings) {
     const name = b.pickup?.trim();
-    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null || isGenericPlaceName(name)) continue;
+    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null || isGenericPlaceName(name) || !isInsidePune(b.pickupLat, b.pickupLng)) continue;
     seenPickupNames.add(name);
     recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
     if (recentPickups.length >= 5) break;
@@ -8818,7 +8829,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   const seenTripKeys = new Set();
   for (const b of myBookings) {
     const pickupName = b.pickup?.trim(), dropName = b.drop?.trim();
-    if (!pickupName || !dropName || b.pickupLat == null || b.pickupLng == null || b.dropLat == null || b.dropLng == null || isGenericPlaceName(pickupName) || isGenericPlaceName(dropName)) continue;
+    if (!pickupName || !dropName || b.pickupLat == null || b.pickupLng == null || b.dropLat == null || b.dropLng == null || isGenericPlaceName(pickupName) || isGenericPlaceName(dropName) || !isInsidePune(b.pickupLat, b.pickupLng)) continue;
     // Same trip = same place ids (text differs by language); text only for older bookings without ids.
     const key = `${b.pickupPlaceId || pickupName}|${b.dropPlaceId || dropName}`;
     if (seenTripKeys.has(key)) continue;
@@ -13194,6 +13205,8 @@ export default function App() {
   const requestByCategory = ({ pickup, drop, tierMaxKg, listCategory, listCategoryKg, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     // BLOCKED CUSTOMER (owner 2026-11-22): Admin's Block on the Customers list stops every booking; firestore.rules refuse the booking too.
     if (customer?.blacklisted) return lang === "en" ? "Your account has been blocked by Apna Transport -- you cannot book vehicles. Please call us." : lang === "mr" ? "तुमचे खाते अपना ट्रान्सपोर्टने ब्लॉक केले आहे — तुम्ही गाडी बुक करू शकत नाही. कृपया आम्हाला फोन करा." : "आपका अकाउंट अपना ट्रांसपोर्ट द्वारा ब्लॉक कर दिया गया है — आप गाड़ी बुक नहीं कर सकते। कृपया हमें फोन करें।";
+    // PICKUP ONLY INSIDE PUNE (owner 2026-11-22, src/serviceArea.js): the screen already refuses an outside pickup; this is the last check before the request goes out.
+    if (!isInsidePune(pickupLat, pickupLng)) return lang === "en" ? "Currently unavailable -- pickups are accepted only inside Pune for now." : lang === "mr" ? "सध्या उपलब्ध नाही — सध्या फक्त पुण्यातील पिकअप स्वीकारले जातात." : "फ़िलहाल उपलब्ध नहीं — अभी सिर्फ़ पुणे के अंदर से पिकअप लिया जाता है।";
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
