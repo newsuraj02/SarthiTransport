@@ -699,3 +699,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-22 -- Pickup/Drop must be a specific place: placeSpecificity.js + addressLang.js (types filter) + customer typed-text check + recents filter; contract N41, CLAUDE.md paragraph
 - changed (11): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:functions/addressLang.js#exportsList, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#geocodeAddress, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking, code:src/App.jsx#CustomerApp
 - added (4): code:functions/addressLang.js#GENERIC_PLACE_TYPES, code:functions/addressLang.js#SPECIFIC_PLACE_TYPES, code:functions/addressLang.js#isGenericPlaceTypes, code:src/placeSpecificity.js
+
+## 2026-11-22 -- Block/Unblock for customers: customers.blacklisted, Admin button, requestByCategory refusal, firestore.rules (booking create, flag protection, delete); contract N42, CLAUDE.md paragraph, rules test customerBlock.mjs
+- changed (9): file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminCustomers, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#CustomerApp, code:src/App.jsx#App
+- added (1): code:scripts/rulesTest/customerBlock.mjs
+
+## 2026-11-22 -- re-pointed two older checks (customer rules text, customer row border) to the blocked-customer wording
+- changed (1): code:scripts/verifyInvariants.mjs#checks

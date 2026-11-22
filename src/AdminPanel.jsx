@@ -3623,7 +3623,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
 // Read-only oversight of customer registrations — name, address, KYC info.
 // Customers are never gated by admin approval (only drivers are), so this
 // is visibility only, not a verification queue.
-function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
+function AdminCustomers({ customers, bookings, lang, deleteCustomer, toggleCustomerBlock }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [statusExpandedId, setStatusExpandedId] = useState(null);
@@ -3698,7 +3698,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           const currentStatusMeta = latestRide ? (statusMeta[latestRide.status] || statusMeta.Cancelled) : noActivityMeta;
           const called = calledCustomerToday(c.mobile);
           return (
-            <div key={c.mobile} data-admin-list-row className="rounded-lg p-3" style={{ border: `2px solid ${C.line}`, opacity: called ? 0.6 : 1 }}>
+            <div key={c.mobile} data-admin-list-row className="rounded-lg p-3" style={{ border: `2px solid ${c.blacklisted ? C.safety : C.line}`, opacity: called ? 0.6 : 1 }}>
               <div className="flex items-center gap-2.5">
                 <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
                 <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
@@ -3780,7 +3780,9 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                       })}
                     </div>
                   )}
-                  <div className="flex items-center justify-end gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="flex items-center justify-between gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                    {c.blacklisted ? <span data-customer-blocked-note className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — cannot book" : lang === "mr" ? "ब्लॉक्ड — बुकिंग करता येणार नाही" : "ब्लॉक्ड — बुकिंग नहीं कर सकते"}</span> : <span />}
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
                     {confirmDeleteId === c.mobile ? (
                       <>
                         <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
@@ -3815,11 +3817,15 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                           className="text-sm font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-white" style={{ background: C.success }}>
                           <MessageCircle size={14} /> {lang === "en" ? "Redirect to Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅपकडे पाठवा" : "ड्राइवर ऐप पर भेजें"}
                         </a>
+                        <button data-customer-block-btn={c.blacklisted ? "unblock" : "block"} onClick={() => toggleCustomerBlock(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: c.blacklisted ? C.success : C.safety }}>
+                          {c.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
+                        </button>
                         <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
                           {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
                         </button>
                       </>
                     )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -4713,7 +4719,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ waStatus, flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
@@ -4753,7 +4759,7 @@ export function AdminPanel({ waStatus, flowSessions, deleteCustomerFlowSessions,
             topExtra={<button data-all-transporters-btn onClick={() => setShowTransporters(true)} className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
               <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
             </button>} />)}
-      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
+      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock} />}
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}

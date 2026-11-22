@@ -1,0 +1,31 @@
+// BLOCKED CUSTOMER (owner 2026-11-22: "Block / Unblock for customers too, same as drivers") -- Firestore rules regression test, run in the local emulator like
+// roleLock.mjs (see access.mjs for how to run it). Every line must say "ok".
+import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
+import { readFileSync } from "node:fs";
+import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+const env = await initializeTestEnvironment({ projectId: "demo-test", firestore: { rules: readFileSync(new URL("../../firestore.rules", import.meta.url).pathname, "utf8"), host: "127.0.0.1", port: 8089 } });
+const memo = new Map(); const fs = (k, mk) => { if (!memo.has(k)) memo.set(k, mk().firestore()); return memo.get(k); };
+const cus = (m) => fs("c" + m, () => env.authenticatedContext("c" + m, { email: `${m}@customer.apnatransport.local` }));
+const adm = () => fs("a1", () => env.authenticatedContext("a1", { admin: true }));
+const seed = async (docs) => env.withSecurityRulesDisabled(async (c) => { const f = c.firestore(); for (const [col, id, d] of docs) await setDoc(doc(f, col, id), d); });
+const out = []; const t = async (name, docs, fn, expectOk) => { await env.clearFirestore(); await seed(docs); let ok; try { await fn(); ok = true; } catch { ok = false; } out.push([ok === expectOk ? "ok  " : "BUG?", name, ok ? "allowed" : "denied"]); };
+const M = "9100000001";
+const OK = [["customers", M, { mobile: M, name: "Rahul" }]], BLOCKED = [["customers", M, { mobile: M, name: "Rahul", blacklisted: true }]];
+const bk = { customerMobile: M, pickup: "A", drop: "B", status: "AwaitingDriver", declinedBy: [] };
+await t("normal customer creates a booking", OK, () => setDoc(doc(cus(M), "bookings", "B1"), bk), true);
+await t("customer with no profile document yet creates a booking (unchanged)", [], () => setDoc(doc(cus(M), "bookings", "B1"), bk), true);
+await t("BLOCKED customer cannot create a booking", BLOCKED, () => setDoc(doc(cus(M), "bookings", "B1"), bk), false);
+await t("an unblocked customer (blacklisted false) books", [["customers", M, { mobile: M, name: "R", blacklisted: false }]], () => setDoc(doc(cus(M), "bookings", "B1"), bk), true);
+await t("Admin blocks a customer", OK, () => updateDoc(doc(adm(), "customers", M), { blacklisted: true }), true);
+await t("Admin unblocks a customer", BLOCKED, () => updateDoc(doc(adm(), "customers", M), { blacklisted: false }), true);
+await t("customer cannot block themselves / set the flag", OK, () => updateDoc(doc(cus(M), "customers", M), { blacklisted: true }), false);
+await t("BLOCKED customer cannot clear their own block", BLOCKED, () => updateDoc(doc(cus(M), "customers", M), { blacklisted: false }), false);
+await t("BLOCKED customer cannot remove the flag by overwriting the profile", BLOCKED, () => setDoc(doc(cus(M), "customers", M), { mobile: M, name: "Rahul" }), false);
+await t("BLOCKED customer can still edit other profile fields", BLOCKED, () => updateDoc(doc(cus(M), "customers", M), { name: "Rahul K", blacklisted: true }), true);
+await t("normal customer still edits own profile", OK, () => updateDoc(doc(cus(M), "customers", M), { name: "Rahul K" }), true);
+await t("BLOCKED customer cannot delete their profile to escape the block", BLOCKED, () => deleteDoc(doc(cus(M), "customers", M)), false);
+await t("normal customer may still delete own profile (unchanged)", OK, () => deleteDoc(doc(cus(M), "customers", M)), true);
+await t("Admin may delete a blocked customer", BLOCKED, () => deleteDoc(doc(adm(), "customers", M)), true);
+await t("new customer cannot create a profile that is already blocked", [], () => setDoc(doc(cus(M), "customers", M), { mobile: M, name: "R", blacklisted: true }), false);
+await t("new customer creates a normal profile", [], () => setDoc(doc(cus(M), "customers", M), { mobile: M, name: "R" }), true);
+console.log(out.map((r) => r.join("  ")).join("\n")); await env.cleanup(); process.exit(out.some((r) => r[0] !== "ok  ") ? 1 : 0);

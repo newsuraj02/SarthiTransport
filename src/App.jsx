@@ -9162,6 +9162,12 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
             <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
         )}
+        {customerProfile?.blacklisted && (
+          <div data-customer-blocked className="rounded-lg p-3 mx-3 my-2 flex items-center gap-2" style={{ background: C.safety }}>
+            <XCircle size={15} color="#FFFFFF" />
+            <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by Apna Transport -- you cannot book vehicles. Please call us." : lang === "mr" ? "तुमचे खाते अपना ट्रान्सपोर्टने ब्लॉक केले आहे — तुम्ही गाडी बुक करू शकत नाही. कृपया आम्हाला फोन करा." : "आपका अकाउंट अपना ट्रांसपोर्ट द्वारा ब्लॉक कर दिया गया है — आप गाड़ी बुक नहीं कर सकते। कृपया हमें फोन करें।"}</span>
+          </div>
+        )}
         {rideView === "current" ? (
           activeBooking && !addingAnother ? (
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
@@ -13186,6 +13192,8 @@ export default function App() {
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
   const requestByCategory = ({ pickup, drop, tierMaxKg, listCategory, listCategoryKg, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
+    // BLOCKED CUSTOMER (owner 2026-11-22): Admin's Block on the Customers list stops every booking; firestore.rules refuse the booking too.
+    if (customer?.blacklisted) return lang === "en" ? "Your account has been blocked by Apna Transport -- you cannot book vehicles. Please call us." : lang === "mr" ? "तुमचे खाते अपना ट्रान्सपोर्टने ब्लॉक केले आहे — तुम्ही गाडी बुक करू शकत नाही. कृपया आम्हाला फोन करा." : "आपका अकाउंट अपना ट्रांसपोर्ट द्वारा ब्लॉक कर दिया गया है — आप गाड़ी बुक नहीं कर सकते। कृपया हमें फोन करें।";
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -13526,6 +13534,12 @@ export default function App() {
   };
   const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
   const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
+  // Block / Unblock a CUSTOMER (owner 2026-11-22, same as a driver's): a blocked customer cannot book (requestByCategory + firestore.rules).
+  const toggleCustomerBlock = (mobile) => {
+    const c = allCustomers.find((x) => x.mobile === mobile || x.id === mobile);
+    if (!c) return;
+    patchDoc("customers", c.mobile || mobile, { blacklisted: !c.blacklisted }).catch((e) => console.error(e));
+  };
   const deleteAdminNotification = (id) => removeDoc("adminNotifications", id).catch((e) => console.error(e));
   // mobile is threaded through from SosScreen so AdminAlerts can actually
   // reply to whoever raised this -- alerts previously carried no way to
@@ -13842,7 +13856,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} leads={leads} leadClicks={leadClicks} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} leads={leads} leadClicks={leadClicks} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
