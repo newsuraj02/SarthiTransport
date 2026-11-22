@@ -267,6 +267,21 @@ export async function adminSwitchRole(mobile, to) {
   }
 }
 
+// ADMIN DELETE ACCOUNT (owner 2026-11-22: "once deleted, delete it from the system (even in firebase backend)"; functions/index.js: adminDeleteAccount): removes the login, the
+// profile and the activity of a customer / driver for real. Never throws: { ok, removed?, reason? } -- reason "trip-running" / "not-found" / "not-admin" or a short error code.
+export async function adminDeleteAccount(mobile, role) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "adminDeleteAccount");
+    const result = await call({ mobile, role });
+    return result.data;
+  } catch (e) {
+    console.error("[adminDeleteAccount] callable failed", e);
+    return { ok: false, reason: "error", message: String(e?.message || "").slice(0, 200) };
+  }
+}
+
 // "Add new vehicle" in My Profile (owner 2026-11-09): asks the server to turn this driver into a fleet owner (functions/index.js: convertDriverToFleetOwner). Never throws:
 // { ok, already?, vehicleId?, reason? } -- reason is "trip-running" / "no-vehicle" / "blocked" / "no-profile" or a short error code.
 export async function convertToFleetOwner() {

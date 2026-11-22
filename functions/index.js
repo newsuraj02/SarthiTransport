@@ -1789,6 +1789,57 @@ exports.adminSwitchRole = onCall({ region: "asia-south1" }, async (request) => {
   }
 });
 
+// ADMIN DELETE ACCOUNT, FOR REAL (owner 2026-11-22: "even if I delete it keeps reappearing in the list. So once deleted, delete it from the system (even in firebase backend). Never show that profile on the app").
+// CAUSE of the reappearing: the Delete button only removed the Firestore profile; the PIN login (Firebase Auth) stayed, so the person's phone logged straight back in and
+// re-made the profile (a driver's app creates a blank profile on every login, a customer's app re-saves it). Now ONE Admin-only callable removes the login, the profile and the
+// activity, and leaves a small tombstone (`deletedAccounts/{mobile}`: the time only, no personal data) so a phone that is still signed in for up to an hour on an old token can
+// no longer re-create the profile (firestore.rules `notStaleSession`). They can only come back by signing up again. Bookings stay (the other side's history).
+// Refused while the person has an unfinished trip / booking (cancel or finish it first).
+exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { mobile, role } = request.data || {};
+  if (typeof mobile !== "string" || !/^\d{10}$/.test(mobile) || (role !== "customer" && role !== "driver")) throw new HttpsError("invalid-argument", "A 10-digit mobile and a role are required.");
+  const col = role === "driver" ? "drivers" : "customers";
+  const other = role === "driver" ? "customer" : "driver";
+  try {
+    const profileRef = db.collection(col).doc(mobile);
+    const profile = await profileRef.get();
+    const bookings = await db.collection("bookings").where(role === "driver" ? "driverMobile" : "customerMobile", "==", mobile).get();
+    if (bookings.docs.some((x) => !["Completed", "Cancelled"].includes(String(x.data().status || "")))) return { ok: false, reason: "trip-running" };
+    let loginUser = null;
+    try { loginUser = await getAuth().getUserByEmail(pinAuthEmail(mobile, role)); } catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+    if (!profile.exists && !loginUser) return { ok: false, reason: "not-found" };
+
+    // 1. the login first: nothing can sign in again, and every device is signed out
+    if (loginUser) { await getAuth().revokeRefreshTokens(loginUser.uid); await getAuth().deleteUser(loginUser.uid); }
+    // an older phone-number login (no PIN account) goes too, but only when the number has no profile in the OTHER role
+    try {
+      const otherProfile = await db.collection(role === "driver" ? "customers" : "drivers").doc(mobile).get();
+      if (!otherProfile.exists) {
+        let otherLogin = null;
+        try { otherLogin = await getAuth().getUserByEmail(pinAuthEmail(mobile, other)); } catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+        if (!otherLogin) { try { const ph = await getAuth().getUserByPhoneNumber(`+91${mobile}`); await getAuth().deleteUser(ph.uid); } catch (e) { if (e.code !== "auth/user-not-found") throw e; } }
+      }
+    } catch (e) { console.error("[adminDeleteAccount] phone login cleanup:", e.message); }
+    // 2. the tombstone BEFORE the profile goes, so a stale phone cannot slip in between
+    await db.collection("deletedAccounts").doc(mobile).set({ deletedAtSec: Math.floor(Date.now() / 1000), role, at: FieldValue.serverTimestamp() });
+    // 3. the profile and what hangs off it
+    if (profile.exists) await profileRef.delete();
+    const gone = [];
+    if (role === "customer") { const fl = await db.collection("customerFlow").where("customerMobile", "==", mobile).get(); fl.docs.forEach((x) => gone.push(x.ref)); }
+    if (role === "driver") {
+      gone.push(db.collection("whatsappStatus").doc(mobile));
+      const fv = await db.collection("fleetVehicles").where("ownerMobile", "==", mobile).get();
+      fv.docs.forEach((x) => { gone.push(x.ref); gone.push(db.collection("fleetVehiclePrivate").doc(x.id)); });
+    }
+    for (const ref of gone) { try { await ref.delete(); } catch (e) { console.error("[adminDeleteAccount] cleanup:", e.message); } }
+    return { ok: true, role, hadLogin: !!loginUser, removed: gone.length };
+  } catch (e) {
+    console.error("[adminDeleteAccount] failed:", e.message);
+    return { ok: false, reason: "error", message: String(e.message || "").slice(0, 200) };
+  }
+});
+
 // ADMIN BOOKS ON BEHALF OF A CUSTOMER (owner 2026-11-12): Admin phones a driver; if the driver agrees, Admin presses Book. The trip is created ALREADY ASSIGNED to that
 // driver (status Ongoing, driver + vehicle filled in, pickup OTP made -- what the driver's own Accept would produce), so nobody else is rung and the ring code is not
 // involved at all. The customer pays the driver directly (`paymentBy: "customer"`); nothing is charged to Admin. Decisions live in functions/adminBooking.js.

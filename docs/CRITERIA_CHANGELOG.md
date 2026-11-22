@@ -706,3 +706,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-22 -- re-pointed two older checks (customer rules text, customer row border) to the blocked-customer wording
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-22 -- Admin Delete now removes the login + profile + activity for real (adminDeleteAccount), tombstone + notStaleSession rules; owner 2026-11-22
+- changed (8): file:firestore.rules, file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#App
+- added (5): fn:adminDeleteAccount, code:functions/index.js#fn:adminDeleteAccount, code:src/firebaseClient.js#adminDeleteAccount, code:scripts/rulesTest/deletedAccount.mjs, code:scripts/serverTests/adminDeleteAccount.cjs
+
+## 2026-11-22 -- re-pointed role-lock invariant (verifyInvariants only)
+- changed (1): code:scripts/verifyInvariants.mjs#checks

@@ -38,6 +38,13 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && request.auth.token.admin == true;
     }
+    // DELETED ACCOUNT (owner 2026-11-22: a deleted profile kept reappearing): the Admin-only callable adminDeleteAccount removes the login + profile and writes
+    // deletedAccounts/{mobile}.deletedAtSec. A phone that is still signed in on a token issued BEFORE that moment can no longer re-create the profile, a booking or an activity
+    // record; a login made AFTER it (the person signing up again) is fine.
+    function notStaleSession(mobile) {
+      return !exists(/databases/$(database)/documents/deletedAccounts/$(mobile)) ||
+        request.auth.token.auth_time > get(/databases/$(database)/documents/deletedAccounts/$(mobile)).data.deletedAtSec;
+    }
     // BLOCKED CUSTOMER (owner 2026-11-22: "Block / Unblock for customers too", same as drivers): Admin sets customers/{mobile}.blacklisted. A blocked customer cannot
     // create a booking (bookings create below), cannot clear the flag on their own profile and cannot delete the profile to escape it (customers rules below).
     function customerIsBlocked(mobile) {
@@ -133,7 +140,7 @@ service cloud.firestore {
       // ONE ROLE PER MOBILE NUMBER (owner 2026-11-12): a number that already has a customers/{mobile} profile can't CREATE a driver profile (Admin may).
       // This is the server-side backstop behind the app's own check (functions checkMobileRegistered), so an older or hand-made client can't slip a second role in.
       // Only CREATE is limited: numbers that already hold both profiles keep working (updates / deletes are unchanged).
-      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/customers/$(mobile)) && request.resource.data.get('fleetOwner', false) != true) || isAdmin();
+      allow create: if (isOwnPhone(mobile) && notStaleSession(mobile) && !exists(/databases/$(database)/documents/customers/$(mobile)) && request.resource.data.get('fleetOwner', false) != true) || isAdmin();
       // The KYC-portal branch (vehicleSpec == null) stays unconditional --
       // it's the one legitimate place kyc/wallet/etc. get set for the
       // first time. Everywhere else, a driver's own session can change
@@ -172,7 +179,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       // ONE ROLE PER MOBILE NUMBER (owner 2026-11-12): mirror of the drivers rule -- a number that already has a drivers/{mobile} profile can't CREATE a customer profile
       // (Admin may). Updates and deletes stay as before, so numbers that already hold both profiles keep working.
-      allow create: if (isOwnPhone(mobile) && !exists(/databases/$(database)/documents/drivers/$(mobile)) && request.resource.data.get('blacklisted', false) != true) || isAdmin();
+      allow create: if (isOwnPhone(mobile) && notStaleSession(mobile) && !exists(/databases/$(database)/documents/drivers/$(mobile)) && request.resource.data.get('blacklisted', false) != true) || isAdmin();
       // Only Admin may change `blacklisted`; a customer may still edit the rest of their own profile, and may delete it only while NOT blocked.
       allow update: if isAdmin() || (isOwnPhone(mobile) && request.resource.data.get('blacklisted', false) == resource.data.get('blacklisted', false));
       allow delete: if isAdmin() || (isOwnPhone(mobile) && resource.data.get('blacklisted', false) != true);
@@ -180,7 +187,7 @@ service cloud.firestore {
 
     match /bookings/{id} {
       allow read: if isSignedIn();
-      allow create: if isOwnPhone(request.resource.data.customerMobile) && !customerIsBlocked(request.resource.data.customerMobile);
+      allow create: if isOwnPhone(request.resource.data.customerMobile) && !customerIsBlocked(request.resource.data.customerMobile) && notStaleSession(request.resource.data.customerMobile);
       // driverMobile is only ever set once (driverRespondBooking, the
       // moment a direct request OR an accepted bid actually gets accepted
       // by that driver -- see App.jsx) -- before that, a booking is still
@@ -280,9 +287,14 @@ service cloud.firestore {
     // CUSTOMER FLOW TRACKING (owner 2026-11-12: "track the Customer screen end to end ... even a single tap"): one doc per booking attempt, written by the customer's own
     // app as they go (src/customerFlow.js), read by Admin only. A customer can only create / update sessions that carry THEIR OWN mobile, the timeline is capped, and
     // only Admin can delete.
+    // deletedAccounts: written only by the server (adminDeleteAccount); Admin may read.
+    match /deletedAccounts/{mobile} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     match /customerFlow/{id} {
       allow read: if isAdmin();
-      allow create: if isOwnPhone(request.resource.data.customerMobile) && request.resource.data.events.size() <= 250;
+      allow create: if isOwnPhone(request.resource.data.customerMobile) && notStaleSession(request.resource.data.customerMobile) && request.resource.data.events.size() <= 250;
       allow update: if isAdmin() || (isOwnPhone(resource.data.customerMobile) && request.resource.data.customerMobile == resource.data.customerMobile && request.resource.data.events.size() <= 250);
       allow delete: if isAdmin();
     }

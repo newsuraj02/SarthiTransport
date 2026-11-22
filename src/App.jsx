@@ -39,7 +39,7 @@ import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
@@ -13532,8 +13532,26 @@ export default function App() {
     if (!d) return;
     patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
   };
-  const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
-  const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
+  // DELETE FOR REAL (owner 2026-11-22: "once deleted, delete it from the system (even in firebase backend) ... never show that profile on the app"): the Admin-only
+  // callable removes the login, the profile and the activity (functions/index.js adminDeleteAccount); deleting only the profile document let the person's still-valid login
+  // re-create a blank profile on the next open. A running trip refuses the delete.
+  const deleteAccountFor = async (mobile, role) => {
+    const res = await adminDeleteAccount(mobile, role);
+    // loaded on demand: only Admin ever reaches this, and the customer / driver bundle must not carry Admin code
+    const { showSwitchToast } = await import("./AdminSwitchRole.jsx");
+    const who = role === "driver" ? { en: "Driver", hi: "ड्राइवर", mr: "ड्रायव्हर" } : { en: "Customer", hi: "कस्टमर", mr: "कस्टमर" };
+    if (res?.ok) {
+      showSwitchToast(lang === "en" ? `${who.en} ${mobile} deleted everywhere (login + profile).` : lang === "mr" ? `${who.mr} ${mobile} पूर्णपणे हटवला (लॉगिन + प्रोफाइल).` : `${who.hi} ${mobile} पूरी तरह हटा दिया गया (लॉगिन + प्रोफ़ाइल)।`, true);
+    } else if (res?.reason === "trip-running") {
+      showSwitchToast(lang === "en" ? `Not deleted: ${mobile} has a trip running. Finish or cancel it first.` : lang === "mr" ? `हटवले नाही: ${mobile} ची ट्रिप सुरू आहे. आधी ती पूर्ण किंवा रद्द करा.` : `हटाया नहीं गया: ${mobile} की ट्रिप चल रही है। पहले उसे पूरा या रद्द करें।`, false);
+    } else if (res?.reason === "not-found") {
+      removeDoc(role === "driver" ? "drivers" : "customers", mobile).catch((e) => console.error(e));
+    } else {
+      showSwitchToast(lang === "en" ? `Couldn't delete (${res?.reason || "error"}). Try again.` : lang === "mr" ? `हटवता आले नाही (${res?.reason || "error"}). पुन्हा प्रयत्न करा.` : `हटा नहीं सके (${res?.reason || "error"})। फिर कोशिश करें।`, false);
+    }
+  };
+  const deleteDriver = (mobile) => deleteAccountFor(mobile, "driver");
+  const deleteCustomer = (mobile) => deleteAccountFor(mobile, "customer");
   // Block / Unblock a CUSTOMER (owner 2026-11-22, same as a driver's): a blocked customer cannot book (requestByCategory + firestore.rules).
   const toggleCustomerBlock = (mobile) => {
     const c = allCustomers.find((x) => x.mobile === mobile || x.id === mobile);
