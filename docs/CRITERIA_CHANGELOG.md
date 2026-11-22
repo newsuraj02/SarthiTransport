@@ -723,3 +723,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-22 -- Customer flow: Pickup above the vehicle list, Drop on screen 2; header / current-location box removed; owner 2026-11-22
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-22 -- Customer flow: Pickup, Drop, then (frozen) vehicle list, then confirm screen; dropdown scroll room only as needed; owner 2026-11-22
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking

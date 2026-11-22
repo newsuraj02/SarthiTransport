@@ -6784,13 +6784,23 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     const sp = scrollParent();
     if (sp) sp.scrollBy({ top: delta, behavior: "smooth" }); else window.scrollBy({ top: delta, behavior: "smooth" });
   };
-  // A short page cannot scroll the box up to the top, so while a box is open its scroll container gets extra room at the bottom (removed again when the last open box closes).
+  // A page too short to scroll the box up to the top gets ONLY the bottom room it needs while the box is open (owner 2026-11-22: "the dropdowns of pickup and drop are scrollable infinite, so keep it
+  // scrollable till suggestions or the end of vehicle list only"): never a fixed 90 vh of blank space. With the vehicle list under the boxes the page is normally long enough and gets none; the room is
+  // removed again when the last open box closes.
   useEffect(() => {
     if (!dropdownOpen || typeof document === "undefined") return undefined;
-    const sp = scrollParent(); if (!sp) return undefined;
+    const sp = scrollParent(); const el = fieldWrapRef.current; if (!sp || !el) return undefined;
     sp.__locFieldsOpen = (sp.__locFieldsOpen || 0) + 1;
-    sp.style.paddingBottom = "90vh";
-    return () => { sp.__locFieldsOpen = Math.max(0, (sp.__locFieldsOpen || 1) - 1); if (!sp.__locFieldsOpen) sp.style.paddingBottom = ""; };
+    const apply = () => {
+      const spTop = sp.getBoundingClientRect().top, r = el.getBoundingClientRect();
+      const fieldTopInContent = sp.scrollTop + (r.top - spTop);
+      const contentBelow = sp.scrollHeight - (parseFloat(sp.style.paddingBottom) || 0) - fieldTopInContent; // from the top of this box to the end of the page, without any extra room
+      const need = Math.ceil(sp.clientHeight - (FIELD_TOP_GAP - spTop) - contentBelow);
+      sp.style.paddingBottom = need > 0 ? `${Math.min(need, Math.round(window.innerHeight * 0.9))}px` : "";
+    };
+    apply();
+    const t = setTimeout(apply, 400);
+    return () => { clearTimeout(t); sp.__locFieldsOpen = Math.max(0, (sp.__locFieldsOpen || 1) - 1); if (!sp.__locFieldsOpen) sp.style.paddingBottom = ""; };
   }, [dropdownOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!dropdownOpen || !fieldWrapRef.current) return undefined;
@@ -7261,8 +7271,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
     if (fromTrip || (pickupCoords && dropCoords)) return; // Pickup/Drop are tucked away after a trip suggestion / both places are already chosen (the vehicle list is showing)
-    // PICKUP FIRST (owner 2026-11-22): on the vehicle screen a map tap can only set the Pickup; the Drop is entered on the next screen.
-    const field = flowStep === "vehicle" ? ((activeField === "pickup" || !pickup.trim()) ? "pickup" : null) : (activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null));
+    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field || field === "date" || field === "time") return;
     const found = await reverseGeocodeFull(lat, lng, lang);
     const place = { name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null };
@@ -7367,7 +7376,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     // text) the boxes tuck away exactly like after a recent-trip tap (`fromTrip` / `tripHidden`), leaving the vehicle list.
     const dropAlreadyChosen = dropFromPlaceRef.current && !!dropCoords;
     setFromTrip(dropAlreadyChosen); setBookedMsg(false);
-    setActiveField(null); requestFocus("date"); // PICKUP FIRST (owner 2026-11-22): the Pickup is entered above the vehicle list; the Drop comes after the vehicle is chosen -- keyboard down, no jump
+    if (dropAlreadyChosen) goAfterPlaces(); else { setActiveField("drop"); requestFocus("drop"); } // Pickup -> Drop (owner 2026-11-22: the Drop box is right under the Pickup, above the vehicle list)
   };
   const onDropPlaceSelected = (p) => {
     setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropPlaceId(p.placeId || null); dropFromPlaceRef.current = true;
@@ -7497,7 +7506,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const [selectedCategory, setSelectedCategory] = useState(null);
   // TWO SCREENS (owner 2026-11-12): "vehicle" = the vehicle list with Book now under the picked category; "places" = the Pickup / Drop screen it leads to.
   const [flowStep, setFlowStep] = useState("vehicle");
-  useBackHandler(flowStep === "places", () => { if (!sendingKey) setFlowStep("vehicle"); }, 20); // Android Back on the Pickup / Drop screen = "Change vehicle"
+  useBackHandler(flowStep === "confirm", () => { if (!sendingKey) setFlowStep("vehicle"); }, 20); // Android Back on the confirm screen = "Change vehicle"
   // "Selected" = coordinates are known (a suggestion / current location / map tap / recent trip, or typed text
   // that has geocoded). Without Google Maps (no way to geocode) typed text of 3+ characters counts.
   const pickupTyping = typingField === "pickup" && !pickupFromPlaceRef.current; // still typing by hand: not chosen yet
@@ -7505,11 +7514,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const pickupSelected = (!!pickupCoords || (!mapsReady && pickup.trim().length >= 3)) && !pickupTyping;
   const dropSelected = (!!dropCoords || (!mapsReady && drop.trim().length >= 3)) && !dropTyping;
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
-  const pickupReady = pickupSelected && !!pickup.trim() && !typingField; // PICKUP FIRST (owner 2026-11-22): "Select vehicle" waits for a chosen Pickup
   const placesReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim(); // Pickup AND Drop chosen
   const locationsReady = placesReady && scheduleReady;   // advance: ...and the date + time too
   const tripHidden = fromTrip && placesReady;      // trip suggestion tapped / both places chosen: Pickup/Drop stay filled but hidden
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
+  const listActive = locationsReady && !sameLocation && !typingField; // FLOW (owner 2026-11-22): the vehicle list under the Pickup / Drop boxes is FROZEN until Pickup + Drop (+ the day in Advance) are chosen
   // Which ONE of Pickup/Drop/Date/Time gets the golden "current step"
   // ring (see LocationField's highlighted prop and the date/time box's own
   // outline below) -- defaults through the natural fill order and stays
@@ -7630,7 +7639,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const selectedTopEntry = selectedGroup ? categoryTopEntry(selectedGroup.entries) : null;
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
   // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
-  const mapHidden = flowStep === "places" && (advance ? placesReady : (locationsReady && !sameLocation)); // owner 2026-11-04: no map over the vehicle list (Current) / the date step + list (Advance)
+  const mapHidden = flowStep === "confirm" || (advance ? placesReady : (locationsReady && !sameLocation)); // owner 2026-11-04: no map over the vehicle list (Current) / the date step + list (Advance)
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !(listStage || flowStep === "vehicle") ? null
     : nearbyDrivers;
@@ -7701,7 +7710,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // the Pickup box (+ "Use Current Location" + the recent-trip cards) now sits ABOVE the vehicle list on screen 1 (pickupFormEl); the Drop box is the first thing on screen 2 (dropFormEl).
   const pickupFormEl = (
       <div className="space-y-2.5">
-        <SmoothCollapse show>
+        <SmoothCollapse show={!tripHidden}>
         <div className="relative z-40 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
@@ -7843,7 +7852,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   flowTrackRef.current = flowTrack;
   const flowSeenRef = useRef({ typing: null, returnTrip: !!returnTrip, step: "vehicle" });
   const ftrack = (type, detail, patch) => { if (flowTrackRef.current) flowTrackRef.current(type, detail, patch); };
-  useEffect(() => { if (flowSeenRef.current.step === flowStep) return; flowSeenRef.current.step = flowStep; ftrack("step", flowStep === "places" ? "Pickup & Drop screen" : "Vehicle list screen", {}); }, [flowStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (flowSeenRef.current.step === flowStep) return; flowSeenRef.current.step = flowStep; ftrack("step", flowStep === "confirm" ? "Confirm screen" : "Pickup, Drop & vehicle list screen", {}); }, [flowStep]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { ftrack("screen", advance ? "Advance Booking screen" : "Current Booking screen", { advance: !!advance }); }, [advance]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (flowSeenRef.current.returnTrip === !!returnTrip) return;
@@ -7896,12 +7905,49 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       {/* SCREEN 1 (owner 2026-11-12: "1. Vehicle list along with the book button underneath the selected vehicle category. This leads to another screen of Pickup and Drop"): the list of vehicle categories is the first thing under the map. Before the route is known a row shows the category, its weight
           and "N min away" (measured from the customer's current location); the FARE appears once Pickup + Drop are chosen. Tapping a row picks the category, moves it to the top and
           shows "Book now" right under it, which leads to screen 2 (Pickup and Drop). Category booking, the ring and every fare are unchanged. */}
+      {/* FIRST SCREEN (owner 2026-11-22: "1. Enter Pickup along with the Use current location button  2. Enter the Drop  3. Select vehicle, press Book this vehicle  4. Finally book this vehicle ...
+          During the Pickup and Drop, the vehicle list must be shown below but frozen until the Pickup and Drop locations are entered"): the Pickup box (+ "Use Current Location" + recent trips), the Drop
+          box, the Advance day buttons, then the vehicle list -- FROZEN (not tappable, dimmed) until Pickup + Drop (+ the day in Advance) are chosen. Tapping a category and pressing "Select vehicle" opens the confirm screen. */}
       {callRowEl}
       <div className="px-5 pt-3 pb-4 space-y-2.5">
-                  {/* PICKUP FIRST (owner 2026-11-22): the Pickup box with "Use Current Location" sits above the vehicle list (the header box / current-location box were removed). */}
-                  <div data-pickup-screen1>
-                    {pickupFormEl}
-                  </div>
+        <div data-pickup-drop-block className="space-y-2.5">
+          {pickupFormEl}
+          {dropFormEl}
+          {dayButtonsEl}
+          {advance && placesReady && !scheduleReady && (
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
+              👆 {lang === "en" ? "Choose the day first, then vehicles will show" : lang === "mr" ? "आधी दिवस निवडा, मग गाड्या दिसतील" : "पहले दिन चुनें, फिर गाड़ियाँ दिखेंगी"}
+            </div>
+          )}
+          {advance && scheduleReady && placesReady && (
+            <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
+              <span className="text-sm font-extrabold min-w-0 break-words" style={{ color: "#0052CC" }}>
+                📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
+              </span>
+              <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
+                {lang === "en" ? "Change date" : lang === "mr" ? "तारीख बदला" : "तारीख बदलें"}
+              </button>
+            </div>
+          )}
+          {placesReady && returnFareNote}
+          {changePlacesLink}
+          {sameLocation && (
+            // Pickup and Drop read as the same place (see isSameLocation) -- no point offering Book for a trip that can't be booked.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
+                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
+            </div>
+          )}
+        </div>
+        <div data-vehicle-list aria-disabled={!listActive} className="space-y-2.5" style={listActive ? undefined : { pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
+                  {!listActive && (
+                    <div data-vehicle-list-frozen-note className="text-center text-xs font-bold rounded-xl py-2 px-3" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: "1.5px solid rgba(232,152,40,0.35)" }}>
+                      👆 {advance
+                        ? (lang === "en" ? "Enter Pickup, Drop and the day first, then choose a vehicle" : lang === "mr" ? "आधी पिकअप, ड्रॉप आणि दिवस टाका, मग गाडी निवडा" : "पहले पिकअप, ड्रॉप और दिन डालें, फिर गाड़ी चुनें")
+                        : (lang === "en" ? "Enter Pickup and Drop first, then choose a vehicle" : lang === "mr" ? "आधी पिकअप आणि ड्रॉप टाका, मग गाडी निवडा" : "पहले पिकअप और ड्रॉप डालें, फिर गाड़ी चुनें")}
+                    </div>
+                  )}
                   {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
                   const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category
@@ -7969,12 +8015,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                   </button>
                   {isPicked && (
                     /* TWO SCREENS (owner 2026-11-12): "Book now" sits directly UNDER the selected vehicle category and leads to the next screen -- Pickup and Drop. */
-                    <button type="button" data-book-now disabled={!!sendingKey || !pickupReady} onClick={() => { setBookingError(""); setFlowStep("places"); }}
+                    <button type="button" data-book-now disabled={!!sendingKey} onClick={() => { setBookingError(""); setFlowStep("confirm"); }}
                       className="w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
                       style={{ background: "linear-gradient(135deg, #00A854, #00C26A)", color: "#FFFFFF", boxShadow: "0 6px 14px rgba(0,168,84,0.28)" }}>
-                      {pickupReady
-                        ? <>🚚 {lang === "en" ? "Select vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}{showFares && selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}</>
-                        : <span data-enter-pickup-first>📍 {lang === "en" ? "Enter Pickup first" : lang === "mr" ? "आधी पिकअप टाका" : "पहले पिकअप डालें"}</span>}
+                      🚚 {lang === "en" ? "Select vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}{showFares && selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}
                     </button>
                   )}
                   </React.Fragment>
@@ -7984,12 +8028,15 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                   <p data-list-hint className="text-center text-xs font-semibold pt-1" style={{ color: C.inkSoft }}>
                     {lang === "en" ? "Choose any vehicle according to your load (you can cancel)" : lang === "mr" ? "तुमच्या लोडनुसार कोणतीही गाडी निवडा (रद्द करता येईल)" : "कोई भी गाड़ी चुने अपने लोड के हिसाब से (कैंसल कर सकते हैं)"}
                   </p>
+        </div>
       </div>
         </>
       ) : (
         <>
       {/* SCREEN 2 (owner 2026-11-12: "on this screen Pickup and Drop boxes and then a 'If unable to fill Pickup and Drop, call Apna Transport to book vehicle' button underneath"): reached from Book now on the vehicle list. */}
-      <div data-places-screen>
+      {/* CONFIRM SCREEN (owner 2026-11-22: "3. Select vehicle, press Book this vehicle  4. Finally book this vehicle"): reached from "Select vehicle" under the picked category on the
+          first screen. Shows the chosen vehicle with its fare and the route distance, then "Confirm booking" sends the request (bookDriver). "Change vehicle" and "Change pickup / drop" go back. */}
+      <div data-confirm-screen>
         <div className="px-5 pt-3">
           <button type="button" data-back-to-vehicles disabled={!!sendingKey} onClick={() => setFlowStep("vehicle")} className="py-2 pr-2 text-sm font-extrabold flex items-center gap-1" style={{ color: C.navy }}>
             <ChevronLeft size={18} /> {lang === "en" ? "Change vehicle" : lang === "mr" ? "गाडी बदला" : "गाड़ी बदलें"}
@@ -8009,49 +8056,24 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
             </div>
           )}
         </div>
-        {mapEl}
-        {/* CALL APNA TRANSPORT (owner 2026-11-12: "paraphrase it in minimal words and add a call button next to it; place it above the Pickup and Drop box"): a short line + a Call button
-            (a tel: link to ADMIN_PHONE) in one row, directly above the Pickup box -- shown only until Pickup and Drop are entered (owner 2026-11-12: "appear only until the Pickup and drop is entered, remove it afterwards"). We then book on the customer's behalf (Admin -> Bookings -> "Book for a customer"); the customer pays the driver. */}
-        {callRowEl}
-        <div className="px-5 pt-3 space-y-2.5">
-          {/* The Pickup chosen on the vehicle screen, read-only here; "Change" goes back to it. */}
-          <div data-pickup-summary className="rounded-xl px-3 py-2 flex items-start gap-2.5" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-            <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.success, boxShadow: "0 0 0 2px rgba(0,168,84,0.18)" }} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-extrabold" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : "पिकअप"}</div>
-              <div className="text-sm font-semibold break-words" style={{ color: C.ink }}>{pickup}</div>
+        <div className="px-5 pt-3 space-y-3">
+          <div data-confirm-route-row className="flex items-center justify-between gap-3">
+            <div data-est-km className="text-base font-extrabold min-w-0 break-words" style={{ color: C.ink }}>
+              {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
             </div>
-            <button type="button" data-pickup-change disabled={!!sendingKey} onClick={() => setFlowStep("vehicle")} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: C.navy }}>
-              {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
+            <button type="button" data-change-places disabled={!!sendingKey} onClick={() => { setFromTrip(false); setFlowStep("vehicle"); }} className="shrink-0 py-2 text-xs font-bold underline underline-offset-2" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
             </button>
           </div>
-          {dropFormEl}
-        </div>
-        <div className="px-5 pt-3 space-y-3">
-          {dayButtonsEl}
-          {advance && placesReady && !scheduleReady && (
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
-              👆 {lang === "en" ? "Choose the day first, then book" : lang === "mr" ? "आधी दिवस निवडा, मग बुक करा" : "पहले दिन चुनें, फिर बुक करें"}
-            </div>
-          )}
           {placesReady && returnFareNote}
           {advance && scheduleReady && placesReady && (
             <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
               <span className="text-sm font-extrabold min-w-0 break-words" style={{ color: "#0052CC" }}>
                 📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
               </span>
-              <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
+              <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setBookedMsg(false); setFlowStep("vehicle"); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
                 {lang === "en" ? "Change date" : lang === "mr" ? "तारीख बदला" : "तारीख बदलें"}
               </button>
-            </div>
-          )}
-          {changePlacesLink}
-          {sameLocation && (
-            // Pickup and Drop read as the same place (see isSameLocation) -- no point offering Book for a trip that can't be booked.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
-                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
-                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
             </div>
           )}
           {bookingError && (
