@@ -158,7 +158,7 @@
   "code:.github/workflows/check-16kb.yml": "aad711246a4158e2",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "70d1d9683514133b",
+  "code:CLAUDE.md": "32d46c0299b56dcc",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -339,7 +339,7 @@
   "code:apna-transport-native/settings.gradle": "faa7e8618f636a89",
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
-  "code:docs/SYSTEM_CONTRACTS.md": "244fee321eb2b0ac",
+  "code:docs/SYSTEM_CONTRACTS.md": "1b494775bf35bf69",
   "code:firebase.json": "900e217b868337c1",
   "code:firestore.rules": "6db31aa33e404a42",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -667,7 +667,7 @@
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
   "code:scripts/verifyInvariants.mjs#VM_ALL_LABELS": "0252744b92ef8156",
-  "code:scripts/verifyInvariants.mjs#checks": "cd8a6826e11dac77",
+  "code:scripts/verifyInvariants.mjs#checks": "b347123464038fc8",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/whyNoDriver.js": "7eaf1835626f2adf",
@@ -1087,7 +1087,7 @@
   "code:src/App.jsx#EmptyState": "26f75f25146b39df",
   "code:src/App.jsx#StepDots": "a8d53a059c998973",
   "code:src/App.jsx#SuccessBurst": "887fabfe46039555",
-  "code:src/App.jsx#CustomerBooking": "b11a01e68e431160",
+  "code:src/App.jsx#CustomerBooking": "22fe497681bb7ab5",
   "code:src/App.jsx#CustomerAdvanceBooking": "45abf9a27e76f14c",
   "code:src/App.jsx#RouteLine": "f7858c5b1b1e46ca",
   "code:src/App.jsx#ReturnTripTag": "0ca27422b1c6bcc2",
@@ -1260,6 +1260,7 @@
   "code:src/inputRules.js": "c85fce8bd2002943",
   "code:src/main.jsx": "4dff99b1994d908f",
   "code:src/placeSpecificity.js": "984cc86ac3b3a3be",
+  "code:src/serviceArea.js": "37cede12105014f9",
   "code:src/vehicleArt.jsx#imports": "9abf3e6700d98954",
   "code:src/vehicleArt.jsx#VEHICLE_ART_SPECS": "5962e96b0e189c4c",
   "code:src/vehicleArt.jsx#INK": "86abbc45a569dbc2",
@@ -1296,7 +1297,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:src/serviceArea.js": "37cede12105014f9"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

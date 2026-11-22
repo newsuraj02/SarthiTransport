@@ -7336,6 +7336,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       clearInterval(intervalId);
     };
   }, []);
+  // CURRENT-LOCATION BOX over the vehicle list (owner 2026-11-22: "I want the current location of the customer in a box where 'Pickup' is"): the customer's own address, read
+  // from the live position above (reverse-geocoded in the app's language), shown under a small "Pickup" caption. Display only -- the real Pickup is still chosen on the next screen.
+  // The address is looked up again only when the phone has moved more than ~100 m or the language changed, never on every 5-second position poll.
+  const [currentLocName, setCurrentLocName] = useState("");
+  const currentLocDoneRef = useRef({ lat: null, lng: null, lang: "" });
+  useEffect(() => {
+    if (!mapsReady || !customerLocation) return;
+    const d = currentLocDoneRef.current;
+    if (d.lat != null && d.lang === lang && haversineKm(d.lat, d.lng, customerLocation.lat, customerLocation.lng) < 0.1) return;
+    currentLocDoneRef.current = { lat: customerLocation.lat, lng: customerLocation.lng, lang };
+    let cancelled = false;
+    reverseGeocodeFull(customerLocation.lat, customerLocation.lng, lang).then((found) => { if (!cancelled && found?.name) setCurrentLocName(found.name); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [customerLocation, mapsReady, lang]);
 
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
@@ -7887,10 +7901,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           and "N min away" (measured from the customer's current location); the FARE appears once Pickup + Drop are chosen. Tapping a row picks the category, moves it to the top and
           shows "Book now" right under it, which leads to screen 2 (Pickup and Drop). Category booking, the ring and every fare are unchanged. */}
       <div className="px-5 pt-3 pb-4 space-y-2.5">
-                  {/* LIST HEADER (owner 2026-11-18 added a "Choose vehicle according to the requirement" line; owner 2026-11-22: "Replace the note 'zarurat ke hisaab se gaadi chune' with 'Pickup' as header"): the header over the vehicle list now reads "Pickup" (hi / mr "पिकअप"). */}
-                  <p data-list-header className="text-sm font-extrabold" style={{ color: C.ink }}>
-                    {lang === "en" ? "Pickup" : "पिकअप"}
-                  </p>
+                  {/* LIST HEADER (owner 2026-11-18 added a "Choose vehicle according to the requirement" line; owner 2026-11-22: "Replace the note 'zarurat ke hisaab se gaadi chune' with 'Pickup' as header"): the header over the vehicle list now reads "Pickup" (hi / mr "पिकअप"); owner 2026-11-22: "I want the current location of the customer in a box where 'Pickup' is" -> the "Pickup" caption sits in a box with the customer's current address under it (`data-current-location-box`). */}
+                  <div data-current-location-box className="rounded-xl px-3 py-2.5 flex items-start gap-2.5" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+                    <MapPin size={18} color={C.navy} className="shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p data-list-header className="text-sm font-extrabold" style={{ color: C.ink }}>
+                        {lang === "en" ? "Pickup" : "पिकअप"}
+                      </p>
+                      <p data-current-location className="text-xs font-medium break-words" style={{ color: currentLocName ? C.inkSoft : "#94A3B8" }}>
+                        {currentLocName || (customerLocation
+                          ? (lang === "en" ? "Finding your current location..." : lang === "mr" ? "तुमचे सध्याचे ठिकाण शोधत आहे..." : "आपकी मौजूदा लोकेशन ढूंढ रहे हैं...")
+                          : (lang === "en" ? "Current location not available -- turn on location" : lang === "mr" ? "सध्याचे ठिकाण उपलब्ध नाही — लोकेशन चालू करा" : "मौजूदा लोकेशन उपलब्ध नहीं — लोकेशन चालू करें"))}
+                      </p>
+                    </div>
+                  </div>
                   {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
                   const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category

@@ -717,3 +717,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-22 -- Pickup only inside Pune (serviceArea.js, 40 km), Drop anywhere; vehicle-list header now 'Pickup'; owner 2026-11-22
 - changed (7): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerBooking, code:src/App.jsx#CustomerApp, code:src/App.jsx#App
 - added (1): code:src/serviceArea.js
+
+## 2026-11-22 -- Current-location box under the Pickup header on the vehicle list; owner 2026-11-22
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
