@@ -877,7 +877,7 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 
 // THE CUSTOMER VEHICLE-LIST RULE (pulled out of CustomerBooking 2026-11-03 so it can be tested): may this driver be shown as a bookable vehicle?
 // DUTY ON + KYC Approved + not blacklisted + has a vehicle + NOT on a trip (a running trip, or an advance booking's buffer for THAT slot) + WITHIN
-// bidRadiusKm of the pickup (30 km Current / 50 km Advance, owner 2026-11-04). The distance is measured from the driver's LAST KNOWN location, however
+// bidRadiusKm of the pickup (15 km Current since owner 2026-11-22, was 30 / 50 km Advance, owner 2026-11-04). The distance is measured from the driver's LAST KNOWN location, however
 // old -- GPS being off now does not matter, but a driver who has never reported a location cannot be placed and is not listed. No weight condition.
 // FLEET OWNERS (owner 2026-11-08): each approved, active vehicle of a fleet owner acts as ONE vehicle in the lists and the eligibility rules, built from the owner's account
 // (duty, KYC, block, name for "declined") + the vehicle's public record (capacity). It has no phone and no GPS: no location, no radius, and only the trips assigned to
@@ -1032,7 +1032,7 @@ const MIN_LOCATION_HEARTBEAT_MS = 30000;
 // Auto-bid proximity: a Current (immediate) load only reaches drivers
 // within CURRENT_BID_RADIUS_KM of its pickup; an Advance load reaches a
 // wider ring since the driver has time to travel there.
-export const CURRENT_BID_RADIUS_KM = 30;
+export const CURRENT_BID_RADIUS_KM = 15;
 export const ADVANCE_BID_RADIUS_KM = 50;
 // Vehicle-fit window: a driver auto-bids only when their vehicle's rated
 // capacity is between the load's weight and weight + this much headroom.
@@ -1228,7 +1228,7 @@ export function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
 
 // WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
-// (escalated: one more category per round, +2 at most -- RING_EXTRA_CATEGORIES), and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
+// (escalated: one more category per round, +2 at most -- RING_EXTRA_CATEGORIES), and who is WITHIN CURRENT_BID_RADIUS_KM (15) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
 // of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
 // Owner 2026-11-10: the FIRST ring is the picked category only; each escalation round (the booking's `escalatedTierIndex` = rounds fired) adds ONE category above it, +2 at most
@@ -7513,7 +7513,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // category (lightest first) and then nearest-first within a category,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
-  const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM; // 50 km Advance / 30 km Current
+  const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM; // 50 km Advance / 15 km Current
   const nearbyDrivers = (() => {
     // VEHICLE-FIRST (owner 2026-11-12): before Pickup is chosen the list is a PREVIEW measured from the customer's current location (no fare yet); in Advance it also shows before the day is picked (availability "now").
     const refCoords = pickupCoords || customerLocation || null;

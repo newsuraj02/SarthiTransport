@@ -418,7 +418,7 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile, 
 // everyone who already got it.
 //
 // WHO is rung is decided by functions/tripLock.js (evaluateNewLoadDriver) -- duty on, KYC approved, not blocked, not on a trip, the picked
-// vehicle category only (owner 2026-11-05: no "+2 above"), within 30 km (Current) / 50 km (Advance) of the pickup by the last known location; no GPS-on / weight condition (owner 2026-11-04). The old DIRECT_REQUEST_RADIUS_KM,
+// vehicle category only (owner 2026-11-05: no "+2 above"), within 15 km (Current) / 50 km (Advance) of the pickup by the last known location; no GPS-on / weight condition (owner 2026-11-04). The old DIRECT_REQUEST_RADIUS_KM,
 // BROADCAST_WEIGHT_HEADROOM_KG and BROADCAST_LOCATION_STALE_MS constants were removed with that rule.
 // ---- घंटी पहुँची? (delivery receipt + automatic re-ring), 2026-10-13 ----
 // Uber-style: the server doesn't just fire the push and hope. Every
@@ -504,7 +504,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       const driver = doc.data();
       const tag = `${doc.id} (${driver.name || "?"})`;
       // WHO GETS THE BELL (owner 2026-11-04): duty ON, KYC approved, not blocked, not on a trip, the picked vehicle category only (owner 2026-11-05: no "+2 above"), within
-      // 30 km / 50 km of the pickup by the last known location (GPS being off does not matter; never-located is not rung); no weight condition. One rule for this ring and the later
+      // 15 km / 50 km of the pickup by the last known location (GPS being off does not matter; never-located is not rung); no weight condition. One rule for this ring and the later
       // rounds: functions/tripLock.js evaluateNewLoadDriver.
       const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
       const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()), fleetVehicles: driver.fleetOwner ? fleet.vehiclesFor(doc.id) : [], fleetMine: fleet.mineFor });
@@ -1933,9 +1933,9 @@ const HEALTH_CHECK_PASSWORD = "apna-pin-1234";
 // pickup points with a KNOWN-correct answer, so the proximity check below
 // asserts an actual result instead of just "did the query not crash" --
 // this is the exact regression behind proximity-filter-fails-open-not-closed
-// in BUG_TRACKER_SEED. Mirrors src/App.jsx's CURRENT_BID_RADIUS_KM (30km,
+// in BUG_TRACKER_SEED. Mirrors src/App.jsx's CURRENT_BID_RADIUS_KM (15km,
 // the customer-facing current-load radius that bug was actually in).
-const HEALTH_CHECK_RADIUS_KM = 30;
+const HEALTH_CHECK_RADIUS_KM = 15;
 const HEALTH_CHECK_DRIVER_LOC = { lat: 18.5204, lng: 73.8567 }; // Pune
 const HEALTH_CHECK_NEAR_PICKUP = { lat: 18.55, lng: 73.9 }; // ~6km away -- must be eligible
 const HEALTH_CHECK_FAR_PICKUP = { lat: 28.7041, lng: 77.1025 }; // Delhi, ~1150km away -- must NOT be eligible
@@ -1976,7 +1976,7 @@ async function checkSourceMarkers() {
     return { findings, notes: [`Source markers not checked: ${e.message}`] };
   }
   const mustContain = [
-    ["CURRENT_BID_RADIUS_KM = 30", "30km current-load proximity radius"],
+    ["CURRENT_BID_RADIUS_KM = 15", "15km current-load proximity radius"],
     ["ADVANCE_BID_RADIUS_KM = 50", "50km advance-load proximity radius"],
     ["if (!pickupCoords || !loc || loc.lat == null || loc.lng == null) return false;", "proximity filter failing closed on missing coordinates"],
     ["function driverIsOnTrip(", "busy-driver rule (a vehicle on a trip must not be listed)"],

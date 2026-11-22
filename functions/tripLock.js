@@ -15,7 +15,7 @@
  *     9000 / 12000 / 16000 / 20000 / 32000 kg + "above 32000 kg". The customer taps a category (never one driver) and EVERY vehicle in it
  *     (ONLY that category, owner 2026-11-05) is rung; the first driver to accept gets the trip. A booking carries `listCategoryKg` (the picked category's weight limit; an older booking only `listCategory`, an index into the previous table);
  *     an older booking without either falls back to the category of its tierMaxKg / weight.
- *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 30 km for a Current booking, 50 km for an Advance one (the booking has `scheduledFor`) --
+ *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 15 km for a Current booking (owner 2026-11-22; it was 30 km), 50 km for an Advance one (the booking has `scheduledFor`) --
  *     measured from the driver's LAST KNOWN location however old (owner 2026-11-04: the same radius as the customer's vehicle list). GPS being off
  *     or stale does not matter, but a driver who has NEVER reported a location cannot be placed and is not rung. A booking with no pickup
  *     coordinates skips the radius (a load is never left unrung because of missing data).
@@ -39,7 +39,7 @@ const LEGACY_RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 900
 // `ctx.extended` is the number of escalation rounds already fired (true = 1): categories picked .. picked + that many. Applies to every picked category.
 const RING_EXTRA_CATEGORIES = 2;
 // MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
-const RING_RADIUS_KM = { current: 30, advance: 50 };
+const RING_RADIUS_KM = { current: 15, advance: 50 };
 
 // Index of the category a vehicle of this capacity belongs to; -1 when the capacity is unknown.
 function categoryIndexOfCapacity(capacityKg) {

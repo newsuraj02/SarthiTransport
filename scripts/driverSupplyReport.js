@@ -9,7 +9,7 @@
 //
 // 1. FUNNEL: of all drivers -> KYC approved -> duty ON -> has a location -> location fresh (GPS live, < 5 min) -> has a push token.
 //    Every step is a reason a customer can end up with "no driver".
-// 2. HUBS: for each place, the drivers who WOULD be rung / listed right now (duty on, KYC approved, last known location within 30 km),
+// 2. HUBS: for each place, the drivers who WOULD be rung / listed right now (duty on, KYC approved, last known location within 15 km for Current bookings),
 //    split by GPS live / GPS off and by vehicle category -- so you can pick the launch area with the most drivers.
 // 3. --lists: duty-ON approved drivers who never shared a location, and ones whose location is more than a day old -- the people to WhatsApp
 //    ("turn on location / open the app") so more of them become reachable.

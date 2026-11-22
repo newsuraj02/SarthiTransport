@@ -689,3 +689,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-19 -- Admin Switch Role (Driver <-> Customer): callable adminSwitchRole + functions/roleSwitch.js + AdminSwitchRole button in Customer rows, Driver rows, Customer activity and Leads; contract N39, CLAUDE.md paragraph
 - changed (12): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks, code:src/AdminCustomerFlow.jsx#imports, code:src/AdminCustomerFlow.jsx#AdminCustomerFlow, code:src/AdminLeads.jsx#imports, code:src/AdminLeads.jsx#AdminLeads, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers
 - added (6): fn:adminSwitchRole, code:functions/index.js#fn:adminSwitchRole, code:src/firebaseClient.js#adminSwitchRole, code:functions/roleSwitch.js, code:scripts/serverTests/adminSwitchRole.cjs, code:src/AdminSwitchRole.jsx
+
+## 2026-11-22 -- 15 km radius for Current bookings (Advance stays 50): tripLock RING_RADIUS_KM.current, App.jsx CURRENT_BID_RADIUS_KM, scan marker + self-test; contract N40, CLAUDE.md paragraph
+- changed (12): app:CURRENT_BID_RADIUS_KM, fn:onDirectRequestBroadcast, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#HEALTH_CHECK_RADIUS_KM, code:functions/index.js#checkSourceMarkers, code:functions/tripLock.js#RING_RADIUS_KM, code:scripts/verifyInvariants.mjs#checks, code:scripts/whyNoDriver.js, code:src/App.jsx#CURRENT_BID_RADIUS_KM, code:src/App.jsx#CustomerBooking
+
+## 2026-11-22 -- contract A6 wording: 15 km Current radius
+- changed (1): code:docs/SYSTEM_CONTRACTS.md

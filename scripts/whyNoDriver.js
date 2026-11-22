@@ -70,7 +70,7 @@ async function main() {
     const lCat = trip.loadCategoryIndex(b);
     console.log("=".repeat(78));
     console.log(`BOOKING ${b.id}  |  ${b.customerName || "?"} ${b.customerMobile || ""}  |  ${new Date(tsMs(b.createdAt || b.acceptedAt)).toLocaleString("en-IN", IST)}  |  ${b.status}`);
-    console.log(`  ${b.pickup} -> ${b.drop}  |  picked category: ${lCat >= 0 ? catName(lCat) : "?"}  |  ${b.scheduledFor ? "ADVANCE " + b.scheduledFor + " (50 km radius)" : "Current (30 km radius)"}  |  pickup coords: ${b.pickupLat != null ? "yes" : "NO"}`);
+    console.log(`  ${b.pickup} -> ${b.drop}  |  picked category: ${lCat >= 0 ? catName(lCat) : "?"}  |  ${b.scheduledFor ? "ADVANCE " + b.scheduledFor + " (50 km radius)" : "Current (15 km radius)"}  |  pickup coords: ${b.pickupLat != null ? "yes" : "NO"}`);
     replay(b, drivers, bookings, fleetVehicles).forEach(({ round, rung, reasons }) => {
       console.log(`\n  ${round === 0 ? "FIRST RING" : "ESCALATION ROUND " + round} (${round === 0 ? "picked category only" : "picked .. +" + round + " categories"}): ${rung.length} driver(s) would be rung`);
       rung.slice(0, 15).forEach((d) => console.log(`      RUNG  ${d.name || "?"}  ${d.mobile}  ${d.vehicleSpec && d.vehicleSpec.capacityKg ? d.vehicleSpec.capacityKg + " kg" : ""}`));
