@@ -52,7 +52,6 @@ function planRoleSwitch(input) {
       name: String(d.name || "").trim() && String(d.name).trim() !== String(mobile) ? String(d.name).trim() : null,
       firmName: null, photo: photo || null, referredBy: null, referralCredited: false, mobile: String(mobile),
     };
-    if (d.leadSource) newDoc.leadSource = d.leadSource;
     return { ok: true, newDoc };
   }
 
@@ -63,7 +62,6 @@ function planRoleSwitch(input) {
     wallet: STARTER_WALLET, bonus: 0, heldCredit: 0, rating: 4.5, blacklisted: false, docs: null, vehicleSpec: null,
   };
   if (d.photo && typeof d.photo === "object") newDoc.photo = d.photo;
-  if (d.leadSource) newDoc.leadSource = d.leadSource;
   return { ok: true, newDoc };
 }
 

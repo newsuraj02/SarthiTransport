@@ -9,6 +9,8 @@ import { createDoc, patchDoc, removeDoc } from "./firestoreStore";
 import { buildFleetDispatchText, whatsappLink } from "./fleetDispatch.js";
 import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput, isValidVehicleNumber, vehicleNumberHint } from "./inputRules.js";
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
+import { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
+import { needsListSearch, filterByQuery } from "./adminListSearch.js";
 import { resolveVehicleChoice, categoryIndexForKg } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
@@ -250,6 +252,7 @@ export function FleetDispatchSheet({ booking, priv, owner, link, autoSent, worki
 // (name, linked phone number, call) with the documents and Approve / Reject (the owner can only ever write kyc "Pending"). One owner open at a time.
 export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang, setKyc }) {
   const [openOwner, setOpenOwner] = useState(null);
+  const [q, setQ] = useState(""); // search bar (owner 2026-11-23): only when there are more than 20 transporters
   const privById = Object.fromEntries((fleetPrivate || []).map((p) => [p.id, p]));
   const ownerName = (m) => (drivers || []).find((d) => d.mobile === m)?.name || m;
   const byOwner = {};
@@ -258,11 +261,17 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
     mobile, name: ownerName(mobile), pending: vs.filter((v) => v.kyc === "Pending").length,
     vehicles: [...vs].sort((a, b) => (a.kyc === "Pending" ? -1 : 1) - (b.kyc === "Pending" ? -1 : 1)),
   })).sort((a, b) => (b.pending > 0) - (a.pending > 0) || String(a.name).localeCompare(String(b.name)));
+  const searchBar = needsListSearch(owners.length);
+  // an owner is found by his own name / mobile and by any of his vehicles: number, name, driver name, driver mobile
+  const ownerText = (o) => [o.name, o.mobile, ...o.vehicles.flatMap((v) => { const pv = privById[v.id] || {}; return [pv.vehicleNumber, v.vehicleName, pv.driverName, pv.driverMobile]; })].filter(Boolean).join(" ");
+  const shownOwners = searchBar ? filterByQuery(owners, q, ownerText) : owners;
   return (
     <div className="p-4 space-y-2" data-admin-fleet>
       <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `All Transporters (${owners.length})`, `सभी ट्रांसपोर्टर (${owners.length})`, `सर्व ट्रान्सपोर्टर (${owners.length})`)}</div>
       {owners.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
-      {owners.map((o) => {
+      {searchBar && <ListSearchBox value={q} onChange={setQ} lang={lang} shown={shownOwners.length} total={owners.length} />}
+      {searchBar && q.trim() && shownOwners.length === 0 && <div className="text-xs text-center py-4" style={{ color: C.inkSoft }}>{noMatchText(lang)}</div>}
+      {shownOwners.map((o) => {
         const open = openOwner === o.mobile;
         return (
           <div key={o.mobile} data-fleet-owner-card className="rounded-xl" style={{ background: C.paper, border: `2px solid ${C.line}` }}>

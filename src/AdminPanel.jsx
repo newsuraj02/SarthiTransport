@@ -20,7 +20,8 @@ import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { useBackHandler } from "./backButton.js";
 import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx";
-import AdminLeads from "./AdminLeads.jsx";
+import SearchableList, { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
+import { needsListSearch, filterByQuery, matchesQuery, personSearchText, bookingSearchText } from "./adminListSearch.js";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
@@ -724,6 +725,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
   useBackHandler(!!detailView, () => setDetailView(null), 10); // Android Back = the page's back arrow (owner 2026-11-13)
+  const [regSearch, setRegSearch] = useState(""); // New Registrations search bar (owner 2026-11-23: only when more than 20 people are in the chosen range)
 
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
@@ -1114,6 +1116,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     // the app driver KYC can be approved/rejected.
     const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
     const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
+    const regTotal = rangeCustomersTotal + rangeDriversTotal;
+    const regBar = needsListSearch(regTotal);
+    const shownTrend = regBar && regSearch.trim()
+      ? registrationTrend.map((d) => ({ ...d, customers: filterByQuery(d.customers, regSearch, personSearchText), drivers: filterByQuery(d.drivers, regSearch, personSearchText) }))
+      : registrationTrend;
+    const regShown = shownTrend.reduce((sum, d) => sum + d.customers.length + d.drivers.length, 0);
     const driverStatusBadge = (d) => {
       if (!d.vehicleSpec) return { text: lang === "en" ? "Form not completed" : lang === "mr" ? "फॉर्म पूर्ण नाही" : "फॉर्म पूरा नहीं", bg: "#E5EAF2", color: C.inkSoft };
       if (d.kyc === "Rejected") return { text: lang === "en" ? "Rejected" : lang === "mr" ? "नाकारले" : "रिजेक्टेड", bg: C.safety, color: "#FFFFFF" };
@@ -1174,7 +1182,9 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           let installRowNum = 0;
           return (
           <div className="space-y-3">
-            {registrationTrend.filter((d) => d.customers.length > 0 || d.drivers.length > 0).map((d) => (
+            {regBar && <ListSearchBox value={regSearch} onChange={setRegSearch} lang={lang} shown={regShown} total={regTotal} />}
+            {regBar && regSearch.trim() && regShown === 0 && <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{noMatchText(lang)}</p>}
+            {shownTrend.filter((d) => d.customers.length > 0 || d.drivers.length > 0).map((d) => (
               <div key={d.key}>
                 <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
                 <div className="space-y-1.5">
@@ -1331,7 +1341,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         {page.items.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
         ) : (
-          <div className="space-y-1.5">{page.items.map(page.renderItem)}</div>
+          <SearchableList items={page.items} renderItem={page.renderItem} textOf={personSearchText} lang={lang} />
         )}
       </div>
     );
@@ -1650,10 +1660,9 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, leads, leadClicks, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
+function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
   const [bookForCustomer, setBookForCustomer] = useState(null); // the prefill (from Customer activity) of the open "Book for this customer" sheet, or null
   const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
-  const [leadsOpen, setLeadsOpen] = useState(false); // Admin -> Leads (where each customer / driver came from, owner 2026-11-13)
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
     if (!d) return false;
@@ -1752,11 +1761,6 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, le
       <button type="button" data-admin-customer-activity-btn onClick={() => setCustomerActivityOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.paper, color: C.navy, border: `2px solid ${C.navy}` }}>
         <Eye size={16} /> {lang === "en" ? "Customer activity (every tap)" : lang === "mr" ? "ग्राहक हालचाल (प्रत्येक टॅप)" : "ग्राहक गतिविधि (हर टैप)"} · {(flowSessions || []).length}
       </button>
-      {/* LEADS (owner 2026-11-13): Name | Phone | Customer / Driver | Advertisement / Deep link / WhatsApp | date | time -- see src/AdminLeads.jsx. */}
-      <button type="button" data-admin-leads-btn onClick={() => setLeadsOpen(true)} className="w-full rounded-xl py-3 text-sm font-extrabold flex items-center justify-center gap-2 shadow-sm" style={{ background: C.paper, color: C.navy, border: `2px solid ${C.navy}` }}>
-        <Eye size={16} /> {lang === "en" ? "Leads (where they came from)" : lang === "mr" ? "लीड्स (कुठून आले)" : "लीड्स (कहाँ से आए)"}
-      </button>
-      {leadsOpen && <AdminLeads customers={customers || []} drivers={drivers || []} leads={leads || []} leadClicks={leadClicks || []} lang={lang} onClose={() => setLeadsOpen(false)} />}
       {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onBookFor={(pf) => setBookForCustomer(pf)} onDeleteSessions={deleteCustomerFlowSessions} onClose={() => setCustomerActivityOpen(false)} />}
       {bookForCustomer && <AdminBookForCustomer prefill={bookForCustomer} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomer(null)} />}
       {sections.map((s) => (
@@ -1768,7 +1772,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, le
           {s.items.length === 0 ? (
             <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
           ) : (
-            <div className="space-y-1.5">{s.items.map(s.renderItem)}</div>
+            <SearchableList items={s.items} renderItem={s.renderItem} textOf={bookingSearchText} lang={lang} />
           )}
         </div>
       ))}
@@ -2264,7 +2268,10 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, fareTiers, la
           {sorted.length === 0 ? (
             <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No route saved yet." : lang === "mr" ? "अजून कोणताही रूट सेव्ह नाही." : "अभी तक कोई रूट सेव नहीं है।"}</p>
           ) : (
-            sorted.map((r) => (
+            <SearchableList items={sorted} lang={lang}
+              placeholder={lang === "en" ? "Search by pickup or drop..." : lang === "mr" ? "पिकअप किंवा ड्रॉपने शोधा..." : "पिकअप या ड्रॉप से खोजें..."}
+              textOf={(r) => [r.pickupName, r.dropName, r.driverEntry && r.driverEntry.mobile].filter(Boolean).join(" ")}
+              renderItem={(r) => (
               <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
                 <button onClick={() => onEditAdminRate(r)} className="w-full text-left">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -2309,7 +2316,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, fareTiers, la
                   )}
                 </div>
               </div>
-            ))
+            )} />
           )}
         </div>
       </div>
@@ -3563,7 +3570,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
         <div className="space-y-2">
           {shownList.length === 0
             ? <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{L3("No driver here.", "इथे कोणताही ड्रायव्हर नाही.", "यहां कोई ड्राइवर नहीं है।")}</p>
-            : shownList.map(renderRow)}
+            : <SearchableList items={shownList} renderItem={renderRow} textOf={personSearchText} lang={lang} className="space-y-2" />}
         </div>
       </div>
     );
@@ -4256,6 +4263,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
   const [pickStatus, setPickStatus] = useState("all");
   const [pickFrom, setPickFrom] = useState("");
   const [pickTo, setPickTo] = useState("");
+  const [pickQuery, setPickQuery] = useState(""); // search bar (owner 2026-11-23): only when there are more than 20 finished rides; part of the filters, so only rides that match AND are ticked are deleted
   const [picked, setPicked] = useState({});
   const [pickConfirmText, setPickConfirmText] = useState("");
   const [pickDeleting, setPickDeleting] = useState(false);
@@ -4263,9 +4271,10 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
   const [pickJustDeleted, setPickJustDeleted] = useState(0);
   const rideMs = (b) => { const c = b && b.createdAt; if (c && c.toMillis) return c.toMillis(); if (c && c.seconds) return c.seconds * 1000; return Number(c) || 0; };
   const finishedRides = (bookings || []).filter((b) => b.status === "Completed" || b.status === "Cancelled").slice().sort((a, b) => rideMs(b) - rideMs(a));
-  const shownRides = finishedRides.filter((b) => (pickStatus === "all" || b.status === pickStatus) && (!pickFrom || (rideMs(b) && localDateKey(new Date(rideMs(b))) >= pickFrom)) && (!pickTo || (rideMs(b) && localDateKey(new Date(rideMs(b))) <= pickTo)));
+  const pickBar = needsListSearch(finishedRides.length);
+  const shownRides = finishedRides.filter((b) => (!pickBar || matchesQuery(pickQuery, bookingSearchText(b))) && (pickStatus === "all" || b.status === pickStatus) && (!pickFrom || (rideMs(b) && localDateKey(new Date(rideMs(b))) >= pickFrom)) && (!pickTo || (rideMs(b) && localDateKey(new Date(rideMs(b))) <= pickTo)));
   const pickedIds = shownRides.filter((b) => picked[b.id]).map((b) => b.id);
-  const closePick = () => { setPickMode(false); setPicked({}); setPickConfirmText(""); setPickError(""); setPickStatus("all"); setPickFrom(""); setPickTo(""); };
+  const closePick = () => { setPickMode(false); setPicked({}); setPickConfirmText(""); setPickError(""); setPickStatus("all"); setPickFrom(""); setPickTo(""); setPickQuery(""); };
   const runPickDelete = async () => {
     if (pickedIds.length === 0) return;
     setPickDeleting(true);
@@ -4422,6 +4431,8 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
             <label className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "To date" : lang === "mr" ? "या तारखेपर्यंत" : "इस तारीख तक"}
               <input type="date" data-pick-to value={pickTo} min={pickFrom || undefined} onChange={(e) => setPickTo(e.target.value)} className="w-full rounded-lg px-2 py-1.5 text-xs font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} /></label>
           </div>
+          {pickBar && <ListSearchBox value={pickQuery} onChange={setPickQuery} lang={lang} shown={shownRides.length} total={finishedRides.length}
+            placeholder={lang === "en" ? "Search by customer, driver, pickup or drop..." : lang === "mr" ? "ग्राहक, ड्रायव्हर, पिकअप किंवा ड्रॉपने शोधा..." : "ग्राहक, ड्राइवर, पिकअप या ड्रॉप से खोजें..."} />}
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? `${pickedIds.length} of ${shownRides.length} selected` : lang === "mr" ? `${shownRides.length} पैकी ${pickedIds.length} निवडले` : `${shownRides.length} में से ${pickedIds.length} चुने`}</div>
             <div className="flex gap-1.5">
@@ -4719,7 +4730,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, leads, leadClicks, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
@@ -4747,7 +4758,7 @@ export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, delete
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} leads={leads} leadClicks={leadClicks} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
+      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>

@@ -1,4 +1,4 @@
-// ADMIN "SWITCH ROLE" BUTTON (owner 2026-11-19: "a Switch button, only Admin can switch ... in every row of the Customer and Driver lists"; also in Customer activity and Leads).
+// ADMIN "SWITCH ROLE" BUTTON (owner 2026-11-19: "a Switch button, only Admin can switch ... in every row of the Customer and Driver lists"; also in Customer activity).
 // One small component used by every Admin row: it asks for a confirm tap, calls the Admin-only callable `adminSwitchRole` (all the rules live on the server in
 // functions/roleSwitch.js) and shows the answer. When the switch worked the row leaves this list (the lists are live), so the result is shown as a toast that outlives the row.
 import React, { useState } from "react";

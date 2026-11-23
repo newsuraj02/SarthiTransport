@@ -2371,13 +2371,12 @@ exports.getPlace = onCall(GEO_OPTIONS, async (request) => {
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-// WHATSAPP LINKS (owner 2026-11-13): https://<site>/wa/customer and /wa/driver (Hosting rewrites them here). Logs ONE click (which link, when -- plain WhatsApp has no API, so no
-// person is known) into `leadClicks` for Admin -> Leads, then sends the visitor to wa.me with the ready-made Hindi message. A logging failure never blocks the redirect.
-const { roleFromWaPath: waRoleFromPath, whatsappUrl: waWhatsappUrl, clickDoc: waClickDoc } = require("./leadClick");
+// WHATSAPP LINKS (owner 2026-11-13): https://<site>/wa/customer and /wa/driver (Hosting rewrites them here) send the visitor to wa.me with the ready-made Hindi message.
+// (Owner 2026-11-23: the click log for Admin -> Leads is gone -- the redirect is all this does now.)
+const { roleFromWaPath: waRoleFromPath, whatsappUrl: waWhatsappUrl } = require("./leadClick");
 exports.waClick = onRequest({ region: "asia-south1", cors: false }, async (req, res) => {
   const role = waRoleFromPath(req.path || req.url);
   if (!role) { res.status(404).send("Not found"); return; }
-  try { await db.collection("leadClicks").add({ ...waClickDoc(role, req.query, Date.now()), at: FieldValue.serverTimestamp() }); } catch (e) { console.error("[waClick] could not log the click", e && e.message); }
   res.set("Cache-Control", "no-store");
   res.redirect(302, waWhatsappUrl(role));
 });

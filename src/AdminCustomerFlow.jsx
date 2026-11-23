@@ -10,6 +10,8 @@ import { Phone, ChevronDown, Trash2 } from "lucide-react";
 import { C, vehicleCategoryText } from "./App.jsx";
 import { FLOW_GROUP_KEYS, flowStatus, groupFlowSessions, groupSessionsByCustomer, calledAdmin, bookingPrefillFromTries } from "./customerFlow.js";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
+import { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
+import { needsListSearch, filterByQuery } from "./adminListSearch.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const pad = (n) => String(n).padStart(2, "0");
@@ -46,6 +48,7 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
   const [confirmDelete, setConfirmDelete] = useState(null); // mobile of the customer entry whose Delete is waiting for its second tap
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [q, setQ] = useState(""); // search bar (owner 2026-11-23): only when the tab holds more than 20 customers
   const now = Date.now();
   const titles = {
     current: T(lang, "Current", "करन्ट", "करंट"), currentReturn: T(lang, "Current Return", "करन्ट रिटर्न", "करंट रिटर्न"),
@@ -61,6 +64,8 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
     return o;
   }, [inRange]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = perTab[tab] || [];
+  const searchBar = needsListSearch(list.length);
+  const shownList = searchBar ? filterByQuery(list, q, (c) => [c.name, c.mobile].filter(Boolean).join(" ")) : list; // the search looks through ALL customers, not only the newest 100
   const totals = { booked: 0, abandoned: 0, active: 0 };
   list.forEach((c) => c.tries.forEach((t) => { totals[flowStatus(t, now)] += 1; }));
   // The booking a "Booked" try turned into: the same customer's booking created during / just after it.
@@ -210,8 +215,13 @@ export default function AdminCustomerFlow({ sessions, bookings, lang, onBookFor,
         )}
         {list.length === 0
           ? <div className="rounded-xl p-6 text-center text-sm font-semibold" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.inkSoft }}>{T(lang, "Nothing in this category yet.", "इस श्रेणी में अभी कुछ नहीं।", "या श्रेणीत अजून काही नाही.")}</div>
-          : <div className="space-y-2">{list.slice(0, 100).map(customerRow)}</div>}
-        {list.length > 100 && <div className="text-center text-[11px]" style={{ color: C.inkSoft }}>{T(lang, `Showing the newest 100 of ${list.length}.`, `${list.length} में से नवीनतम 100 दिख रहे हैं।`, `${list.length} पैकी नवीनतम 100 दिसत आहेत.`)}</div>}
+          : <div>
+            {searchBar && <ListSearchBox value={q} onChange={setQ} lang={lang} shown={shownList.length} total={list.length} />}
+            {searchBar && q.trim() && shownList.length === 0
+              ? <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{noMatchText(lang)}</p>
+              : <div className="space-y-2">{shownList.slice(0, 100).map(customerRow)}</div>}
+          </div>}
+        {shownList.length > 100 && <div className="text-center text-[11px]" style={{ color: C.inkSoft }}>{T(lang, `Showing the newest 100 of ${shownList.length}.`, `${shownList.length} में से नवीनतम 100 दिख रहे हैं।`, `${shownList.length} पैकी नवीनतम 100 दिसत आहेत.`)}</div>}
       </div>
     </div>
   );

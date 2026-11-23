@@ -27,7 +27,7 @@ import {
   claimBooking, addDeclinedBy, subscribeWhere, mergeDoc, subscribeRecent, removeDocFields,
 } from "./firestoreStore";
 import { createFlowRecorder, tapLabel } from "./customerFlow";
-import { parseEntryLink, parseEntryUrl, storedLeadSource, leadSourceForAccount } from "./entryLink.js";
+import { parseEntryLink, parseEntryUrl } from "./entryLink.js";
 import { mergeListGroups } from "./categoryList.js";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
@@ -12657,10 +12657,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // DEEP LINKS (owner 2026-11-13): /customer and /driver lock this phone to ONE role -- the role-choice screen (and so the other role's buttons) is never shown. `sarthi_roleLock` is the
-  // locked role, `sarthi_leadSource` remembers which link it came from until the new account is created (then it is saved on the account as `leadSource`, see the stamp effect further down).
+  // locked role. (The lead-source tracking that used to ride on these links was REMOVED 2026-11-23, owner: "it doesnt actually help in anything".)
   // A browser on Android never gets here: main.jsx sends it to the Play Store with the role in the referrer. The other role's live session always wins (one number, one app).
   const [roleLock, setRoleLock] = usePersistedState("sarthi_roleLock", null);
-  const [pendingLead, setPendingLead] = usePersistedState("sarthi_leadSource", null);
   const entryCtxRef = useRef({});
   entryCtxRef.current = { customerVerified: customerAuth.verified, driverVerified: driverAuth.verified };
   const applyEntryLink = (entry) => {
@@ -12669,8 +12668,6 @@ export default function App() {
     if ((entry.role === "driver" && c.customerVerified) || (entry.role === "customer" && c.driverVerified)) return;
     setRoleLock(entry.role);
     setRole(entry.role); setApp(entry.role);
-    const alreadyIn = entry.role === "customer" ? c.customerVerified : c.driverVerified;
-    if (!alreadyIn) setPendingLead(storedLeadSource(entry));
   };
   useEffect(() => {
     const entry = parseEntryLink(window.location.pathname, window.location.search);
@@ -13005,32 +13002,10 @@ export default function App() {
   // Customer flow sessions (owner 2026-11-12): every tap / step the customers make, newest 400 sessions, Admin only (see src/customerFlow.js).
   const [flowSessions, setFlowSessions] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeRecent("customerFlow", setFlowSessions, "updatedAt", 400) : undefined), authDeps);
-  // LEADS (owner 2026-11-13): Admin -> Leads reads the enquiries typed in by hand (`leads`) and the WhatsApp-link clicks (`leadClicks`, written by the waClick function); Admin only.
-  const [leads, setLeads] = useState([]);
-  const [leadClicks, setLeadClicks] = useState([]);
   // WHATSAPP DELIVERY TICKS (owner 2026-11-14): whatsappStatus/{mobile} (written by the Cloud Functions) -> a { mobile: record } map for the ticks in Admin's driver rows.
   const [waStatusList, setWaStatusList] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("whatsappStatus", setWaStatusList, null) : undefined), authDeps);
   const waStatus = useMemo(() => Object.fromEntries((waStatusList || []).filter((x) => x && x.mobile).map((x) => [x.mobile, x])), [waStatusList]);
-  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeRecent("leads", setLeads, "atMs", 500) : undefined), authDeps);
-  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeRecent("leadClicks", setLeadClicks, "atMs", 1500) : undefined), authDeps);
-  // LEAD SOURCE STAMP (owner 2026-11-13): once the account that a deep link led to EXISTS (created after the click), its source is saved on it as `leadSource`
-  // ({ kind: ad | deeplink | whatsapp, link, utm, at }) so Admin -> Leads can show where each customer / driver came from. An older account that merely logs in is never tagged
-  // (its createdAt is before the click); the stored click is dropped once it has been used or can no longer match.
-  useEffect(() => {
-    if (!pendingLead || !firestoreReady) return;
-    const isCustomer = pendingLead.role === "customer";
-    const acct = isCustomer ? customer : driver;
-    const mob = isCustomer ? customerAuth.mobile : driverAuth.mobile;
-    if (!(isCustomer ? customerAuth.verified : driverAuth.verified) || !acct || !mob) return;
-    if (acct.leadSource) { setPendingLead(null); return; }
-    const ms = acct.createdAt && typeof acct.createdAt.toMillis === "function" ? acct.createdAt.toMillis() : Number(acct.createdAt) || 0;
-    if (!ms) return; // the profile's own creation time has not arrived yet -- wait
-    const ls = leadSourceForAccount(pendingLead, pendingLead.role, ms);
-    if (ls) mergeDoc(isCustomer ? "customers" : "drivers", mob, { leadSource: ls }).catch((e) => console.error("[leadSource]", e));
-    setPendingLead(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingLead, customer, driver, customerAuth.verified, driverAuth.verified]);
   useEffect(() => (firestoreReady ? subscribeCollection("bookings", (rows) => { setBookings(rows); markBookingsLoaded(); }) : undefined), authDeps);
   // Admin reads every alert (see AdminAlerts); customers/drivers now also
   // subscribe so SosScreen's "My Complaints" list can show their own
@@ -14048,7 +14023,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} leads={leads} leadClicks={leadClicks} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
+              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
