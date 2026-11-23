@@ -1663,6 +1663,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
   const [bookForCustomer, setBookForCustomer] = useState(null); // the prefill (from Customer activity) of the open "Book for this customer" sheet, or null
   const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
+  const [openLiveGroup, setOpenLiveGroup] = useState(null); // the ONE live group (Current / Current Return / Advance / Advance Return) whose list is open (owner 2026-11-23); null = all closed
   const isToday = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
     if (!d) return false;
@@ -1763,19 +1764,39 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
       </button>
       {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onBookFor={(pf) => setBookForCustomer(pf)} onDeleteSessions={deleteCustomerFlowSessions} onClose={() => setCustomerActivityOpen(false)} />}
       {bookForCustomer && <AdminBookForCustomer prefill={bookForCustomer} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomer(null)} />}
-      {sections.map((s) => (
-        <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{s.title}</h3>
-            <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
-          </div>
-          {s.items.length === 0 ? (
-            <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
+      {sections.map((s) => {
+        // The four live groups are DROPDOWNS (owner 2026-11-23: "the list needs to be in the dropdown and only one of them is open at a time"): closed by default, a tap on the header opens
+        // that group's list and closes the one that was open, a tap on the open one closes it. Booked today / Cancelled today / Total advance bookings stay plain lists.
+        const isGroup = s.key.startsWith("live-");
+        const open = !isGroup || openLiveGroup === s.key;
+        return (
+        <div key={s.key} data-booking-section={s.key} data-booking-group={isGroup ? "" : undefined} data-open={isGroup ? String(open) : undefined} className="rounded-xl shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          {isGroup ? (
+            <button type="button" data-booking-group-toggle aria-expanded={open} onClick={() => setOpenLiveGroup(open ? null : s.key)} className="w-full flex items-center justify-between gap-2 p-4 text-left">
+              <h3 className="text-sm font-bold min-w-0 break-words" style={{ color: C.ink }}>{s.title}</h3>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
+                <ChevronDown size={18} color={C.ink} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+              </span>
+            </button>
           ) : (
-            <SearchableList items={s.items} renderItem={s.renderItem} textOf={bookingSearchText} lang={lang} />
+            <div className="flex items-center justify-between p-4 pb-0 mb-3">
+              <h3 className="text-sm font-bold" style={{ color: C.ink }}>{s.title}</h3>
+              <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
+            </div>
+          )}
+          {open && (
+            <div data-booking-group-list={isGroup ? "" : undefined} className="px-4 pb-4">
+              {s.items.length === 0 ? (
+                <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
+              ) : (
+                <SearchableList items={s.items} renderItem={s.renderItem} textOf={bookingSearchText} lang={lang} />
+              )}
+            </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
