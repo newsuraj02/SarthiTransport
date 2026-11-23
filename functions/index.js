@@ -209,6 +209,7 @@ const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const wa = require("./whatsappStatus");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
+const { planPhoneSignup, isClientPinSignup } = require("./phoneSignup");
 const { planRoleSwitch, plainSnapshot } = require("./roleSwitch");
 const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
@@ -1704,6 +1705,52 @@ exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (requ
   }
   return { ok: true };
 });
+
+// ---------------- OTP at sign-up (owner 2026-11-23) ----------------
+// "I want the OTP back during signup and login as I have got multiple fraud bookings." Customer: number > OTP > PIN (twice) > done. Driver: number > OTP > PIN (twice) > KYC documents >
+// done. The OTP is a real Firebase Phone Auth SMS (sent by Firebase's servers, the same mechanism Forgot PIN already uses), done in a SEPARATE auth app on the phone (src/phoneOtp.js,
+// in-memory only) so it never logs anybody into the app by itself. THIS callable is what actually creates the PIN login, and only for a caller whose ID token comes from a fresh
+// phone sign-in (functions/phoneSignup.js `planPhoneSignup`): an account for a number nobody verified can no longer be made through the app. It creates ONLY the login; the
+// profile / documents are written by the app afterwards exactly as before, so a driver still gets no account before the whole form is complete (the client calls this at the
+// final "Create Account"). `newPin` is the same pinToPassword(...) string the client always sent.
+exports.createPinAccountAfterPhoneVerify = onCall({ region: "asia-south1" }, async (request) => {
+  const { role, newPin } = request.data || {};
+  const toRole = role === "driver" ? "driver" : "customer";
+  const token = request.auth && request.auth.token;
+  let roles = null;
+  const preMobile = typeof token?.phone_number === "string" ? (token.phone_number.match(/^\+91(\d{10})$/) || [])[1] : null;
+  try {
+    if (preMobile) roles = await lookupMobileRoles(toRole, (rr) => mobileHasRoleAccount(preMobile, rr));
+  } catch (e) {
+    console.error("[createPinAccountAfterPhoneVerify] role lookup failed:", e.message);
+    return { ok: false, reason: "error" };
+  }
+  const plan = planPhoneSignup({ token, nowSec: Math.floor(Date.now() / 1000), newPassword: newPin, roles });
+  if (!plan.ok) {
+    if (plan.reason === "phone_required") throw new HttpsError("unauthenticated", "Phone verification required.");
+    return { ok: false, reason: plan.reason };
+  }
+  try {
+    await getAuth().createUser({ email: pinAuthEmail(plan.mobile, toRole), password: newPin });
+    return { ok: true };
+  } catch (e) {
+    if (e.code === "auth/email-already-exists") return { ok: false, reason: "exists" };
+    console.error("[createPinAccountAfterPhoneVerify] create failed:", e.message);
+    return { ok: false, reason: "error" };
+  }
+});
+
+// OPTIONAL hard lock (off until the owner turns it on, because it needs Google Identity Platform): with ENFORCE_OTP_SIGNUP=1 in functions/.env, this blocking function refuses every
+// browser-side sign-up of a PIN login (the synthetic <mobile>@customer|driver.apnatransport.local e-mail), so the only way to get a PIN account is the callable above (the Admin SDK
+// is not blocked). Without it the app flow still needs the OTP, but someone who talks to Firebase directly could still create an account without one. Phone sign-ups (the OTP itself)
+// and the Admin sign-in are never blocked. Deploying it before Identity Platform is enabled fails the deploy -- hence the switch.
+if (process.env.ENFORCE_OTP_SIGNUP === "1") {
+  const { beforeUserCreated } = require("firebase-functions/v2/identity");
+  exports.blockUnverifiedPinSignup = beforeUserCreated({ region: "asia-south1" }, (event) => {
+    if (isClientPinSignup(event.data && event.data.email)) throw new HttpsError("permission-denied", "Sign-up needs the OTP verification step.");
+    return;
+  });
+}
 
 // Sign-up pre-check: does this mobile already have a PIN account for this
 // role, and does it already belong to the OTHER role? Callable signed-out

@@ -726,3 +726,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-22 -- Customer flow: Pickup, Drop, then (frozen) vehicle list, then confirm screen; dropdown scroll room only as needed; owner 2026-11-22
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking
+
+## 2026-11-23 -- OTP at sign-up and login: new callable createPinAccountAfterPhoneVerify, optional blocking function, otpAuth app, OTP stage in customer + driver onboarding (owner 2026-11-23, fraud bookings)
+- changed (10): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/firebaseClient.js#imports, code:src/firebaseClient.js#adminFirebaseAuth
+- added (12): fn:createPinAccountAfterPhoneVerify, code:functions/index.js#fn:createPinAccountAfterPhoneVerify, code:src/App.jsx#useOtpFlow, code:src/App.jsx#OtpStep, code:src/App.jsx#numberNotRegisteredMsg, code:src/firebaseClient.js#otpApp, code:src/firebaseClient.js#otpFirebaseAuth, code:src/firebaseClient.js#other, code:src/firebaseClient.js#otpFunctions, code:functions/phoneSignup.js, code:scripts/serverTests/phoneSignup.cjs, code:src/phoneOtp.js

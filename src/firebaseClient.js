@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
-import { getAuth, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth, setPersistence, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -73,9 +73,15 @@ const customerApp = hasConfig ? initializeApp(firebaseConfig, "customerAuth") : 
 const driverApp = hasConfig ? initializeApp(firebaseConfig, "driverAuth") : null;
 const adminApp = hasConfig ? initializeApp(firebaseConfig, "adminAuth") : null;
 
+// A FOURTH app, used only to prove ownership of a mobile number with a real SMS OTP at sign-up / login (owner 2026-11-23, src/phoneOtp.js). It is separate on purpose: its phone
+// sign-in never touches the customer / driver / admin sessions, and it is kept in memory only, so an OTP session that is abandoned half-way can never log anybody in.
+const otpApp = hasConfig ? initializeApp(firebaseConfig, "otpAuth") : null;
+
 export const customerFirebaseAuth = customerApp ? getAuth(customerApp) : null;
 export const driverFirebaseAuth = driverApp ? getAuth(driverApp) : null;
 export const adminFirebaseAuth = adminApp ? getAuth(adminApp) : null;
+export const otpFirebaseAuth = otpApp ? getAuth(otpApp) : null;
+if (otpFirebaseAuth) setPersistence(otpFirebaseAuth, inMemoryPersistence).catch((e) => console.error("[otp auth persistence]", e));
 
 // Without this, Auth's own persistence auto-detection has been seen to
 // silently settle on a non-durable mode (session-only or in-memory) in some
@@ -153,6 +159,8 @@ const functionsByRole = {
   driver: driverApp ? getFunctions(driverApp, "asia-south1") : null,
   admin: adminApp ? getFunctions(adminApp, "asia-south1") : null,
 };
+// Callables made by the OTP-verified (phone) session of the fourth app -- see src/phoneOtp.js.
+export const otpFunctions = otpApp ? getFunctions(otpApp, "asia-south1") : null;
 
 // Address language (owner 2026-10-31): Pickup/Drop addresses come from these three callables (functions/index.js:
 // getAddress / searchPlaces / getPlace), always in the app's selected language with English words transliterated into the
