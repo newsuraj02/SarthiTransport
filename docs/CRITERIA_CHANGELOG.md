@@ -753,3 +753,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- Role-selection card titles renamed: Driver App -> Partner (Driver and Owner), Customer App -> Customer / Grahak (owner 2026-11-24)
 - changed (2): code:CLAUDE.md, code:src/App.jsx#RoleSelect
+
+## 2026-11-24 -- Role-choice screen enlarged + Customer left / Partner right, coloured cards (owner 2026-11-24)
+- changed (2): code:CLAUDE.md, code:src/App.jsx#RoleSelect

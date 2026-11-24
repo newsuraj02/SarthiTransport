@@ -4841,32 +4841,34 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   }, [lang, anyVerified]);
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-5 py-8">
-      <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
+      <p className="text-xl font-extrabold text-center mb-6" style={{ color: C.ink }}>
         {anyVerified
           ? (lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
           : (lang === "en" ? "Choose your app" : lang === "mr" ? "तुमचे अ‍ॅप निवडा" : "अपनी ऐप चुनें")}
       </p>
 
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
-        {showDriver && (
+        {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
-            <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
-              <img src="/role-driver-icon.png" alt="" className="h-16 w-16 mb-3" />
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Partner (Driver and Owner)" : lang === "mr" ? "पार्टनर (ड्रायव्हर आणि ओनर)" : "पार्टनर (ड्राइवर और ओनर)"}</div>
-              <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{driverWho}</div>
+            <button data-role-card="customer" onClick={() => onSelect("customer")} className="flex-1 w-full rounded-3xl px-3 pt-6 pb-4 flex flex-col items-center text-center shadow-lg active:scale-[0.98]" style={{ background: "#E8F8F0", border: `4px solid ${C.success}`, minHeight: 330 }}>
+              <img src="/role-customer.svg" alt="" className="h-24 w-24 mb-4" />
+              <div className="text-2xl font-black leading-tight mb-3" style={{ color: C.ink }}>{lang === "en" ? "Customer / Grahak" : "कस्टमर / ग्राहक"}</div>
+              <div className="text-base font-extrabold leading-snug text-balance mb-4" style={{ color: C.ink }}>{customerWho}</div>
+              <div className="mt-auto w-full rounded-2xl py-3 text-base font-black text-white" style={{ background: C.success }}>{lang === "en" ? "Tap here" : lang === "mr" ? "इथे दाबा" : "यहाँ दबाएँ"}</div>
             </button>
-            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
+            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </div>
         )}
 
-        {showCustomer && (
+        {showDriver && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
-            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
-              <img src="/role-customer.svg" alt="" className="h-16 w-16 mb-3" />
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer / Grahak" : "कस्टमर / ग्राहक"}</div>
-              <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{customerWho}</div>
+            <button data-role-card="driver" onClick={() => onSelect("driver")} className="flex-1 w-full rounded-3xl px-3 pt-6 pb-4 flex flex-col items-center text-center shadow-lg active:scale-[0.98]" style={{ background: "#FFF1E3", border: `4px solid ${C.pimpri}`, minHeight: 330 }}>
+              <img src="/role-driver-icon.png" alt="" className="h-24 w-24 mb-4" />
+              <div className="text-2xl font-black leading-tight mb-3" style={{ color: C.ink }}>{lang === "en" ? "Partner (Driver and Owner)" : lang === "mr" ? "पार्टनर (ड्रायव्हर आणि ओनर)" : "पार्टनर (ड्राइवर और ओनर)"}</div>
+              <div className="text-base font-extrabold leading-snug text-balance mb-4" style={{ color: C.ink }}>{driverWho}</div>
+              <div className="mt-auto w-full rounded-2xl py-3 text-base font-black text-white" style={{ background: C.pimpri }}>{lang === "en" ? "Tap here" : lang === "mr" ? "इथे दाबा" : "यहाँ दबाएँ"}</div>
             </button>
-            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
+            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
           </div>
         )}
       </div>
