@@ -796,3 +796,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- GPS service crash guards (owner 2026-11-24, Play Console crash rate 13.57 % / ANR 1.01 %): startForeground wrapped, startTracking refuses without a location permission; nothing changes when location is allowed
 - changed (4): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-24 -- Startup ANR fix (owner 2026-11-24): MainActivity creates its notification channel on a background thread instead of the main thread
+- changed (3): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/MainActivity.java, code:scripts/verifyInvariants.mjs#checks

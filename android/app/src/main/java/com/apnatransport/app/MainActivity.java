@@ -24,7 +24,11 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativePushPlugin.class);
         registerPlugin(AnalyticsBridgePlugin.class);
         super.onCreate(savedInstanceState);
-        createLoadAlertNotificationChannel();
+        // ANR FIX (owner 2026-11-24, Play Console: "Input dispatching timed out" in MainActivity.onCreate and "main thread busy doing a slow binder call"):
+        // getSystemService + createNotificationChannel are binder calls into the system server, which can stall for seconds under lock contention on a
+        // busy / slow phone, and this ran on the main thread on every launch. NotificationManager is thread-safe, so it now runs on a short background
+        // thread (the channel is only needed when a push arrives, long after). Same channel, same settings.
+        new Thread(this::createLoadAlertNotificationChannel, "load-alert-channel").start();
     }
 
     // singleTask (see AndroidManifest.xml) means a launch while this
@@ -68,17 +72,21 @@ public class MainActivity extends BridgeActivity {
     // "have I done this already" flag.
     private void createLoadAlertNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager == null) return;
-        NotificationChannel channel = new NotificationChannel(
-            "new_load_alerts", "New load alerts", NotificationManager.IMPORTANCE_HIGH);
-        channel.setDescription("New loads and direct booking requests.");
-        channel.enableVibration(true);
-        channel.setVibrationPattern(new long[] { 0, 500, 200, 500, 200, 500, 200, 500 });
-        channel.setSound(
-            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-            new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
-        );
-        manager.createNotificationChannel(channel);
+        try {
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager == null) return;
+            NotificationChannel channel = new NotificationChannel(
+                "new_load_alerts", "New load alerts", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("New loads and direct booking requests.");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[] { 0, 500, 200, 500, 200, 500, 200, 500 });
+            channel.setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
+            );
+            manager.createNotificationChannel(channel);
+        } catch (Exception ignored) {
+            // Never let a notification-channel problem take the app down; the channel is re-tried on the next launch.
+        }
     }
 }
