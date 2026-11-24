@@ -1,6 +1,8 @@
 package com.apnatransport.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -25,6 +27,14 @@ public class LocationTrackerPlugin extends Plugin {
             call.reject("mobile and token are required.");
             return;
         }
+        // CRASH GUARD (owner 2026-11-24): never start the location foreground service without a location permission -- on Android 14+ that is a
+        // SecurityException inside the service. The driver app calls this whenever duty is on, even before the permission was granted.
+        boolean fine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean coarse = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (!fine && !coarse) {
+            call.reject("Location permission is not granted yet.");
+            return;
+        }
         Intent intent = new Intent(getContext(), LocationTrackerService.class);
         intent.setAction(LocationTrackerService.ACTION_START);
         intent.putExtra(LocationTrackerService.EXTRA_MOBILE, mobile);
@@ -36,7 +46,13 @@ public class LocationTrackerPlugin extends Plugin {
         // O+ and plain startService() below it, which is all pre-O needs
         // since the foreground-service-must-post-a-notification-within-5s
         // rule (and this crash risk) doesn't exist before API 26 either.
-        ContextCompat.startForegroundService(getContext(), intent);
+        try {
+            ContextCompat.startForegroundService(getContext(), intent);
+        } catch (RuntimeException e) {
+            // Android 12+ refuses a foreground-service start from the background (ForegroundServiceStartNotAllowedException): report it, never crash.
+            call.reject("Could not start location tracking right now: " + e.getMessage());
+            return;
+        }
         call.resolve();
     }
 

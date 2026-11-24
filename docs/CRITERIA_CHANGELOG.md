@@ -793,3 +793,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-24 -- Mic on Pickup/Drop + Helper through the native speech plugin (next native build); shared src/nativeSpeech.js; mic hidden until the plugin is installed; replaces the 2026-11-04 no-microphone rule at the owner's request
 - changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#LocationField, code:src/HelperWidget.jsx#imports, code:src/HelperWidget.jsx#T, code:src/HelperWidget.jsx#HelperWidget
 - added (2): code:src/App.jsx#LOC_MIC_TEXT, code:src/nativeSpeech.js
+
+## 2026-11-24 -- GPS service crash guards (owner 2026-11-24, Play Console crash rate 13.57 % / ANR 1.01 %): startForeground wrapped, startTracking refuses without a location permission; nothing changes when location is allowed
+- changed (4): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java, code:scripts/verifyInvariants.mjs#checks

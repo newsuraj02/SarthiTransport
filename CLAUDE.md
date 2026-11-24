@@ -64,6 +64,8 @@ If a change elsewhere in the app happens to touch one of these files
 (e.g. a broader refactor), leave the GPS-tracking-specific code exactly as
 it is and work around it, rather than folding it into the same edit.
 
+Crash guards (owner 2026-11-24, Play Console crash rate 13.57 % / ANR 1.01 %; NEW bug report = permission, ONLY this; ships with the next native build, NOT confirmed on a phone): `LocationTrackerService.onStartCommand` wraps `startForeground` (Android 14+ SecurityException when the location permission is missing / the app may not use location right now; Android 12+ ForegroundServiceStartNotAllowedException) and just stops itself; `LocationTrackerPlugin.startTracking` refuses to start the service without a location permission and reports a refused start instead of throwing. With permission granted nothing changes. The JS start effect (frozen) was NOT edited. Pinned by "GPS SERVICE CRASH GUARDS". The real cause must still be confirmed from the Play Console / Crashlytics stack trace.
+
 If the user reports a NEW bug in this area later, that itself is
 permission to investigate and fix it — "frozen" means no unsolicited
 changes, not that bug reports here should be ignored.

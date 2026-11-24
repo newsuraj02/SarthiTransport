@@ -161,7 +161,7 @@
   "code:.github/workflows/check-16kb.yml": "aad711246a4158e2",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "3bcd50024243bceb",
+  "code:CLAUDE.md": "a38642636e9cd36f",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -236,8 +236,8 @@
   "code:android/app/src/main/java/com/apnatransport/app/FusedLocationBridgePlugin.java": "639ac9afccb824f5",
   "code:android/app/src/main/java/com/apnatransport/app/LoadWatcher.java": "d2548b92cf413008",
   "code:android/app/src/main/java/com/apnatransport/app/LocationBridgePlugin.java": "01ca4c93fc1bd64c",
-  "code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java": "959c57c01591c2b0",
-  "code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java": "2fc72d7f45b7dc19",
+  "code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java": "cef695fe2c411540",
+  "code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java": "85a1cae4f57f608b",
   "code:android/app/src/main/java/com/apnatransport/app/MainActivity.java": "ffedc95c40b67041",
   "code:android/app/src/main/java/com/apnatransport/app/NativePushPlugin.java": "a3ec0ec500bc38b3",
   "code:android/app/src/main/java/com/apnatransport/app/PowerBridgePlugin.java": "5d6c3adef68f9f33",
@@ -724,7 +724,7 @@
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
   "code:scripts/verifyInvariants.mjs#VM_ALL_LABELS": "0252744b92ef8156",
-  "code:scripts/verifyInvariants.mjs#checks": "d13aa5ddd6b3dd9d",
+  "code:scripts/verifyInvariants.mjs#checks": "65f90622beb8f567",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/whyNoDriver.js": "7eaf1835626f2adf",
@@ -1328,6 +1328,7 @@
   "code:src/inputRules.js": "c85fce8bd2002943",
   "code:src/loginEpoch.js": "492d9ac1e5ddf9ae",
   "code:src/main.jsx": "42f2986bafbe68ac",
+  "code:src/nativeSpeech.js": "4862885c20a8135c",
   "code:src/phoneOtp.js": "377ac1d465c5483e",
   "code:src/placeSpecificity.js": "984cc86ac3b3a3be",
   "code:src/serviceArea.js": "37cede12105014f9",
@@ -1367,7 +1368,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:src/nativeSpeech.js": "4862885c20a8135c"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

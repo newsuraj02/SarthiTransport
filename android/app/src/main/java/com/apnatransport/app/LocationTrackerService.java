@@ -94,7 +94,17 @@ public class LocationTrackerService extends Service {
             driverMobile = intent.getStringExtra(EXTRA_MOBILE);
             tripId = intent.getStringExtra(EXTRA_TRIP_ID);
             String token = intent.getStringExtra(EXTRA_TOKEN);
-            startForeground(NOTIFICATION_ID, buildNotification());
+            // CRASH GUARD (owner 2026-11-24, Play Console: crash rate 13.57 %): on Android 14+ a "location" foreground service is refused with a
+            // SecurityException when the location permission is missing or the app is not in a state that may use it right now (e.g. a retry fired
+            // while the app was in the background), and Android 12+ can throw ForegroundServiceStartNotAllowedException. Uncaught, either one
+            // killed the whole app. Now the service just stops itself (tracking simply does not start; the driver app retries on its own schedule).
+            try {
+                startForeground(NOTIFICATION_ID, buildNotification());
+            } catch (RuntimeException e) {
+                Log.e(TAG, "startForeground refused by the system, stopping", e);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
             signInAndStart(token);
             return START_STICKY;
         }
