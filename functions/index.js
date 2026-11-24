@@ -1550,6 +1550,78 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   }
 });
 
+// ---------------- In-app helper (owner 2026-11-24) ----------------
+// "An AI agent inside the app to answer all the app related queries, FAQs." Customer + driver apps only, Claude Haiku, answers ONLY from functions/helpKnowledge.js, in the language the user chose
+// at sign-up. Signed-in users only; HELP_DAILY_LIMIT questions per user per day (cost guard); nothing about the person (name, mobile, trips) is sent -- only the question text with long digit runs
+// removed, the role and the language. Every exchange is logged (anonymously) in `helperLog` for Admin: a question it could not answer shows what to add to the knowledge file.
+// Uses the same ANTHROPIC_API_KEY secret as resolveChangeLogEntry; without it the callable answers { ok: false, reason: "not_configured" } and the app offers the support buttons.
+const helpAgent = require("./helpAgent");
+exports.askHelper = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const input = helpAgent.cleanHelpInput(request.data);
+  if (!input.ok) throw new HttpsError("invalid-argument", input.reason);
+  const apiKey = ANTHROPIC_API_KEY.value();
+  if (!apiKey) return { ok: false, reason: "not_configured" };
+
+  // Daily limit: one counter per user per India day, bumped in a transaction so parallel taps cannot slip past it.
+  const usageRef = db.collection("helperUsage").doc(`${request.auth.uid}_${helpAgent.istDayKey()}`);
+  const allowed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(usageRef);
+    const n = snap.exists ? Number(snap.data().count) || 0 : 0;
+    if (!helpAgent.withinDailyLimit(n)) return false;
+    tx.set(usageRef, { count: n + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+  if (!allowed) return { ok: false, reason: "limit", limit: helpAgent.HELP_DAILY_LIMIT };
+
+  let reply;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 25000);
+    let res;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: ctl.signal,
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify(helpAgent.buildRequestBody(input)),
+      });
+    } finally { clearTimeout(timer); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error("[askHelper] Claude API rejected the request:", res.status, JSON.stringify(data).slice(0, 300));
+      return { ok: false, reason: "api_error" };
+    }
+    reply = helpAgent.parseHelperReply(data);
+  } catch (e) {
+    console.error("[askHelper] failed:", e.message);
+    return { ok: false, reason: "error" };
+  }
+
+  let logId = null;
+  try {
+    const ref = await db.collection("helperLog").add({
+      at: FieldValue.serverTimestamp(), role: input.role, lang: input.lang,
+      question: input.question, answer: reply.text.slice(0, 1500), answered: reply.answered,
+      tokensIn: reply.tokensIn, tokensOut: reply.tokensOut, helpful: null,
+    });
+    logId = ref.id;
+  } catch (e) { console.error("[askHelper] log failed:", e.message); }
+  return { ok: true, text: reply.text, answered: reply.answered, logId };
+});
+
+// 👍 / 👎 on an answer. Only the `helpful` flag of an existing log entry can change, and only to a boolean.
+exports.rateHelperAnswer = onCall({ region: "asia-south1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  const { logId, helpful } = request.data || {};
+  if (typeof logId !== "string" || !/^[A-Za-z0-9]{10,40}$/.test(logId) || typeof helpful !== "boolean") throw new HttpsError("invalid-argument", "logId and helpful are required.");
+  const ref = db.collection("helperLog").doc(logId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false };
+  await ref.update({ helpful });
+  return { ok: true };
+});
+
 // ---------------- Number masking + WhatsApp (both MSG91) ----------------
 // Replaces Kaleyra for masked calling below -- the owner closed their
 // Kaleyra account, and MSG91 (already in use for WhatsApp direct-request

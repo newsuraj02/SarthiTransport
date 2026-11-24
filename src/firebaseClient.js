@@ -364,6 +364,25 @@ export async function verifyPickupOtp(bookingId, otp) {
   }
 }
 
+// In-app helper (owner 2026-11-24): asks the askHelper callable. Resolves { ok, text, answered, logId } or { ok: false, reason } -- reason "limit" (daily cap), "not_configured", "api_error", "error", "signed_out";
+// never throws. rateHelperAnswer saves a thumbs up / down on an answer (best effort).
+export async function askHelperCall({ role, lang, question, history }) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "signed_out" };
+  try {
+    const result = await httpsCallable(functions, "askHelper")({ role, lang, question, history });
+    return result.data;
+  } catch (e) {
+    console.warn("[helper] askHelper failed", e?.code || e);
+    return { ok: false, reason: e?.code === "functions/unauthenticated" ? "signed_out" : "error" };
+  }
+}
+export async function rateHelperCall(logId, helpful) {
+  const functions = functionsByRole[activeRole];
+  if (!functions || !logId) return;
+  try { await httpsCallable(functions, "rateHelperAnswer")({ logId, helpful }); } catch (e) { console.warn("[helper] rating failed", e?.code || e); }
+}
+
 // Fleet owner accepted a booking and picked a vehicle (owner 2026-11-08): the server makes the driver's trip link, sends the WhatsApp message automatically when
 // MSG91 is set up for it, and returns { link, sent }. Never throws -- { link: null, sent: false } on any failure (the owner's app still offers the one-tap WhatsApp button).
 export async function dispatchFleetTrip(bookingId) {

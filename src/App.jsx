@@ -6,6 +6,7 @@ const FleetSetup = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default:
 const FleetAssignSheet = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default: m.FleetAssignSheet })));
 const FleetDispatchSheet = lazy(() => import("./FleetOwner.jsx").then((m) => ({ default: m.FleetDispatchSheet })));
 const AdminPanel = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminPanel })));
+const HelperWidget = lazy(() => import("./HelperWidget.jsx"));
 const AdminLogin = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminLogin })));
 const AdminPinLock = lazy(() => import("./AdminPanel.jsx").then((m) => ({ default: m.AdminPinLock })));
 // Deliberately tiny and dependency-free (no C/lucide-react reference) so it
@@ -13510,6 +13511,10 @@ export default function App() {
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras}
             fleetVehicles={fleetVehicles} fleetPrivateById={fleetPrivateById} />
+        )}
+        {/* IN-APP HELPER (owner 2026-11-24): the helper ("Your Helper" / "अपना मददगार" / "आपला मददगार"), bottom right of every signed-in Customer / Driver screen (not Admin). Mounted once here, so no screen's own code is edited. */}
+        {((role === "customer" && customerAuth.verified) || (role === "driver" && driverAuth.verified)) && (
+          <Suspense fallback={null}><HelperWidget role={role} lang={lang} phone={ADMIN_PHONE} whatsapp={ADMIN_WHATSAPP} /></Suspense>
         )}
         {kickedNotice && (
           <div data-session-kicked className="fixed inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(15,27,45,0.55)" }}>

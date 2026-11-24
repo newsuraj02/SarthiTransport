@@ -23,6 +23,7 @@ import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx"
 import SearchableList, { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
 import { needsListSearch, filterByQuery, matchesQuery, personSearchText, bookingSearchText } from "./adminListSearch.js";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
+import AdminHelperLog from "./AdminHelperLog.jsx";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
@@ -4135,6 +4136,9 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
       </div>
 
       <div className="mt-2 mb-4"><WaSetupCard lang={lang} /></div>
+
+      {/* IN-APP HELPER LOG (owner 2026-11-24): what the AI helper was asked and could not answer -- see src/AdminHelperLog.jsx. */}
+      <AdminHelperLog lang={lang} />
 
       <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Export app users for ads (Meta)" : lang === "mr" ? "जाहिरातींसाठी अ‍ॅप वापरकर्ते एक्सपोर्ट करा (Meta)" : "विज्ञापनों के लिए ऐप यूज़र एक्सपोर्ट करें (Meta)"}</div>
