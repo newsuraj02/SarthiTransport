@@ -122,7 +122,8 @@ function parseHelperReply(api) {
 // and the same approach as Admin's spoken announcements: it plays everywhere, unlike each phone's own speech engine) at the app's ONE speaking rate (= SPEECH_RATE in src/App.jsx).
 const HELP_SPEECH_RATE = 0.85;
 const HELP_DAILY_AUDIO_LIMIT = 60;   // spoken answers per user per day (cost guard, separate from the 20 questions)
-const HELP_TTS_VOICE = { en: { languageCode: "en-IN", ssmlGender: "FEMALE" }, hi: { languageCode: "hi-IN", ssmlGender: "FEMALE" }, mr: { languageCode: "mr-IN", ssmlGender: "FEMALE" } };
+// LOCKED TO GOOGLE'S "STANDARD" VOICES (owner 2026-11-24: "Lock it to Standard"): the cheapest tier (WaveNet / Neural2 cost about 4x). A named voice stops Google picking a dearer default.
+const HELP_TTS_VOICE = { en: { languageCode: "en-IN", name: "en-IN-Standard-A", ssmlGender: "FEMALE" }, hi: { languageCode: "hi-IN", name: "hi-IN-Standard-A", ssmlGender: "FEMALE" }, mr: { languageCode: "mr-IN", name: "mr-IN-Standard-A", ssmlGender: "FEMALE" } };
 const SPEECH_WORDS = {
   en: { rupee: "rupees", kg: "kilograms", km: "kilometres", min: "minutes" },
   hi: { rupee: "रुपये", kg: "किलोग्राम", km: "किलोमीटर", min: "मिनट" },

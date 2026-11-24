@@ -1644,11 +1644,16 @@ exports.speakHelperAnswer = onCall({ region: "asia-south1", timeoutSeconds: 60, 
   });
   if (!allowed) return { ok: false, reason: "limit" };
   try {
-    const [response] = await getTtsClient().synthesizeSpeech({
-      input: { text },
-      voice: helpAgent.HELP_TTS_VOICE[lang],
-      audioConfig: { audioEncoding: "MP3", speakingRate: helpAgent.HELP_SPEECH_RATE },
-    });
+    const audioConfig = { audioEncoding: "MP3", speakingRate: helpAgent.HELP_SPEECH_RATE };
+    let response;
+    try {
+      [response] = await getTtsClient().synthesizeSpeech({ input: { text }, voice: helpAgent.HELP_TTS_VOICE[lang], audioConfig });
+    } catch (e1) {
+      // If Google ever renames / retires the locked Standard voice, a working (default) voice beats silence; the warning shows in the function logs so the name can be fixed.
+      console.warn("[speakHelperAnswer] locked voice failed, retrying with the language default:", e1.message);
+      const v = helpAgent.HELP_TTS_VOICE[lang];
+      [response] = await getTtsClient().synthesizeSpeech({ input: { text }, voice: { languageCode: v.languageCode, ssmlGender: v.ssmlGender }, audioConfig });
+    }
     return { ok: true, audio: Buffer.from(response.audioContent).toString("base64"), mime: "audio/mpeg" };
   } catch (e) {
     console.error("[speakHelperAnswer] text-to-speech failed:", e.message);

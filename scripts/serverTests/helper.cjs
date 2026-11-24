@@ -38,12 +38,12 @@ Module._load = function (req, parent, isMain) {
     createCustomToken: async (uid, claims) => "custom:" + uid + ":" + JSON.stringify(claims || {}),
     createUser: async ({ email, password }) => { if (users.has(email)) { const x = new Error("exists"); x.code = "auth/email-already-exists"; throw x; } users.set(email, { uid: "u" + users.size, password }); return { uid: "u" + users.size }; },
   }) };
-  if (req === "@google-cloud/text-to-speech") return { TextToSpeechClient: class { async synthesizeSpeech(r) { global.__tts.push(r); if (global.__ttsFail) throw new Error("tts api disabled"); return [{ audioContent: Buffer.from("FAKE-MP3") }]; } } };
+  if (req === "@google-cloud/text-to-speech") return { TextToSpeechClient: class { async synthesizeSpeech(r) { global.__tts.push(r); if (global.__ttsFail) throw new Error("tts api disabled"); if (global.__ttsBadName && r.voice.name) throw new Error("voice not found"); return [{ audioContent: Buffer.from("FAKE-MP3") }]; } } };
   if (req.startsWith("firebase-") || req.startsWith("@google-cloud")) return new Proxy(function () {}, { get: (t, k) => (k === "then" ? undefined : () => ({})), apply: () => ({}) });
   return real.apply(this, arguments);
 };
 process.env.TEST_KEY = "sk-test";
-global.__tts = []; global.__ttsFail = false;
+global.__tts = []; global.__ttsFail = false; global.__ttsBadName = false;
 let fns;
 try { fns = require(path.join(__dirname, "..", "..", "functions", "index.js")); } catch (e) { console.error("LOAD FAIL", e.message); process.exit(2); }
 const ask = fns.askHelper, rate = fns.rateHelperAnswer, speak = fns.speakHelperAnswer;
@@ -165,14 +165,19 @@ global.fetch = async (url, opts) => {
   const t1 = global.__tts[global.__tts.length - 1];
   ck(x.r && x.r.ok === true && x.r.mime === "audio/mpeg" && Buffer.from(x.r.audio, "base64").toString() === "FAKE-MP3", "a logged answer comes back as an MP3 (base64)");
   ck(t1 && !t1.input.text.includes("arbitrary") && t1.input.text.includes("1,200 रुपये") && t1.input.text.includes("700 किलोग्राम") && t1.input.text.includes("15 किलोमीटर") && !/^1\./.test(t1.input.text), "it speaks the helper's own answer (never text sent by the app), with money / weight / distance made speakable and the list number dropped");
+  ck(t1 && t1.voice.name === "hi-IN-Standard-A" && /Standard/.test(t1.voice.name), "the voice is LOCKED to Google's cheapest Standard tier (a named Standard voice, never a WaveNet / Neural2 / Chirp default)");
   ck(t1 && t1.voice.languageCode === "hi-IN" && t1.audioConfig.audioEncoding === "MP3" && t1.audioConfig.speakingRate === 0.85, "the language is the log entry's own (the app's), MP3, and the app's one speaking rate 0.85");
   await ask({ ...user("v2", "customer"), data: { role: "customer", lang: "mr", question: "gaadi kashi book karaychi" } });
   const lastMr = [...col("helperLog").entries()].filter(([, l]) => l.lang === "mr").pop()[0];
   await tryCall(speak, { ...user("v2", "customer"), data: { logId: lastMr } });
-  ck(global.__tts[global.__tts.length - 1].voice.languageCode === "mr-IN", "Marathi answers are spoken with the Marathi voice");
+  ck(global.__tts[global.__tts.length - 1].voice.languageCode === "mr-IN" && global.__tts[global.__tts.length - 1].voice.name === "mr-IN-Standard-A", "Marathi answers are spoken with the Marathi Standard voice");
   const nBefore = global.__tts.length; let allowedCount = 0, lastSpeak = null;
   for (let i = 0; i < 64; i++) { lastSpeak = await speak({ ...user("audioheavy", "customer"), data: { logId: spoken.logId } }); if (lastSpeak.ok) allowedCount++; }
   ck(allowedCount === 60 && lastSpeak.ok === false && lastSpeak.reason === "limit" && global.__tts.length - nBefore === 60, "60 spoken answers a day per user; after that no text-to-speech call is made", allowedCount + " spoken");
+  global.__ttsBadName = true; const nRetry = global.__tts.length;
+  x = await tryCall(speak, { ...user("v4", "customer"), data: { logId: spoken.logId } });
+  global.__ttsBadName = false;
+  ck(x.r && x.r.ok === true && global.__tts.length - nRetry === 2 && !global.__tts[global.__tts.length - 1].voice.name, "if Google retires the locked voice name, the language default is used once instead of silence");
   global.__ttsFail = true;
   x = await tryCall(speak, { ...user("v3", "customer"), data: { logId: spoken.logId } });
   global.__ttsFail = false;
