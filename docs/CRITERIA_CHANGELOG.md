@@ -759,3 +759,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- Role-choice cards toned down (owner 2026-11-24: lower the exaggeration)
 - changed (2): code:CLAUDE.md, code:src/App.jsx#RoleSelect
+
+## 2026-11-24 -- Role-choice card border = icon blue (owner 2026-11-24)
+- changed (2): code:CLAUDE.md, code:src/App.jsx#RoleSelect

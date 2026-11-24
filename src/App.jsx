@@ -4850,7 +4850,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
         {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
-            <button data-role-card="customer" onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl px-3 pt-5 pb-3 flex flex-col items-center text-center shadow-md active:scale-[0.98]" style={{ background: "#E8F8F0", border: `3px solid ${C.success}`, minHeight: 250 }}>
+            <button data-role-card="customer" onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl px-3 pt-5 pb-3 flex flex-col items-center text-center shadow-md active:scale-[0.98]" style={{ background: "#E8F8F0", border: `3px solid ${C.navy}`, minHeight: 250 }}>
               <img src="/role-customer.svg" alt="" className="h-20 w-20 mb-3" />
               <div className="text-lg font-black leading-tight mb-2" style={{ color: C.ink }}>{lang === "en" ? "Customer / Grahak" : "कस्टमर / ग्राहक"}</div>
               <div className="text-sm font-bold leading-snug text-balance mb-3" style={{ color: C.ink }}>{customerWho}</div>
@@ -4862,7 +4862,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 
         {showDriver && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
-            <button data-role-card="driver" onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl px-3 pt-5 pb-3 flex flex-col items-center text-center shadow-md active:scale-[0.98]" style={{ background: "#FFF1E3", border: `3px solid ${C.pimpri}`, minHeight: 250 }}>
+            <button data-role-card="driver" onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl px-3 pt-5 pb-3 flex flex-col items-center text-center shadow-md active:scale-[0.98]" style={{ background: "#FFF1E3", border: `3px solid ${C.navy}`, minHeight: 250 }}>
               <img src="/role-driver-icon.png" alt="" className="h-20 w-20 mb-3" />
               <div className="text-lg font-black leading-tight mb-2" style={{ color: C.ink }}>{lang === "en" ? "Partner (Driver and Owner)" : lang === "mr" ? "पार्टनर (ड्रायव्हर आणि ओनर)" : "पार्टनर (ड्राइवर और ओनर)"}</div>
               <div className="text-sm font-bold leading-snug text-balance mb-3" style={{ color: C.ink }}>{driverWho}</div>
