@@ -9,20 +9,21 @@ import { askHelperCall, rateHelperCall } from "./firebaseClient";
 import { useBackHandler } from "./backButton.js";
 
 export const HELPER_NAME = { en: "Your Helper", hi: "अपना मददगार", mr: "आपला मददगार" };
-const POS_KEY = "sarthi_helperPos";
+// The button NEVER moves (owner 2026-11-24: "the AI logo stays constant throughout the app, no change on its placement"): the same spot on every screen, not draggable, no remembered position.
+const FAB_RIGHT = 12, FAB_BOTTOM = 88; // px; sits above the fixed Round trip bar and the driver's bottom block
 const BLUE = "#0052CC";
 
 const T = {
-  hello: { en: "Hello! Ask me anything about using the app.", hi: "नमस्ते! ऐप इस्तेमाल करने के बारे में कुछ भी पूछें।", mr: "नमस्कार! अ‍ॅप वापरण्याबद्दल काहीही विचारा." },
+  hello: { en: "Good day. How may I assist you with the Apna Transport app?", hi: "नमस्कार। मैं अपना ट्रांसपोर्ट ऐप के बारे में आपकी क्या सहायता कर सकता हूँ?", mr: "नमस्कार. मी अपना ट्रान्सपोर्ट अ‍ॅपबद्दल आपली कशी मदत करू शकतो?" },
   placeholder: { en: "Type your question", hi: "अपना सवाल लिखें", mr: "तुमचा प्रश्न लिहा" },
   send: { en: "Send", hi: "भेजें", mr: "पाठवा" },
   thinking: { en: "Typing...", hi: "लिख रहा हूँ...", mr: "लिहित आहे..." },
-  person: { en: "Talk to a person", hi: "किसी इंसान से बात करें", mr: "व्यक्तीशी बोला" },
+  person: { en: "Talk to a person", hi: "हमारी टीम से बात करें", mr: "आमच्या टीमशी बोला" },
   call: { en: "Call", hi: "कॉल", mr: "कॉल" },
   whatsapp: { en: "WhatsApp", hi: "व्हाट्सएप", mr: "व्हॉट्सअ‍ॅप" },
   note: { en: "AI answers can be wrong. Never share your OTP.", hi: "AI के जवाब गलत हो सकते हैं। अपना OTP किसी को न बताएं।", mr: "AI ची उत्तरे चुकीची असू शकतात. तुमचा OTP कोणालाही सांगू नका." },
-  limit: { en: "You have reached today's question limit. Please try again tomorrow or talk to a person.", hi: "आज के सवालों की सीमा पूरी हो गई। कल फिर कोशिश करें या किसी इंसान से बात करें।", mr: "आजची प्रश्नांची मर्यादा संपली. उद्या पुन्हा प्रयत्न करा किंवा व्यक्तीशी बोला." },
-  down: { en: "I could not answer just now. Please talk to a person.", hi: "अभी जवाब नहीं दे पाया। कृपया किसी इंसान से बात करें।", mr: "आत्ता उत्तर देता आले नाही. कृपया व्यक्तीशी बोला." },
+  limit: { en: "You have reached today's limit of questions. Kindly try again tomorrow, or speak to our team.", hi: "आज के प्रश्नों की सीमा पूरी हो चुकी है। कृपया कल पुनः प्रयास करें, या हमारी टीम से बात करें।", mr: "आजची प्रश्नांची मर्यादा पूर्ण झाली आहे. कृपया उद्या पुन्हा प्रयत्न करा, किंवा आमच्या टीमशी बोला." },
+  down: { en: "I am unable to answer this at the moment. Kindly speak to our team.", hi: "मैं इस समय इसका उत्तर नहीं दे पा रहा हूँ। कृपया हमारी टीम से बात करें।", mr: "मी सध्या याचे उत्तर देऊ शकत नाही. कृपया आमच्या टीमशी बोला." },
   helpful: { en: "Helpful", hi: "काम का", mr: "उपयुक्त" },
   notHelpful: { en: "Not helpful", hi: "काम का नहीं", mr: "उपयुक्त नाही" },
   close: { en: "Close", hi: "बंद करें", mr: "बंद करा" },
@@ -42,11 +43,6 @@ const QUICK = {
 };
 const tr = (key, lang) => (T[key] && (T[key][lang] || T[key].hi)) || "";
 
-function readPos() {
-  try { const p = JSON.parse(window.localStorage.getItem(POS_KEY)); if (p && Number.isFinite(p.right) && Number.isFinite(p.bottom)) return p; } catch { /* storage unavailable */ }
-  return { right: 12, bottom: 88 };
-}
-
 export default function HelperWidget({ role, lang, phone, whatsapp }) {
   const L = HELPER_NAME[lang] ? lang : "hi";
   const [open, setOpen] = useState(false);
@@ -54,9 +50,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState(false); // a text box somewhere else on the screen has the keyboard up
-  const [pos, setPos] = useState(readPos);
   const bodyRef = useRef(null);
-  const dragRef = useRef(null);
   const busyRef = useRef(false);
 
   useBackHandler(open, () => setOpen(false), 40); // Android Back closes the panel first
@@ -99,31 +93,13 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
     rateHelperCall(msgs[i] && msgs[i].logId, helpful);
   };
 
-  // Drag the round button (a plain tap still opens the panel). The spot is remembered on this phone only.
-  const onDown = (e) => { dragRef.current = { x: e.clientX, y: e.clientY, right: pos.right, bottom: pos.bottom, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ } };
-  const onMove = (e) => {
-    const d = dragRef.current; if (!d) return;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (!d.moved && Math.hypot(dx, dy) < 8) return;
-    d.moved = true;
-    const right = Math.min(Math.max(8, d.right - dx), Math.max(8, window.innerWidth - 64));
-    const bottom = Math.min(Math.max(8, d.bottom - dy), Math.max(8, window.innerHeight - 140));
-    setPos({ right, bottom });
-  };
-  const onUp = () => {
-    const d = dragRef.current; dragRef.current = null;
-    if (!d) return;
-    if (d.moved) { try { window.localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch { /* storage unavailable */ } return; }
-    setOpen(true);
-  };
-
   if (!open) {
     if (typing) return null;
     return (
       <button type="button" data-helper-fab aria-label={`${HELPER_NAME[L]} - ${tr("open", L)}`}
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { dragRef.current = null; }}
+        onClick={() => setOpen(true)}
         className="fixed z-[34] w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-lg active:scale-95"
-        style={{ right: pos.right, bottom: `calc(env(safe-area-inset-bottom, 0px) + ${pos.bottom}px)`, background: `linear-gradient(135deg, #2A78F0, ${BLUE})`, touchAction: "none", border: "2px solid #fff" }}>
+        style={{ right: FAB_RIGHT, bottom: `calc(env(safe-area-inset-bottom, 0px) + ${FAB_BOTTOM}px)`, background: `linear-gradient(135deg, #2A78F0, ${BLUE})`, border: "2px solid #fff" }}>
         <Sparkles size={24} color="#fff" />
       </button>
     );
