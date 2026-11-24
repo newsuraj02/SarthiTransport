@@ -20,8 +20,8 @@ const T = {
   placeholder: { en: "Type your question", hi: "अपना सवाल लिखें", mr: "तुमचा प्रश्न लिहा" },
   speak: { en: "Tap the microphone and speak your question", hi: "माइक दबाकर अपना प्रश्न बोलें", mr: "माइक दाबून आपला प्रश्न बोला" },
   listening: { en: "Listening... tap to stop", hi: "सुन रहा हूँ... रोकने के लिए दबाएँ", mr: "ऐकत आहे... थांबवण्यासाठी दाबा" },
-  micOff: { en: "Voice input is not available on this phone. Kindly type your question.", hi: "इस फ़ोन पर आवाज़ से पूछना उपलब्ध नहीं है। कृपया अपना प्रश्न लिखें।", mr: "या फोनवर आवाजाने विचारणे उपलब्ध नाही. कृपया आपला प्रश्न लिहा." },
-  micDenied: { en: "The microphone is not allowed. Please allow it in the phone's settings, or type your question.", hi: "माइक की अनुमति नहीं है। कृपया फ़ोन की सेटिंग में अनुमति दें, या अपना प्रश्न लिखें।", mr: "माइकची परवानगी नाही. कृपया फोनच्या सेटिंगमध्ये परवानगी द्या, किंवा आपला प्रश्न लिहा." },
+  micOff: { en: "To speak your question, tap the box below and then the 🎤 microphone on your keyboard. Or simply type it.", hi: "आवाज़ से पूछने के लिए नीचे के बॉक्स पर टैप करें, फिर कीबोर्ड का 🎤 माइक दबाएँ। या सीधे लिखें।", mr: "आवाजाने विचारण्यासाठी खालील बॉक्सवर टॅप करा, मग कीबोर्डवरील 🎤 माइक दाबा. किंवा थेट लिहा." },
+  micDenied: { en: "This app cannot use the microphone directly. Tap the box below and then the 🎤 microphone on your keyboard, or type your question.", hi: "यह ऐप सीधे माइक का उपयोग नहीं कर सकता। नीचे के बॉक्स पर टैप करें, फिर कीबोर्ड का 🎤 माइक दबाएँ, या अपना प्रश्न लिखें।", mr: "हे अ‍ॅप थेट माइक वापरू शकत नाही. खालील बॉक्सवर टॅप करा, मग कीबोर्डवरील 🎤 माइक दाबा, किंवा आपला प्रश्न लिहा." },
   noSpeech: { en: "I did not hear anything. Please tap the microphone and try again.", hi: "कुछ सुनाई नहीं दिया। कृपया माइक दबाकर पुनः प्रयास करें।", mr: "काही ऐकू आले नाही. कृपया माइक दाबून पुन्हा प्रयत्न करा." },
   send: { en: "Send", hi: "भेजें", mr: "पाठवा" },
   thinking: { en: "Typing...", hi: "लिख रहा हूँ...", mr: "लिहित आहे..." },
@@ -121,8 +121,8 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
       r.onerror = (e) => {
         const code = e && e.error;
         if (code === "not-allowed" || code === "service-not-allowed") setMicIssue("denied");
-        else if (code === "language-not-supported" || code === "audio-capture") setMicIssue("unsupported");
         else if (code === "no-speech") setMicIssue("nospeech");
+        else if (code && code !== "aborted") setMicIssue("unsupported"); // language-not-supported, audio-capture, network ...: show the typing box (with the keyboard-mic hint)
       };
       r.onend = () => { setListening(false); setHeard(""); const q = (finalText || lastText).trim(); recRef.current = null; if (q.length >= 2 && askRef.current) askRef.current(q); };
       recRef.current = r; r.start(); setListening(true);
@@ -285,7 +285,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
         ) : (
           <>
             {(!SR || micIssue === "unsupported") && <div className="text-[11px] mb-1.5" style={{ color: "#475569" }} data-helper-mic-note>{tr("micOff", L)}</div>}
-            {micIssue === "denied" && <div className="text-[11px] mb-1.5" style={{ color: "#FF2A2A" }} data-helper-mic-note>{tr("micDenied", L)}</div>}
+            {micIssue === "denied" && <div className="text-[11px] mb-1.5" style={{ color: "#475569" }} data-helper-mic-note>{tr("micDenied", L)}</div>}
             <form onSubmit={(e) => { e.preventDefault(); ask(text); }} className="flex items-center gap-2" data-helper-text-form>
               <input value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} placeholder={tr("placeholder", L)} maxLength={500}
                 className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm outline-none" style={{ border: "1px solid #D5DCE8", background: "#fff", color: "#0F1B2D" }} />
