@@ -161,7 +161,7 @@
   "code:.github/workflows/check-16kb.yml": "aad711246a4158e2",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "3bcd50024243bceb",
+  "code:CLAUDE.md": "6d8bad7e9a4b5a2e",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -342,7 +342,7 @@
   "code:apna-transport-native/settings.gradle": "faa7e8618f636a89",
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
-  "code:docs/SYSTEM_CONTRACTS.md": "8b2120dff5346864",
+  "code:docs/SYSTEM_CONTRACTS.md": "29ea446cc6bc3b1a",
   "code:firebase.json": "900e217b868337c1",
   "code:firestore.rules": "b310980040312deb",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -724,7 +724,7 @@
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
   "code:scripts/verifyInvariants.mjs#VM_ALL_LABELS": "0252744b92ef8156",
-  "code:scripts/verifyInvariants.mjs#checks": "d13aa5ddd6b3dd9d",
+  "code:scripts/verifyInvariants.mjs#checks": "ee1180234b41ede8",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/whyNoDriver.js": "7eaf1835626f2adf",
@@ -799,7 +799,7 @@
   "code:src/AdminPanel.jsx#AdminNotify": "a24d09be3915da30",
   "code:src/AdminPanel.jsx#toMetaPhone": "f53983661940a035",
   "code:src/AdminPanel.jsx#buildMetaUsersCsv": "8325b1a2419aba3c",
-  "code:src/AdminPanel.jsx#AdminSettings": "1a538804945d76e3",
+  "code:src/AdminPanel.jsx#AdminSettings": "65b9f0955600a38a",
   "code:src/AdminPanel.jsx#AdminFinance": "e2e304a25d34e5c9",
   "code:src/AdminPanel.jsx#AdminExpenses": "f672cfbdc9b34982",
   "code:src/AdminPanel.jsx#AdminPanel": "66964cf44f0b1306",
@@ -1328,6 +1328,7 @@
   "code:src/inputRules.js": "c85fce8bd2002943",
   "code:src/loginEpoch.js": "492d9ac1e5ddf9ae",
   "code:src/main.jsx": "42f2986bafbe68ac",
+  "code:src/nativeSpeech.js": "4862885c20a8135c",
   "code:src/phoneOtp.js": "377ac1d465c5483e",
   "code:src/placeSpecificity.js": "984cc86ac3b3a3be",
   "code:src/serviceArea.js": "37cede12105014f9",
@@ -1367,7 +1368,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:src/nativeSpeech.js": "4862885c20a8135c"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

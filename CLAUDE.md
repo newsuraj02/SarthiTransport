@@ -214,6 +214,10 @@ capacitor.config.ts) require a real CI build + reinstall to test at all
   remote-URL mode. Don't confuse the two or bump a versionCode for a
   JS-only change.
 
+## Force-update gate — NEVER block users before the release is live (owner 2026-11-24, furious: every user got "अपडेट आवश्यक है" while the Play Store showed only "Open")
+
+`settings/main.latestVersionCode` ("Required versionCode" in Admin -> Settings -> Force Update (Play Store)) is a HARD STOP: every phone whose build is lower sees the "Update required" screen at once and a push goes out (`notifyForceUpdate`). It must be set ONLY AFTER the new build is LIVE on Google Play (Play Console release status "Available", and a phone on the old build shows an "Update" button in the Play Store) -- NEVER at upload, during review or during a staged rollout. If users are blocked: Admin -> Settings -> Force Update -> clear the number (blank = Off) -> Save; they are unblocked on their next open. Every set of build / release steps I give the owner MUST say this explicitly, next to "upload to Play Console". Safeguard built 2026-11-24 (hosting only): Admin's Save asks "is it live on Google Play?" before RAISING the required version (`data-version-confirm`); lowering / clearing saves at once. NOT built (needs a native build): letting the gate ask Play itself whether an update exists. Contract N50; pinned by "FORCE-UPDATE: RAISING THE REQUIRED VERSION NEEDS A LIVE ON PLAY CONFIRMATION".
+
 ## Verified-working behavior — KEEP INTACT (owner standing rule, 2026-10-26)
 
 Everything in this section was built, deployed and confirmed working by the

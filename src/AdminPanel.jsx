@@ -4046,6 +4046,9 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  // FORCE-UPDATE SAFETY (owner 2026-11-24: users saw "Update required" while the Play Store had no update -- "Required versionCode" had been set above the
+  // build that was live): RAISING the required version needs an explicit "it is live on Google Play" confirmation first. Lowering / clearing saves at once (that unblocks people).
+  const [versionConfirm, setVersionConfirm] = useState(false);
   useEffect(() => {
     if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4095,7 +4098,10 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
     try { await navigator.clipboard.writeText(metaNumbersText); setMetaCopied(true); setTimeout(() => setMetaCopied(false), 3000); }
     catch { /* clipboard blocked -- the visible box below lets them select and copy by hand */ }
   };
+  const raisingRequiredVersion = draft.latestVersionCode !== "" && Number(draft.latestVersionCode) > Number(latestVersionCode || 0);
   const saveSettings = () => {
+    if (raisingRequiredVersion && !versionConfirm) { setVersionConfirm(true); return; }
+    setVersionConfirm(false);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
     setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
@@ -4206,7 +4212,27 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
       </div>
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
-      <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
+      {versionConfirm && raisingRequiredVersion && (
+        <div className="rounded-lg p-3 mb-3" style={{ background: "#FFF1F1", border: `2px solid ${C.danger || "#FF2A2A"}` }} data-version-confirm>
+          <div className="text-sm font-extrabold mb-1" style={{ color: C.ink }}>
+            {lang === "en" ? `Block everyone below version ${draft.latestVersionCode}?` : lang === "mr" ? `आवृत्ती ${draft.latestVersionCode} पेक्षा जुन्या सर्वांना थांबवायचे?` : `वर्शन ${draft.latestVersionCode} से पुराने सभी लोगों को रोकना है?`}
+          </div>
+          <div className="text-[12px] font-semibold mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? `Every phone on an older build is locked on an "Update required" screen at once, and a push goes out. Save only if version ${draft.latestVersionCode} is already LIVE on Google Play and a phone with the old build shows an "Update" button there. If it is still in review or rolling out, tap Cancel.`
+              : lang === "mr" ? `जुन्या आवृत्तीवरील प्रत्येक फोन लगेच "अपडेट आवश्यक" स्क्रीनवर अडकतो आणि पुश जातो. आवृत्ती ${draft.latestVersionCode} Google Play वर आधीच LIVE असेल आणि जुन्या फोनवर तिथे "Update" बटण दिसत असेल तरच सेव्ह करा. रिव्ह्यूमध्ये असेल तर Cancel दाबा.`
+              : `पुराने वर्शन वाला हर फोन तुरंत "अपडेट आवश्यक है" स्क्रीन पर अटक जाता है और पुश जाता है। तभी सेव करें जब वर्शन ${draft.latestVersionCode} Google Play पर LIVE हो चुका हो और पुराने फोन में वहाँ "Update" बटन दिखता हो। अगर अभी रिव्यू में है या रोलआउट हो रहा है तो Cancel दबाएँ।`}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveSettings} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.danger || "#FF2A2A" }}>
+              {lang === "en" ? "Yes, it is live - block old builds" : lang === "mr" ? "हो, LIVE आहे - जुन्या बिल्ड थांबवा" : "हाँ, LIVE है - पुराने बिल्ड रोकें"}
+            </button>
+            <button onClick={() => setVersionConfirm(false)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
+              {lang === "en" ? "Cancel" : "रद्द करें"}
+            </button>
+          </div>
+        </div>
+      )}
+      <button onClick={saveSettings} disabled={!dirty || (versionConfirm && raisingRequiredVersion)} className="w-full rounded-lg py-3.5 font-bold text-base"
         style={{ background: dirty ? "#0052CC" : "#E5EAF2", color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
