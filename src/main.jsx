@@ -5,6 +5,9 @@ import { GoogleMapsProvider } from "./googleMapsContext.jsx";
 import "./index.css";
 import { Capacitor } from "@capacitor/core";
 import { parseEntryLink, playStoreUrlFor } from "./entryLink.js";
+import { enforceLoginEpoch } from "./loginEpoch.js";
+import { signOut } from "firebase/auth";
+import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 
 // DEEP LINKS (owner 2026-11-13): https://<site>/customer and /driver. An ANDROID BROWSER (the app is not what opened the link) is sent straight to the Play Store with the role + source in the
 // Play "referrer", which the app reads on its first launch. The installed app (Capacitor WebView / its Chrome wrapper), iPhones and desktops carry on into the app itself, where the link locks the role.
@@ -86,7 +89,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-if (!sentToPlayStore) ReactDOM.createRoot(document.getElementById("root")).render(
+const startApp = () => ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
       <GoogleMapsProvider>
@@ -95,3 +98,14 @@ if (!sentToPlayStore) ReactDOM.createRoot(document.getElementById("root")).rende
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// ONE-TIME FORCED RE-LOGIN (owner 2026-11-24, src/loginEpoch.js): before anything is drawn, a phone that has not yet handled the current LOGIN_EPOCH signs the customer / driver out once
+// (their Firebase sessions too) so they log in again with number + OTP; after that the session stays until they log out themselves. Waits at most ~4 s, never blocks the app.
+const signOutAll = async () => {
+  for (const a of [customerFirebaseAuth, driverFirebaseAuth]) {
+    if (!a) continue;
+    try { if (a.authStateReady) await a.authStateReady(); } catch { /* go on */ }
+    try { await signOut(a); } catch { /* nothing signed in */ }
+  }
+};
+if (!sentToPlayStore) enforceLoginEpoch({ signOutAll }).catch(() => {}).then(startApp);

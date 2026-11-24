@@ -743,3 +743,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 - changed (14): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/phoneSignup.js, code:scripts/serverTests/phoneSignup.cjs, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#CustomerProfileEdit, code:src/App.jsx#DriverProfileEdit, code:src/main.jsx, code:src/phoneOtp.js
 - added (2): fn:otpSignIn, code:functions/index.js#fn:otpSignIn
 - removed (9): fn:resetPinAfterPhoneVerify, fn:createPinAccountAfterPhoneVerify, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:functions/index.js#fn:createPinAccountAfterPhoneVerify, code:scripts/serverTests/driverForgotPin.cjs, code:src/App.jsx#numberBelongsToOtherRole, code:src/firebaseClient.js#pinAuthEmail, code:src/firebaseClient.js#pinToPassword, code:src/firebaseClient.js#resetPinAfterPhoneVerify
+
+## 2026-11-24 -- One-time forced re-login for every existing customer / driver (LOGIN_EPOCH in src/loginEpoch.js, run by main.jsx before the app draws) (owner 2026-11-24)
+- changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#App, code:src/main.jsx
+- added (1): code:src/loginEpoch.js
