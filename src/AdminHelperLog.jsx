@@ -48,6 +48,7 @@ export default function AdminHelperLog({ lang }) {
                 <div className="flex items-center gap-1.5 flex-wrap mb-1" style={{ color: C.inkSoft }}>
                   <span>{when(atMs(l))}</span><span>· {l.role}</span><span>· {String(l.lang || "").toUpperCase()}</span>
                   {l.answered === false && <span className="font-bold" style={{ color: "#E89828" }}>· {T(lang, "Not answered", "जवाब नहीं मिला", "उत्तर नाही")}</span>}
+                  {l.restricted === true && <span className="font-bold" style={{ color: "#475569" }}>· {T(lang, "Restricted request", "प्रतिबंधित अनुरोध", "प्रतिबंधित विनंती")}</span>}
                   {l.helpful === false && <span className="font-bold" style={{ color: "#FF2A2A" }}>· 👎</span>}
                   {l.helpful === true && <span className="font-bold" style={{ color: "#00A854" }}>· 👍</span>}
                 </div>

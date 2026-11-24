@@ -1558,8 +1558,18 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
 const helpAgent = require("./helpAgent");
 exports.askHelper = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
-  const input = helpAgent.cleanHelpInput(request.data);
+  // The role is the LOGIN's own (customer / driver e-mail), not what the app claims -- a customer cannot get partner answers or the reverse; Admin and unknown logins get nothing.
+  const loginRole = helpAgent.roleFromEmail(request.auth.token && request.auth.token.email);
+  if (!loginRole) return { ok: false, reason: "role" };
+  const input = helpAgent.cleanHelpInput(request.data, loginRole);
   if (!input.ok) throw new HttpsError("invalid-argument", input.reason);
+  // Questions that only try to reach confidential things get the fixed refusal -- no model call, no daily-limit use; still logged (restricted) so Admin can see attempts.
+  if (helpAgent.isConfidentialProbe(input.question)) {
+    const text = helpAgent.CONFIDENTIAL_REPLY[input.lang] || helpAgent.CONFIDENTIAL_REPLY.hi;
+    let logId = null;
+    try { logId = (await db.collection("helperLog").add({ at: FieldValue.serverTimestamp(), role: input.role, lang: input.lang, question: input.question, answer: text, answered: true, restricted: true, tokensIn: 0, tokensOut: 0, helpful: null })).id; } catch (e) { console.error("[askHelper] log failed:", e.message); }
+    return { ok: true, text, answered: true, restricted: true, logId };
+  }
   const apiKey = ANTHROPIC_API_KEY.value();
   if (!apiKey) return { ok: false, reason: "not_configured" };
 
