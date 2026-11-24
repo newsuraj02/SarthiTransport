@@ -28,32 +28,10 @@ export const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 // it without importing @capacitor/core a second time.
 export const isNativeApp = Capacitor.isNativePlatform();
 
-// PIN-based signup/login (CustomerOnboarding/DriverOnboarding in App.jsx)
-// signs a customer/driver in as a normal Firebase email/password account
-// under this synthetic, never-shown "email" built from their mobile number
-// — Firebase Auth requires *some* email/password identity, and this avoids
-// needing a real one. Namespaced by role so the same phone number can hold
-// both a customer and a driver account at once, same as it already could
-// under real Firebase Phone Auth (see the three-named-apps note below).
-// Mirrored server-side in functions/index.js as pinAuthEmail — keep both in
-// sync if this domain/shape ever changes.
-export function pinAuthEmail(mobile, role) {
-  return `${mobile}@${role === "driver" ? "driver" : "customer"}.apnatransport.local`;
-}
-
-// The customer/driver-facing PIN is 4 digits, but Firebase Auth's
-// email/password sign-in rejects anything under 6 characters — so a fixed,
-// non-numeric prefix is added before ever handing it to Firebase, purely to
-// clear that length floor. This is NOT a security measure (the prefix is a
-// constant, known to anyone reading this file) — the PIN's own 4 digits are
-// still the entire secret. Used everywhere a raw PIN would otherwise be
-// passed to createUserWithEmailAndPassword/signInWithEmailAndPassword/
-// EmailAuthProvider.credential, and for what's sent as the new password to
-// the resetPinAfterPhoneVerify Cloud Function (which just stores whatever
-// string it receives, unaware this transform even happened).
-export function pinToPassword(pin) {
-  return `apna-pin-${pin}`;
-}
+// A customer / driver is a normal Firebase account under a synthetic, never-shown "email" built from their mobile number (`<mobile>@customer|driver.apnatransport.local`;
+// Firestore / Storage rules and the Cloud Functions read it as the owner of that number). Namespaced by role so one number can still be matched to the right role. Since
+// 2026-11-24 there is NO PIN: the person proves the number with an SMS OTP and the server signs them in (src/phoneOtp.js `signInAfterOtp`, callable `otpSignIn`); the account's
+// password is random and never used. The email shape is mirrored in functions/index.js as pinAuthEmail -- keep both in sync if it ever changes.
 
 // Three separate named Firebase Apps (not one shared default app) so a
 // customer session, a driver session, and an admin session can each hold
@@ -444,26 +422,6 @@ export async function resolveChangeLogEntry(bugId) {
     return result.data;
   } catch (e) {
     console.error("[resolveChangeLogEntry] callable failed", e);
-    return { ok: false, reason: "error" };
-  }
-}
-
-// Forgot-PIN recovery, final step (see functions/index.js). Must be called
-// while already signed in via a fresh real Firebase Phone Auth session
-// (CustomerOnboarding/DriverOnboarding's Forgot PIN flow does the
-// signInWithPhoneNumber + OTP confirm first) -- the function trusts that
-// session's phone_number claim as proof, no separate code passed here.
-// Sets newPin as that mobile+role's PIN account password (creating the
-// account if it never had one). Always resolves with { ok, reason? }.
-export async function resetPinAfterPhoneVerify(role, newPin) {
-  const functions = functionsByRole[activeRole];
-  if (!functions) return { ok: false, reason: "not_configured" };
-  try {
-    const call = httpsCallable(functions, "resetPinAfterPhoneVerify");
-    const result = await call({ role, newPin });
-    return result.data;
-  } catch (e) {
-    console.error("[forgotPin] reset callable failed", e);
     return { ok: false, reason: "error" };
   }
 }

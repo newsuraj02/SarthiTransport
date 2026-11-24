@@ -209,7 +209,7 @@ const { buildFleetConversion } = require("./fleetConvert");
 const { judgeMsg91Response } = require("./bulkWhatsApp");
 const wa = require("./whatsappStatus");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
-const { planPhoneSignup, isClientPinSignup } = require("./phoneSignup");
+const { planOtpSignIn, isClientPinSignup } = require("./phoneSignup");
 const { planRoleSwitch, plainSnapshot } = require("./roleSwitch");
 const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
@@ -1639,103 +1639,44 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [MSG91_AUT
   return { ok: true };
 });
 
-// ---------------- Forgot PIN (recovery via Firebase Phone Auth) ----------------
-// Customer/Driver signup and normal login are pure client-side Firebase
-// email/password calls (see CustomerOnboarding/DriverOnboarding) -- no
-// server involvement, no SMS, no reCAPTCHA. Recovering a forgotten PIN
-// still needs a Cloud Function (setting a password without knowing the old
-// one requires Admin SDK privileges a browser can't hold), but the actual
-// "prove you own this number" step reuses Firebase's own Phone Auth
-// (reCAPTCHA + real SMS OTP) instead of a custom Exotel-based one --
-// that flow already works today with no DLT template to wait on, since
-// it's the same mechanism the app used for every login before PIN auth.
-// Showing the "I'm not a robot" check on this one rare recovery path is a
-// far smaller cost than showing it on every signup/login, which was the
-// actual complaint that started this whole migration.
-//
-// The client calls this already signed in via a fresh signInWithPhoneNumber
-// (see CustomerOnboarding/DriverOnboarding's Forgot PIN flow) -- so
-// request.auth.token.phone_number is trusted directly as real proof,
-// no separate code-matching step needed here. Creates the PIN account if
-// this mobile+role never had one yet (covers "forgot a PIN I never
-// actually set"), otherwise resets the existing one's password.
-//
-// newPin here is NOT the raw 4-digit PIN the person typed -- the client
-// already ran it through pinToPassword (see firebaseClient.js) before this
-// call, the same transform used at signup/login, purely to clear Firebase
-// Auth's 6-character password minimum (the 4 digits are still the whole
-// secret; the added prefix is a public constant, not a security layer).
-// This function just stores whatever string it's given, unaware that
-// happened -- hence the length-only check below rather than a digit regex.
-exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (request) => {
-  const phone = request.auth?.token?.phone_number;
-  if (!phone) throw new HttpsError("unauthenticated", "Phone verification required.");
-  const mobile = phone.replace("+91", "");
-  const { role, newPin } = request.data || {};
+// ---------------- Number + OTP login, no PIN (owner 2026-11-24) ----------------
+// "Remove the PIN procedure, just keep the Number + OTP login" (2026-11-23: "I want the OTP back during signup and Login as I have got multiple fraud bookings"). The OTP is a real
+// Firebase Phone Auth SMS (sent by Firebase's servers), checked on a SEPARATE auth app on the phone (src/phoneOtp.js, in memory only) so it never logs anybody in by itself. THIS
+// callable is what turns a proven number into a session: the caller must hold a fresh phone sign-in (functions/phoneSignup.js `planOtpSignIn`), and the answer is a Firebase CUSTOM TOKEN
+// for that number's customer / driver login, which the app signs in with (signInWithCustomToken). The login is the same synthetic-e-mail account the app always used (same uid, same
+// Firestore / Storage rules, same admin tools); nobody ever types or knows its password -- it is random and is never used. `mode` "signup" creates the login (only for a number this
+// role does not have yet, and not the other role's), `mode` "login" signs in an existing account (a login, or a profile only -- an Admin-added driver -- gets its login made here, the
+// OTP being the proof the number is theirs). A login on a number with no account gets "no_account": nothing is created, so no driver account exists without the completed form (the client
+// calls signup only at the final "Create Account" of the documents form). The session then lives on the phone until the person logs out: Firebase's refresh token does not expire.
+exports.otpSignIn = onCall({ region: "asia-south1" }, async (request) => {
+  const { role, mode } = request.data || {};
   const toRole = role === "driver" ? "driver" : "customer";
-  if (typeof newPin !== "string" || newPin.length < 6) throw new HttpsError("invalid-argument", "A valid newPin is required.");
-
-  const email = pinAuthEmail(mobile, toRole);
-  try {
-    const user = await getAuth().getUserByEmail(email);
-    await getAuth().updateUser(user.uid, { password: newPin });
-  } catch (e) {
-    if (e.code === "auth/user-not-found") {
-      // One role per number (owner 2026-11-12): a number that is a Customer must not become a Driver through "forgot PIN" (this branch CREATES the account), nor the reverse.
-      try {
-        const roles = await lookupMobileRoles(toRole, (rr) => mobileHasRoleAccount(mobile, rr));
-        if (refusesSecondRole(roles)) return { ok: false, reason: "other_role" };
-      } catch (e2) {
-        console.error("[forgotPin] role lookup failed:", e2.message);
-        return { ok: false, reason: "reset_failed" };
-      }
-      // NO DRIVER ACCOUNT WITHOUT THE COMPLETED FORM (owner 2026-11-15: drivers appeared with no documents): Forgot PIN used to CREATE a brand-new driver login for any number that
-      // had none. A new driver account may only come from the final "Create Account" of the completed documents form. A driver who already exists as a profile (Admin-added, or an
-      // older phone-login driver) may still get a PIN login here; a number with no driver profile gets "no_account" and must Sign Up.
-      if (toRole === "driver") {
-        let hasProfile = false;
-        try { hasProfile = (await db.collection("drivers").doc(mobile).get()).exists; } catch (e3) { console.error("[forgotPin] driver profile lookup failed:", e3.message); return { ok: false, reason: "reset_failed" }; }
-        if (!hasProfile) return { ok: false, reason: "no_account" };
-      }
-      await getAuth().createUser({ email, password: newPin });
-    } else {
-      console.error("[forgotPin] reset failed:", e.message);
-      return { ok: false, reason: "reset_failed" };
-    }
-  }
-  return { ok: true };
-});
-
-// ---------------- OTP at sign-up (owner 2026-11-23) ----------------
-// "I want the OTP back during signup and login as I have got multiple fraud bookings." Customer: number > OTP > PIN (twice) > done. Driver: number > OTP > PIN (twice) > KYC documents >
-// done. The OTP is a real Firebase Phone Auth SMS (sent by Firebase's servers, the same mechanism Forgot PIN already uses), done in a SEPARATE auth app on the phone (src/phoneOtp.js,
-// in-memory only) so it never logs anybody into the app by itself. THIS callable is what actually creates the PIN login, and only for a caller whose ID token comes from a fresh
-// phone sign-in (functions/phoneSignup.js `planPhoneSignup`): an account for a number nobody verified can no longer be made through the app. It creates ONLY the login; the
-// profile / documents are written by the app afterwards exactly as before, so a driver still gets no account before the whole form is complete (the client calls this at the
-// final "Create Account"). `newPin` is the same pinToPassword(...) string the client always sent.
-exports.createPinAccountAfterPhoneVerify = onCall({ region: "asia-south1" }, async (request) => {
-  const { role, newPin } = request.data || {};
-  const toRole = role === "driver" ? "driver" : "customer";
+  const toMode = mode === "signup" ? "signup" : "login";
   const token = request.auth && request.auth.token;
   let roles = null;
   const preMobile = typeof token?.phone_number === "string" ? (token.phone_number.match(/^\+91(\d{10})$/) || [])[1] : null;
   try {
     if (preMobile) roles = await lookupMobileRoles(toRole, (rr) => mobileHasRoleAccount(preMobile, rr));
   } catch (e) {
-    console.error("[createPinAccountAfterPhoneVerify] role lookup failed:", e.message);
+    console.error("[otpSignIn] role lookup failed:", e.message);
     return { ok: false, reason: "error" };
   }
-  const plan = planPhoneSignup({ token, nowSec: Math.floor(Date.now() / 1000), newPassword: newPin, roles });
+  const plan = planOtpSignIn({ token, nowSec: Math.floor(Date.now() / 1000), mode: toMode, roles });
   if (!plan.ok) {
     if (plan.reason === "phone_required") throw new HttpsError("unauthenticated", "Phone verification required.");
     return { ok: false, reason: plan.reason };
   }
+  const email = pinAuthEmail(plan.mobile, toRole);
   try {
-    await getAuth().createUser({ email: pinAuthEmail(plan.mobile, toRole), password: newPin });
-    return { ok: true };
+    let uid = null;
+    try { uid = (await getAuth().getUserByEmail(email)).uid; } catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+    if (uid && toMode === "signup") return { ok: false, reason: "exists" };
+    if (!uid) uid = (await getAuth().createUser({ email, password: crypto.randomBytes(24).toString("base64url") })).uid;
+    // `email` is also sent as a claim so firestore.rules / storage.rules (isOwnPhone) see it for certain, whatever the token exchange copies from the user record.
+    return { ok: true, token: await getAuth().createCustomToken(uid, { email }) };
   } catch (e) {
     if (e.code === "auth/email-already-exists") return { ok: false, reason: "exists" };
-    console.error("[createPinAccountAfterPhoneVerify] create failed:", e.message);
+    console.error("[otpSignIn] failed:", e.message);
     return { ok: false, reason: "error" };
   }
 });

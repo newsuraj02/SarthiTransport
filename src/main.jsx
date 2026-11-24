@@ -15,6 +15,10 @@ try {
   if (entry && !inApp && /android/i.test(navigator.userAgent)) { sentToPlayStore = true; window.location.replace(playStoreUrlFor(entry)); }
 } catch { /* never block the app over a redirect */ }
 
+// LOGIN ONCE, LOGOUT ONLY BY HAND (owner 2026-11-24): the signed-in session lives in this browser's / WebView's IndexedDB. Ask for persistent storage so the system does not evict it
+// when the phone runs short of space (best effort; a browser that does not support it, or says no, changes nothing).
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch { /* not supported */ }
+
 // Registers the service worker as soon as the app loads, so the app-shell
 // caching benefit (instant repeat visits, works on a flaky/offline
 // connection) applies to every visitor from their first visit.

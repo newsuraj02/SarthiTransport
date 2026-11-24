@@ -738,3 +738,8 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-23 -- Admin Bookings: the four live groups are dropdowns, one open at a time (owner 2026-11-23)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings
+
+## 2026-11-24 -- Number + OTP login, no PIN: new otpSignIn callable (custom token), resetPinAfterPhoneVerify / createPinAccountAfterPhoneVerify removed, PIN screens + Set-PIN cards removed, durable session (owner 2026-11-24)
+- changed (14): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:functions/phoneSignup.js, code:scripts/serverTests/phoneSignup.cjs, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#CustomerProfileEdit, code:src/App.jsx#DriverProfileEdit, code:src/main.jsx, code:src/phoneOtp.js
+- added (2): fn:otpSignIn, code:functions/index.js#fn:otpSignIn
+- removed (9): fn:resetPinAfterPhoneVerify, fn:createPinAccountAfterPhoneVerify, code:functions/index.js#fn:resetPinAfterPhoneVerify, code:functions/index.js#fn:createPinAccountAfterPhoneVerify, code:scripts/serverTests/driverForgotPin.cjs, code:src/App.jsx#numberBelongsToOtherRole, code:src/firebaseClient.js#pinAuthEmail, code:src/firebaseClient.js#pinToPassword, code:src/firebaseClient.js#resetPinAfterPhoneVerify
