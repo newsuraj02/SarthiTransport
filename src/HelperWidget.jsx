@@ -4,14 +4,16 @@
 // functions/index.js) answers ONLY from functions/helpKnowledge.js; anything it cannot answer shows "Talk to a person" (call / WhatsApp). Nothing about the person is sent -- only the question text,
 // the role and the language.
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X, Send, ThumbsUp, ThumbsDown, Phone, MessageCircle, Mic } from "lucide-react";
-import { askHelperCall, rateHelperCall } from "./firebaseClient";
+import { Sparkles, X, Send, ThumbsUp, ThumbsDown, Phone, MessageCircle, Mic, Volume2, VolumeX } from "lucide-react";
+import { askHelperCall, rateHelperCall, speakHelperCall } from "./firebaseClient";
 import { useBackHandler } from "./backButton.js";
 
 export const HELPER_NAME = { en: "Your Helper", hi: "अपना मददगार", mr: "आपला मददगार" };
 // The button NEVER moves (owner 2026-11-24: "the AI logo stays constant throughout the app, no change on its placement"): the same spot on every screen, not draggable, no remembered position.
 const FAB_RIGHT = 12, FAB_BOTTOM = 88; // px; sits above the fixed Round trip bar and the driver's bottom block
 const BLUE = "#0052CC";
+const SPEECH_RATE = 0.85; // the app's ONE speaking rate (same as SPEECH_RATE in App.jsx and HELP_SPEECH_RATE on the server)
+const VOICE_KEY = "sarthi_helperVoice"; // "0" = muted on this phone (a per-device convenience only)
 
 const T = {
   hello: { en: "Good day. How may I assist you with the Apna Transport app?", hi: "नमस्कार। मैं अपना ट्रांसपोर्ट ऐप के बारे में आपकी क्या सहायता कर सकता हूँ?", mr: "नमस्कार. मी अपना ट्रान्सपोर्ट अ‍ॅपबद्दल आपली कशी मदत करू शकतो?" },
@@ -33,6 +35,10 @@ const T = {
   notHelpful: { en: "Not helpful", hi: "काम का नहीं", mr: "उपयुक्त नाही" },
   close: { en: "Close", hi: "बंद करें", mr: "बंद करा" },
   open: { en: "Help", hi: "मदद", mr: "मदत" },
+  voiceOn: { en: "Voice on - tap to mute", hi: "आवाज़ चालू - बंद करने के लिए दबाएँ", mr: "आवाज चालू - बंद करण्यासाठी दाबा" },
+  voiceOff: { en: "Voice off - tap to turn on", hi: "आवाज़ बंद - चालू करने के लिए दबाएँ", mr: "आवाज बंद - चालू करण्यासाठी दाबा" },
+  listen: { en: "Listen to this answer", hi: "यह उत्तर सुनें", mr: "हे उत्तर ऐका" },
+  stopListen: { en: "Stop", hi: "रोकें", mr: "थांबवा" },
 };
 const QUICK = {
   customer: {
@@ -63,7 +69,16 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
   const [micIssue, setMicIssue] = useState(""); // "" | "unsupported" | "denied" | "nospeech"
   const recRef = useRef(null);
   const askRef = useRef(null);
+  const audioRef = useRef(null);          // the one <audio> that is ever playing
+  const idRef = useRef(0);                // message ids (so a spoken answer is found again after the list changes)
+  const [speakingId, setSpeakingId] = useState(null);
+  const tokenRef = useRef(0);            // bumped by every new speak / stop, so a slow server answer never plays over something newer
+  const openRef = useRef(false);
+  const [voiceOn, setVoiceOn] = useState(() => { try { return window.localStorage.getItem(VOICE_KEY) !== "0"; } catch { return true; } });
+  const voiceOnRef = useRef(voiceOn);
+  voiceOnRef.current = voiceOn;
 
+  openRef.current = open;
   useBackHandler(open, () => setOpen(false), 40); // Android Back closes the panel first
 
   // Hide the round button while the keyboard is up for another box (it would sit on top of the keyboard / suggestions).
@@ -92,6 +107,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
   const startListening = () => {
     if (!SR || busyRef.current) return;
     if (listening) { stopListening(); return; }
+    stopSpeaking();
     setMicIssue(""); setHeard("");
     try {
       const r = new SR();
@@ -114,19 +130,79 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
   };
   useEffect(() => { if (!open && recRef.current) { try { recRef.current.abort(); } catch { /* ignore */ } recRef.current = null; setListening(false); setHeard(""); } }, [open]);
 
+  // VOICE FOR EVERY ANSWER (owner 2026-11-24: "add a voice to every response to the questions by the AI helper"). Each answer is read out in the app's language as soon as it appears (unless the person
+  // muted the voice with the speaker button in the header) and has its own listen / stop button. The audio is an MP3 made on the server (speakHelperAnswer) and kept in memory for replays; if
+  // that is not possible (offline, service off), the phone's own voice reads it at the same speaking rate; if neither works, the text is simply shown. Only ONE sound plays at a time, and
+  // it is stopped when the microphone starts (so the helper never hears itself), when the panel closes and when the voice is muted.
+  const stopSpeaking = () => {
+    tokenRef.current += 1;
+    try { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } } catch { /* ignore */ }
+    try { if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    setSpeakingId(null);
+  };
+  const speakDevice = (m) => {
+    try {
+      if (typeof window === "undefined" || !window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") return;
+      window.speechSynthesis.cancel();
+      const u = new window.SpeechSynthesisUtterance(m.text);
+      u.lang = LOCALE[L] || "hi-IN"; u.rate = SPEECH_RATE;
+      u.onend = () => setSpeakingId((cur) => (cur === m.id ? null : cur)); u.onerror = u.onend;
+      setSpeakingId(m.id); window.speechSynthesis.speak(u);
+    } catch { setSpeakingId(null); }
+  };
+  const playData = (m, src) => {
+    try {
+      const a = new Audio(src);
+      audioRef.current = a;
+      a.onended = () => { if (audioRef.current === a) audioRef.current = null; setSpeakingId((cur) => (cur === m.id ? null : cur)); };
+      a.onerror = () => { if (audioRef.current === a) audioRef.current = null; setSpeakingId(null); speakDevice(m); };
+      setSpeakingId(m.id);
+      const p = a.play();
+      if (p && typeof p.catch === "function") p.catch(() => { if (audioRef.current === a) audioRef.current = null; setSpeakingId(null); }); // autoplay blocked: the listen button plays it on a tap
+    } catch { setSpeakingId(null); }
+  };
+  const speakMsg = async (m) => {
+    stopSpeaking();
+    const my = tokenRef.current;
+    if (m.audio) { playData(m, m.audio); return; }
+    if (m.logId && !m.system) {
+      setSpeakingId(m.id);
+      const r = await speakHelperCall(m.logId);
+      const stale = my !== tokenRef.current || !openRef.current || !!recRef.current || (!voiceOnRef.current && !m.manual); // something newer happened, or the panel closed / the mic started / voice was muted
+      if (r && r.ok && r.audio) {
+        const src = `data:${r.mime || "audio/mpeg"};base64,${r.audio}`;
+        setMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, audio: src } : x)));
+        if (!stale) playData(m, src); else if (my === tokenRef.current) setSpeakingId(null);
+        return;
+      }
+      if (stale) { if (my === tokenRef.current) setSpeakingId(null); return; }
+    }
+    speakDevice(m);
+  };
+  const toggleVoice = () => {
+    const next = !voiceOn;
+    setVoiceOn(next);
+    try { window.localStorage.setItem(VOICE_KEY, next ? "1" : "0"); } catch { /* storage unavailable */ }
+    if (!next) stopSpeaking();
+  };
+  useEffect(() => { if (!open) stopSpeaking(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open]);
+  useEffect(() => () => { stopSpeaking(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
   const ask = async (raw) => {
     const q = String(raw || "").trim();
     if (q.length < 2 || busyRef.current) return;
     busyRef.current = true; setBusy(true); setText("");
     const history = msgs.filter((m) => !m.system).slice(-6).map((m) => ({ role: m.role, text: m.text }));
-    setMsgs((prev) => [...prev, { role: "user", text: q }]);
+    setMsgs((prev) => [...prev, { role: "user", text: q, id: ++idRef.current }]);
     const r = await askHelperCall({ role, lang: L, question: q, history });
     let reply;
     if (r && r.ok) reply = { role: "assistant", text: r.text || tr("down", L), logId: r.logId, unanswered: !r.answered };
     else if (r && r.reason === "limit") reply = { role: "assistant", text: tr("limit", L), system: true, unanswered: true };
     else reply = { role: "assistant", text: tr("down", L), system: true, unanswered: true };
+    reply.id = ++idRef.current;
     setMsgs((prev) => [...prev, reply]);
     busyRef.current = false; setBusy(false);
+    if (voiceOnRef.current && !recRef.current) speakMsg(reply); // every answer is spoken
   };
 
   askRef.current = ask;
@@ -155,6 +231,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
       <div className="flex items-center gap-2 px-4 py-3 text-white shrink-0" style={{ background: `linear-gradient(135deg, #2A78F0, ${BLUE})` }}>
         <Sparkles size={18} />
         <div className="flex-1 min-w-0 text-sm font-extrabold break-words">{HELPER_NAME[L]} <span className="ml-1 text-[10px] font-bold rounded px-1.5 py-0.5" style={{ background: "rgba(255,255,255,0.22)" }}>AI</span></div>
+        <button type="button" data-helper-voice-toggle onClick={toggleVoice} aria-label={tr(voiceOn ? "voiceOn" : "voiceOff", L)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}>{voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
         <button type="button" onClick={() => setOpen(false)} aria-label={tr("close", L)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}><X size={16} /></button>
       </div>
 
@@ -172,6 +249,10 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
         ) : (
           <div key={i} className="max-w-[92%]" data-helper-answer>
             <div className="rounded-2xl rounded-bl-md px-3 py-2 text-sm break-words whitespace-pre-wrap" style={{ background: "#fff", color: "#0F1B2D", border: "1px solid #D5DCE8" }}>{m.text}</div>
+            <button type="button" data-helper-listen onClick={() => (speakingId === m.id ? stopSpeaking() : speakMsg({ ...m, manual: true }))} aria-label={tr(speakingId === m.id ? "stopListen" : "listen", L)}
+              className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: speakingId === m.id ? BLUE : "#E5EAF2", color: speakingId === m.id ? "#fff" : "#475569" }}>
+              {speakingId === m.id ? <VolumeX size={13} /> : <Volume2 size={13} />} {tr(speakingId === m.id ? "stopListen" : "listen", L)}
+            </button>
             {m.unanswered && personButtons}
             {m.logId && !m.unanswered && (
               <div className="flex items-center gap-1.5 mt-1">

@@ -118,6 +118,34 @@ function parseHelperReply(api) {
   };
 }
 
+// VOICE for every answer (owner 2026-11-24: "add a voice to every response to the questions by the AI helper"). The answer is turned into an MP3 on the server (Google Cloud Text-to-Speech, the same service
+// and the same approach as Admin's spoken announcements: it plays everywhere, unlike each phone's own speech engine) at the app's ONE speaking rate (= SPEECH_RATE in src/App.jsx).
+const HELP_SPEECH_RATE = 0.85;
+const HELP_DAILY_AUDIO_LIMIT = 60;   // spoken answers per user per day (cost guard, separate from the 20 questions)
+const HELP_TTS_VOICE = { en: { languageCode: "en-IN", ssmlGender: "FEMALE" }, hi: { languageCode: "hi-IN", ssmlGender: "FEMALE" }, mr: { languageCode: "mr-IN", ssmlGender: "FEMALE" } };
+const SPEECH_WORDS = {
+  en: { rupee: "rupees", kg: "kilograms", km: "kilometres", min: "minutes" },
+  hi: { rupee: "रुपये", kg: "किलोग्राम", km: "किलोमीटर", min: "मिनट" },
+  mr: { rupee: "रुपये", kg: "किलोग्रॅम", km: "किलोमीटर", min: "मिनिटे" },
+};
+// What is actually read out: the answer with list numbers, symbols and short forms made speakable; never longer than the TTS limit.
+function speechText(text, lang) {
+  const w = SPEECH_WORDS[lang] || SPEECH_WORDS.hi;
+  return String(text || "")
+    .replace(/\[\[NO_ANSWER\]\]/g, " ")
+    .replace(/₹\s*([\d,]+)/g, (m, n) => `${n} ${w.rupee}`)
+    .replace(/\bRs\.?\s*([\d,]+)/gi, (m, n) => `${n} ${w.rupee}`)
+    .replace(/(\d)\s*kg\b/gi, `$1 ${w.kg}`)
+    .replace(/(\d)\s*km\b/gi, `$1 ${w.km}`)
+    .replace(/(\d)\s*min\b/gi, `$1 ${w.min}`)
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/[*_#>`~|]+/g, " ")
+    .replace(/\s*\/\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1500);
+}
+
 // India's calendar day (UTC+5:30) -- the daily limit resets at local midnight.
 function istDayKey(now = new Date()) {
   const t = new Date(now.getTime() + 5.5 * 3600 * 1000);
@@ -128,6 +156,6 @@ function istDayKey(now = new Date()) {
 function withinDailyLimit(countSoFar, limit = HELP_DAILY_LIMIT) { return (Number(countSoFar) || 0) < limit; }
 
 module.exports = {
-  roleFromEmail, isConfidentialProbe, CONFIDENTIAL_REPLY, HELP_MODEL, HELP_DAILY_LIMIT, HELP_MAX_QUESTION_CHARS, HELP_MAX_HISTORY, HELP_MAX_TOKENS, NO_ANSWER_MARKER, HELP_LANGS,
+  HELP_SPEECH_RATE, HELP_DAILY_AUDIO_LIMIT, HELP_TTS_VOICE, speechText, roleFromEmail, isConfidentialProbe, CONFIDENTIAL_REPLY, HELP_MODEL, HELP_DAILY_LIMIT, HELP_MAX_QUESTION_CHARS, HELP_MAX_HISTORY, HELP_MAX_TOKENS, NO_ANSWER_MARKER, HELP_LANGS,
   scrubDigits, cleanHelpInput, buildSystemPrompt, buildRequestBody, parseHelperReply, istDayKey, withinDailyLimit,
 };

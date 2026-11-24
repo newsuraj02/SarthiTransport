@@ -377,6 +377,12 @@ export async function askHelperCall({ role, lang, question, history }) {
     return { ok: false, reason: e?.code === "functions/unauthenticated" ? "signed_out" : "error" };
   }
 }
+// Spoken version of one of the helper's answers (owner 2026-11-24): resolves { ok, audio (base64 MP3), mime } or { ok: false }; never throws. The app falls back to the phone's own voice on { ok: false }.
+export async function speakHelperCall(logId) {
+  const functions = functionsByRole[activeRole];
+  if (!functions || !logId) return { ok: false };
+  try { return (await httpsCallable(functions, "speakHelperAnswer")({ logId })).data; } catch (e) { console.warn("[helper] speech failed", e?.code || e); return { ok: false }; }
+}
 export async function rateHelperCall(logId, helpful) {
   const functions = functionsByRole[activeRole];
   if (!functions || !logId) return;

@@ -1620,6 +1620,42 @@ exports.askHelper = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY]
   return { ok: true, text: reply.text, answered: reply.answered, logId };
 });
 
+// SPOKEN ANSWER (owner 2026-11-24: "add a voice to every response"): turns one of the helper's own logged answers into an MP3 (base64) with Google Cloud Text-to-Speech at the app's one speaking rate.
+// It speaks ONLY text the helper itself produced (looked up by its log id), never text the app sends, so it cannot be used as a free text-to-speech service; the language is the log entry's own.
+// 60 spoken answers per user per day. Any failure answers { ok: false } and the app falls back to the phone's own voice.
+exports.speakHelperAnswer = onCall({ region: "asia-south1", timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (!helpAgent.roleFromEmail(request.auth.token && request.auth.token.email)) return { ok: false, reason: "role" };
+  const { logId } = request.data || {};
+  if (typeof logId !== "string" || !/^[A-Za-z0-9]{10,40}$/.test(logId)) throw new HttpsError("invalid-argument", "logId is required.");
+  const snap = await db.collection("helperLog").doc(logId).get();
+  if (!snap.exists) return { ok: false, reason: "not_found" };
+  const entry = snap.data() || {};
+  const lang = helpAgent.HELP_TTS_VOICE[entry.lang] ? entry.lang : "hi";
+  const text = helpAgent.speechText(entry.answer, lang);
+  if (text.length < 2) return { ok: false, reason: "empty" };
+  const usageRef = db.collection("helperUsage").doc(`${request.auth.uid}_${helpAgent.istDayKey()}`);
+  const allowed = await db.runTransaction(async (tx) => {
+    const u = await tx.get(usageRef);
+    const n = u.exists ? Number(u.data().audio) || 0 : 0;
+    if (n >= helpAgent.HELP_DAILY_AUDIO_LIMIT) return false;
+    tx.set(usageRef, { audio: n + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+  if (!allowed) return { ok: false, reason: "limit" };
+  try {
+    const [response] = await getTtsClient().synthesizeSpeech({
+      input: { text },
+      voice: helpAgent.HELP_TTS_VOICE[lang],
+      audioConfig: { audioEncoding: "MP3", speakingRate: helpAgent.HELP_SPEECH_RATE },
+    });
+    return { ok: true, audio: Buffer.from(response.audioContent).toString("base64"), mime: "audio/mpeg" };
+  } catch (e) {
+    console.error("[speakHelperAnswer] text-to-speech failed:", e.message);
+    return { ok: false, reason: "error" };
+  }
+});
+
 // 👍 / 👎 on an answer. Only the `helpful` flag of an existing log entry can change, and only to a boolean.
 exports.rateHelperAnswer = onCall({ region: "asia-south1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
