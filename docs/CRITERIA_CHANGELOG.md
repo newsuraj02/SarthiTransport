@@ -783,3 +783,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- In-app helper voice locked to Google Standard voices (owner 2026-11-24)
 - changed (7): fn:speakHelperAnswer, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/helpAgent.js#HELP_TTS_VOICE, code:functions/index.js#fn:speakHelperAnswer, code:scripts/serverTests/helper.cjs#other, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-24 -- In-app helper limits: 50 questions + 50 spoken answers per user per day (owner 2026-11-24)
+- changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/helpAgent.js#HELP_DAILY_LIMIT, code:functions/helpAgent.js#HELP_DAILY_AUDIO_LIMIT, code:scripts/serverTests/helper.cjs#other, code:scripts/verifyInvariants.mjs#checks

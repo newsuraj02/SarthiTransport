@@ -135,8 +135,8 @@ global.fetch = async (url, opts) => {
   boom = false;
   // ---- the daily limit
   const before = sent.length; let last = null, okCount = 0;
-  for (let i = 0; i < 22; i++) { const r = await ask({ ...user("heavy"), data: { role: "customer", lang: "en", question: "question " + i } }); if (r.ok) okCount++; last = r; }
-  ck(okCount === 20 && last.ok === false && last.reason === "limit" && sent.length - before === 20, "20 questions a day per user, the 21st is refused WITHOUT calling the API", okCount + " answered, last=" + last.reason);
+  for (let i = 0; i < 52; i++) { const r = await ask({ ...user("heavy"), data: { role: "customer", lang: "en", question: "question " + i } }); if (r.ok) okCount++; last = r; }
+  ck(okCount === 50 && last.ok === false && last.reason === "limit" && sent.length - before === 50, "50 questions a day per user, the 51st is refused WITHOUT calling the API", okCount + " answered, last=" + last.reason);
   const other = await ask({ ...user("someoneElse"), data: { role: "customer", lang: "en", question: "how to book" } });
   ck(other.ok === true, "another user is not affected by one user's limit");
   // ---- feedback
@@ -172,8 +172,8 @@ global.fetch = async (url, opts) => {
   await tryCall(speak, { ...user("v2", "customer"), data: { logId: lastMr } });
   ck(global.__tts[global.__tts.length - 1].voice.languageCode === "mr-IN" && global.__tts[global.__tts.length - 1].voice.name === "mr-IN-Standard-A", "Marathi answers are spoken with the Marathi Standard voice");
   const nBefore = global.__tts.length; let allowedCount = 0, lastSpeak = null;
-  for (let i = 0; i < 64; i++) { lastSpeak = await speak({ ...user("audioheavy", "customer"), data: { logId: spoken.logId } }); if (lastSpeak.ok) allowedCount++; }
-  ck(allowedCount === 60 && lastSpeak.ok === false && lastSpeak.reason === "limit" && global.__tts.length - nBefore === 60, "60 spoken answers a day per user; after that no text-to-speech call is made", allowedCount + " spoken");
+  for (let i = 0; i < 54; i++) { lastSpeak = await speak({ ...user("audioheavy", "customer"), data: { logId: spoken.logId } }); if (lastSpeak.ok) allowedCount++; }
+  ck(allowedCount === 50 && lastSpeak.ok === false && lastSpeak.reason === "limit" && global.__tts.length - nBefore === 50, "50 spoken answers a day per user; after that no text-to-speech call is made", allowedCount + " spoken");
   global.__ttsBadName = true; const nRetry = global.__tts.length;
   x = await tryCall(speak, { ...user("v4", "customer"), data: { logId: spoken.logId } });
   global.__ttsBadName = false;

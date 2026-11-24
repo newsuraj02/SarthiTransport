@@ -4,7 +4,7 @@
 const { KNOWLEDGE } = require("./helpKnowledge");
 
 const HELP_MODEL = "claude-haiku-5-5";
-const HELP_DAILY_LIMIT = 20;          // questions per signed-in user per day (cost guard)
+const HELP_DAILY_LIMIT = 50;          // questions per signed-in user per day (cost guard; owner 2026-11-24: 50)
 const HELP_MAX_QUESTION_CHARS = 500;
 const HELP_MAX_HISTORY = 6;           // earlier messages sent along (3 questions + 3 answers)
 const HELP_MAX_HISTORY_CHARS = 600;
@@ -121,7 +121,7 @@ function parseHelperReply(api) {
 // VOICE for every answer (owner 2026-11-24: "add a voice to every response to the questions by the AI helper"). The answer is turned into an MP3 on the server (Google Cloud Text-to-Speech, the same service
 // and the same approach as Admin's spoken announcements: it plays everywhere, unlike each phone's own speech engine) at the app's ONE speaking rate (= SPEECH_RATE in src/App.jsx).
 const HELP_SPEECH_RATE = 0.85;
-const HELP_DAILY_AUDIO_LIMIT = 60;   // spoken answers per user per day (cost guard, separate from the 20 questions)
+const HELP_DAILY_AUDIO_LIMIT = 50;   // spoken answers per user per day (cost guard, separate from the 50 questions; owner 2026-11-24: 50)
 // LOCKED TO GOOGLE'S "STANDARD" VOICES (owner 2026-11-24: "Lock it to Standard"): the cheapest tier (WaveNet / Neural2 cost about 4x). A named voice stops Google picking a dearer default.
 const HELP_TTS_VOICE = { en: { languageCode: "en-IN", name: "en-IN-Standard-A", ssmlGender: "FEMALE" }, hi: { languageCode: "hi-IN", name: "hi-IN-Standard-A", ssmlGender: "FEMALE" }, mr: { languageCode: "mr-IN", name: "mr-IN-Standard-A", ssmlGender: "FEMALE" } };
 const SPEECH_WORDS = {
