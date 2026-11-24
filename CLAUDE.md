@@ -512,6 +512,8 @@ Deploy gotchas: run `npm install` in `functions/` after pulling new deps; keep
 the TTS client lazy (eager creation timed out `firebase deploy`); Cloud
 Text-to-Speech API must be enabled on the GCP project.
 
+**Role selection -- card titles renamed (owner 2026-11-24):** "Driver App" is now "Partner (Driver and Owner)" (hi "पार्टनर (ड्राइवर और ओनर)", mr "पार्टनर (ड्रायव्हर आणि ओनर)") and "Customer App" is "Customer / Grahak" (hi / mr "कस्टमर / ग्राहक"); the spoken role question says Partner / Customer to match. Titles only; the "who should pick" lines below and everything else are unchanged. Hosting only.
+
 **Role selection.** Cards say WHO should pick them ("If you drive a truck or
 vehicle" / "If you need to send goods") — matches the spoken prompt.
 

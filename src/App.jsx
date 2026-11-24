@@ -4831,10 +4831,10 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
     if (anyVerified) return; // "continue where you left off" -- not the first-time flow this guidance is for
     const welcome = lang === "en" ? "Welcome to Apna Transport." : lang === "mr" ? "अपना ट्रान्सपोर्टमध्ये आपले स्वागत आहे." : "अपना ट्रांसपोर्ट में आपका स्वागत है।";
     const roleQuestion = lang === "en"
-      ? "Are you a Driver or a Customer? If you drive a vehicle, choose Driver App. If you need to send goods, choose Customer App."
+      ? "Are you a Driver or a Customer? If you drive a vehicle, choose Partner. If you need to send goods, choose Customer."
       : lang === "mr"
-      ? "तुम्ही ड्रायव्हर आहात की कस्टमर? जर तुम्ही गाडी चालवता तर ड्रायव्हर अ‍ॅप निवडा. जर तुम्हाला सामान पाठवायचे असेल तर कस्टमर अ‍ॅप निवडा."
-      : "क्या आप ड्राइवर हैं या कस्टमर? अगर आप गाड़ी चलाते हैं तो ड्राइवर ऐप चुनें। अगर आपको सामान भेजना है तो कस्टमर ऐप चुनें।";
+      ? "तुम्ही ड्रायव्हर आहात की कस्टमर? जर तुम्ही गाडी चालवता तर पार्टनर निवडा. जर तुम्हाला सामान पाठवायचे असेल तर कस्टमर निवडा."
+      : "क्या आप ड्राइवर हैं या कस्टमर? अगर आप गाड़ी चलाते हैं तो पार्टनर चुनें। अगर आपको सामान भेजना है तो कस्टमर चुनें।";
     speakGuide(welcome, lang);
     speakGuide(roleQuestion, lang, { queue: true }); // plays right after the welcome finishes, never cutting it off
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4852,7 +4852,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
             <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
               <img src="/role-driver-icon.png" alt="" className="h-16 w-16 mb-3" />
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅप" : "ड्राइवर ऐप"}</div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Partner (Driver and Owner)" : lang === "mr" ? "पार्टनर (ड्रायव्हर आणि ओनर)" : "पार्टनर (ड्राइवर और ओनर)"}</div>
               <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{driverWho}</div>
             </button>
             {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
@@ -4863,7 +4863,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
             <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
               <img src="/role-customer.svg" alt="" className="h-16 w-16 mb-3" />
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer / Grahak" : "कस्टमर / ग्राहक"}</div>
               <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{customerWho}</div>
             </button>
             {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}

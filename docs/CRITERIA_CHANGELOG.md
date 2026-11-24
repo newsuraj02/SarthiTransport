@@ -750,3 +750,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- Forced re-login: no explanation popup, existing users land directly on their role's Login screen (owner 2026-11-24)
 - changed (8): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#App, code:src/loginEpoch.js
+
+## 2026-11-24 -- Role-selection card titles renamed: Driver App -> Partner (Driver and Owner), Customer App -> Customer / Grahak (owner 2026-11-24)
+- changed (2): code:CLAUDE.md, code:src/App.jsx#RoleSelect
