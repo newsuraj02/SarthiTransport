@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, X, Send, ThumbsUp, ThumbsDown, Phone, MessageCircle, Mic, Volume2, VolumeX } from "lucide-react";
 import { askHelperCall, rateHelperCall, speakHelperCall } from "./firebaseClient";
 import { useBackHandler } from "./backButton.js";
+import { useNativeSpeech, startNativeListening, stopNativeListening } from "./nativeSpeech.js";
 
 export const HELPER_NAME = { en: "Your Helper", hi: "अपना मददगार", mr: "आपला मददगार" };
 // The button NEVER moves (owner 2026-11-24: "the AI logo stays constant throughout the app, no change on its placement"): the same spot on every screen, not draggable, no remembered position.
@@ -21,6 +22,7 @@ const T = {
   speak: { en: "Tap the microphone and speak your question", hi: "माइक दबाकर अपना प्रश्न बोलें", mr: "माइक दाबून आपला प्रश्न बोला" },
   listening: { en: "Listening... tap to stop", hi: "सुन रहा हूँ... रोकने के लिए दबाएँ", mr: "ऐकत आहे... थांबवण्यासाठी दाबा" },
   micOff: { en: "To speak your question, tap the box below and then the 🎤 microphone on your keyboard. Or simply type it.", hi: "आवाज़ से पूछने के लिए नीचे के बॉक्स पर टैप करें, फिर कीबोर्ड का 🎤 माइक दबाएँ। या सीधे लिखें।", mr: "आवाजाने विचारण्यासाठी खालील बॉक्सवर टॅप करा, मग कीबोर्डवरील 🎤 माइक दाबा. किंवा थेट लिहा." },
+  micDeniedSettings: { en: "The microphone is not allowed. Please allow it in the phone's settings, or type your question.", hi: "माइक की अनुमति नहीं है। कृपया फ़ोन की सेटिंग में अनुमति दें, या अपना प्रश्न लिखें।", mr: "माइकची परवानगी नाही. कृपया फोनच्या सेटिंगमध्ये परवानगी द्या, किंवा आपला प्रश्न लिहा." },
   micDenied: { en: "This app cannot use the microphone directly. Tap the box below and then the 🎤 microphone on your keyboard, or type your question.", hi: "यह ऐप सीधे माइक का उपयोग नहीं कर सकता। नीचे के बॉक्स पर टैप करें, फिर कीबोर्ड का 🎤 माइक दबाएँ, या अपना प्रश्न लिखें।", mr: "हे अ‍ॅप थेट माइक वापरू शकत नाही. खालील बॉक्सवर टॅप करा, मग कीबोर्डवरील 🎤 माइक दाबा, किंवा आपला प्रश्न लिहा." },
   noSpeech: { en: "I did not hear anything. Please tap the microphone and try again.", hi: "कुछ सुनाई नहीं दिया। कृपया माइक दबाकर पुनः प्रयास करें।", mr: "काही ऐकू आले नाही. कृपया माइक दाबून पुन्हा प्रयत्न करा." },
   send: { en: "Send", hi: "भेजें", mr: "पाठवा" },
@@ -102,9 +104,28 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
   // VOICE (owner 2026-11-24: "add a Mic button instead of a text box and send button inside the AI helper"). Uses the phone's own speech recognition (Web Speech API) in the app's language;
   // the audio is never recorded or stored by Apna Transport. Where the phone cannot do it (many Android WebViews), the panel shows the typing box instead so the helper is never unusable.
   const SR = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
-  const micOk = !!SR && micIssue !== "unsupported" && micIssue !== "denied";
-  const stopListening = () => { try { if (recRef.current) recRef.current.stop(); } catch { /* already stopped */ } };
+  // NATIVE MIC (owner 2026-11-24): once the next native build with the speech plugin is installed, the mic uses Android's own speech service (works in the installed app, asks the microphone permission once);
+  // before that build `nativeOk` is false and everything below behaves exactly as it did (browser speech if the phone has it, else the typing box with the keyboard-mic note).
+  const nativeOk = useNativeSpeech();
+  const micOk = nativeOk ? micIssue !== "unsupported" : (!!SR && micIssue !== "unsupported" && micIssue !== "denied");
+  const stopListening = () => { if (nativeOk) { stopNativeListening(); return; } try { if (recRef.current) recRef.current.stop(); } catch { /* already stopped */ } };
   const startListening = () => {
+    if (nativeOk) {
+      if (busyRef.current) return;
+      if (listening) { stopNativeListening(); return; }
+      stopSpeaking();
+      setMicIssue(""); setHeard(""); setListening(true);
+      startNativeListening({
+        lang: L,
+        onPartial: (t) => setHeard(t),
+        onDone: (t, problem) => {
+          setListening(false); setHeard("");
+          if (problem === "denied" || problem === "unsupported" || problem === "nospeech") { setMicIssue(problem); return; }
+          if (t.length >= 2 && askRef.current) askRef.current(t);
+        },
+      }).then((began) => { if (!began) setListening(false); });
+      return;
+    }
     if (!SR || busyRef.current) return;
     if (listening) { stopListening(); return; }
     stopSpeaking();
@@ -128,7 +149,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
       recRef.current = r; r.start(); setListening(true);
     } catch { setMicIssue("unsupported"); setListening(false); }
   };
-  useEffect(() => { if (!open && recRef.current) { try { recRef.current.abort(); } catch { /* ignore */ } recRef.current = null; setListening(false); setHeard(""); } }, [open]);
+  useEffect(() => { if (!open && nativeOk) { stopNativeListening(); setListening(false); setHeard(""); } if (!open && recRef.current) { try { recRef.current.abort(); } catch { /* ignore */ } recRef.current = null; setListening(false); setHeard(""); } }, [open]);
 
   // VOICE FOR EVERY ANSWER (owner 2026-11-24: "add a voice to every response to the questions by the AI helper"). Each answer is read out in the app's language as soon as it appears (unless the person
   // muted the voice with the speaker button in the header) and has its own listen / stop button. The audio is an MP3 made on the server (speakHelperAnswer) and kept in memory for replays; if
@@ -281,6 +302,7 @@ export default function HelperWidget({ role, lang, phone, whatsapp }) {
             </button>
             <div className="text-xs font-bold text-center break-words px-2" style={{ color: listening ? "#FF2A2A" : "#475569" }} data-helper-mic-label>{heard || tr(listening ? "listening" : "speak", L)}</div>
             {micIssue === "nospeech" && <div className="text-[11px] text-center" style={{ color: "#E89828" }}>{tr("noSpeech", L)}</div>}
+            {micIssue === "denied" && nativeOk && <div className="text-[11px] text-center" style={{ color: "#FF2A2A" }} data-helper-mic-note>{tr("micDeniedSettings", L)}</div>}
           </div>
         ) : (
           <>

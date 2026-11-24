@@ -21,7 +21,7 @@ import {
   Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, Smartphone, Weight, LocateFixed,
-  AlertTriangle, Volume2, Square, Plus,
+  AlertTriangle, Volume2, Square, Plus, Mic,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
@@ -47,6 +47,7 @@ import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveR
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
+import { useNativeSpeech, startNativeListening, stopNativeListening } from "./nativeSpeech.js";
 
 // Custom native plugin (android/app + android-admin/app:
 // FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
@@ -6395,11 +6396,26 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 function formatSuggestionKm(km) { return km < 1 ? "<1 km" : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`; }
 
 if (typeof window !== "undefined") window.__baseVh = Math.max(window.__baseVh || 0, window.innerHeight); // the screen height before any keyboard opens (see LocationField)
+// Words of the Pickup / Drop mic (owner 2026-11-24). Only ever shown when the native speech plugin is installed.
+const LOC_MIC_TEXT = {
+  speak: { en: "Speak the place", hi: "बोलकर जगह बताएँ", mr: "बोलून जागा सांगा" },
+  listening: { en: "Listening… speak now", hi: "सुन रहा हूँ… बोलिए", mr: "ऐकत आहे… बोला" },
+  nospeech: { en: "Could not hear you. Tap the mic and try again, or type the place.", hi: "सुनाई नहीं दिया। माइक दबाकर फिर बोलें, या जगह लिखें।", mr: "ऐकू आले नाही. माइक दाबून पुन्हा बोला, किंवा जागा लिहा." },
+  denied: { en: "Microphone is not allowed. Allow it in the phone's settings, or type the place.", hi: "माइक की अनुमति नहीं है। फ़ोन की सेटिंग में अनुमति दें, या जगह लिखें।", mr: "माइकची परवानगी नाही. फोनच्या सेटिंगमध्ये परवानगी द्या, किंवा जागा लिहा." },
+  unsupported: { en: "Voice is not available on this phone. Please type the place.", hi: "इस फ़ोन पर आवाज़ उपलब्ध नहीं है। कृपया जगह लिखें।", mr: "या फोनवर आवाज उपलब्ध नाही. कृपया जागा लिहा." },
+};
 export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
+  // MIC (owner 2026-11-24: "a mic at the right end of the Pickup and Drop boxes, only to take the customer's voice and show suggestions"). Needs the native speech plugin of the NEXT native build:
+  // `nativeMic` is false in the installed app until then, so no mic shows and nothing else in this box changes. The spoken words are NOT written while the person is still talking (that would
+  // look like typed text to the booking flow); they are shown in the box's placeholder, then written ONCE, the box takes the cursor and the usual suggestions open, exactly as if typed.
+  const nativeMic = useNativeSpeech();
+  const [micListening, setMicListening] = useState(false);
+  const [micHeard, setMicHeard] = useState("");
+  const [micNote, setMicNote] = useState("");
   // Owner 2026-11-04: the fixed "Book Round trip" bar must stay visible while the suggestions are open, so the list is capped to end ABOVE it.
   const fieldWrapRef = useRef(null);
   const [ddMaxH, setDdMaxH] = useState(256);
@@ -6476,6 +6492,23 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   }, [value, mapsReady, citiesOnly, lang, biasLat, biasLng]);
 
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
+  useEffect(() => () => { stopNativeListening(); }, []);
+  const toggleMic = () => {
+    if (micListening) { stopNativeListening(); return; }
+    setMicNote(""); setMicHeard(""); setMicListening(true);
+    startNativeListening({
+      lang,
+      onPartial: (t) => setMicHeard(t),
+      onDone: (t, problem) => {
+        setMicListening(false); setMicHeard("");
+        if (problem) { setMicNote(problem); return; }
+        if (t) {
+          onChange({ target: { value: t } }); setDropdownOpen(true);
+          try { const el = fieldWrapRef.current && fieldWrapRef.current.querySelector("input"); if (el) el.focus(); } catch { /* ignore */ }
+        }
+      },
+    }).then((began) => { if (!began) setMicListening(false); });
+  };
 
   const selectPrediction = async (p) => {
     setDropdownOpen(false);
@@ -6513,7 +6546,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // compact (customer booking steps, owner 2026-10-29): smaller, lighter text and
   // tighter padding so a long address shows more words before it runs out of room.
   const inputCls = compact ? "w-full rounded-lg py-4 text-[11.5px] font-semibold outline-none" : "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: value ? (compact ? 44 : 52) : (compact ? 12 : 16) };
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: (value ? (compact ? 44 : 52) : (compact ? 12 : 16)) + (nativeMic && !disabled ? 44 : 0) };
   // Golden-yellow frame AROUND the box (not the box's own border/
   // background) -- a padded, colored outer wrapper rather than an
   // outline, so the gap between the box and the highlight itself is
@@ -6598,7 +6631,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     <div>
       <div style={highlightWrapStyle}>
         <div className="relative w-full" ref={fieldWrapRef}>
-          <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
+          <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={micListening ? (micHeard || LOC_MIC_TEXT.listening[lang] || LOC_MIC_TEXT.listening.en) : placeholder} value={value} disabled={disabled}
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
               setDropdownOpen(true);
@@ -6607,6 +6640,12 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
               onFocus?.();
             }}
             onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
+          {nativeMic && !disabled && (
+            <button type="button" data-location-mic onMouseDown={(e) => e.preventDefault()} onClick={toggleMic} aria-label={micListening ? LOC_MIC_TEXT.listening[lang] || LOC_MIC_TEXT.listening.en : LOC_MIC_TEXT.speak[lang] || LOC_MIC_TEXT.speak.en}
+              className={`absolute top-0 bottom-0 flex items-center justify-center ${micListening ? "animate-pulse" : ""}`} style={{ right: value ? 44 : 0, width: 44, background: "transparent" }}>
+              <Mic size={20} color={micListening ? "#FF2A2A" : C.navy} strokeWidth={2.5} />
+            </button>
+          )}
           {value && !disabled && (
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
               className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -6647,6 +6686,9 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           )}
         </div>
       </div>
+      {micNote && (
+        <div className="text-[11px] mt-1 px-1" style={{ color: micNote === "denied" ? "#FF2A2A" : C.inkSoft }} data-location-mic-note>{(LOC_MIC_TEXT[micNote] || LOC_MIC_TEXT.nospeech)[lang] || (LOC_MIC_TEXT[micNote] || LOC_MIC_TEXT.nospeech).en}</div>
+      )}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
