@@ -28,7 +28,7 @@ import {
 } from "./firestoreStore";
 import { createFlowRecorder, tapLabel } from "./customerFlow";
 import { parseEntryLink, parseEntryUrl } from "./entryLink.js";
-import { didForceRelogin } from "./loginEpoch.js";
+import { didForceRelogin, loginFirstPending, clearLoginFirst } from "./loginEpoch.js";
 import { mergeListGroups } from "./categoryList.js";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
@@ -5002,7 +5002,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // showing the right labels/copy, since the underlying mobile+OTP flow is
   // identical either way and already figures out on its own (via
   // hasProfile) whether this number needs the registration form or not.
-  const [mode, setMode] = useState(null); // null | "login" | "signup"
+  const [mode, setMode] = useState(() => (loginFirstPending() ? "login" : null)); // null | "login" | "signup"  (a person signed out by the one-time re-login starts on Login)
   useBackHandler(true, () => { if (mode) { setMode(null); resetForm(); } else onLogout?.(); }, 10); // Android Back = the visible back arrow
 
   // Number + OTP (owner 2026-11-24: no PIN any more). "stage" is the screen: "mobile" (type the number) -> "otp" (type the SMS code) -> signed in.
@@ -5396,7 +5396,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // forceMode skips that first screen entirely (used by DriverKycPortal,
   // where the visitor is always an already-registered driver completing
   // KYC, so there's no real "new here?" choice to ask).
-  const [mode, setMode] = useState(forceMode); // null | "login" | "signup"
+  const [mode, setMode] = useState(forceMode || (loginFirstPending() ? "login" : null)); // null | "login" | "signup"  (a person signed out by the one-time re-login starts on Login)
   useBackHandler(true, () => { if (mode) { setMode(null); resetForm(); } else onLogout?.(); }, 10); // Android Back = the visible back arrow
 
   // Sign-up name. NOT remembered (owner 2026-10-28): Back wipes the whole
@@ -12156,10 +12156,10 @@ export default function App() {
   const [driverSession, setDriverSession] = usePersistedState("sarthi_driverSession", "");
   const [sessionClaim, setSessionClaim] = useState(false);
   const [kickedNotice, setKickedNotice] = useState(false);
-  // ONE-TIME FORCED RE-LOGIN (owner 2026-11-24, src/loginEpoch.js): main.jsx already signed everybody out once before this screen drew; this notice says why, until they tap OK.
-  // The native driver session (the GPS service's own sign-in) is cleared too, exactly as the Logout button does it.
-  const [relogNotice, setRelogNotice] = usePersistedState("sarthi_relogNotice", false);
-  useEffect(() => { if (customerAuth.verified || driverAuth.verified) setRelogNotice(false); }, [customerAuth.verified, driverAuth.verified]); // logged in again = the notice is done
+  // ONE-TIME FORCED RE-LOGIN (owner 2026-11-24, src/loginEpoch.js): main.jsx already signed everybody out once before this screen drew. Nothing is explained: the customer / driver
+  // screen simply opens on its Login screen (loginFirstPending); the flag is dropped the moment somebody is logged in. The native driver session (the GPS service's own sign-in) is cleared too,
+  // exactly as the Logout button does it.
+  useEffect(() => { if (customerAuth.verified || driverAuth.verified) clearLoginFirst(); }, [customerAuth.verified, driverAuth.verified]);
   useEffect(() => { if (didForceRelogin() && isNativeApp) LocationTrackerNative.signOutNative().catch((e) => console.error("[forced re-login] native sign-out failed", e)); }, []);
   // Opening the app with ?admin=1 skips the role-choice screen entirely and
   // goes straight to the Admin login form — no option to pick Customer/Driver.
@@ -13508,15 +13508,6 @@ export default function App() {
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras}
             fleetVehicles={fleetVehicles} fleetPrivateById={fleetPrivateById} />
-        )}
-        {relogNotice && !customerAuth.verified && !driverAuth.verified && role !== "admin" && (
-          <div data-relogin-notice className="fixed inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(15,27,45,0.55)" }}>
-            <div className="w-full max-w-sm rounded-2xl p-5 text-center shadow-md" style={{ background: C.paper }}>
-              <div className="text-base font-extrabold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Please log in again" : lang === "mr" ? "कृपया पुन्हा लॉगिन करा" : "कृपया फिर से लॉगिन करें"}</div>
-              <div className="text-sm mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "We have updated how login works. Please log in once with your mobile number and an OTP. After that you stay logged in until you log out yourself." : lang === "mr" ? "लॉगिन अपडेट झाले आहे. कृपया तुमचा मोबाइल नंबर आणि OTP ने एकदा लॉगिन करा. त्यानंतर तुम्ही स्वतः लॉग आउट करेपर्यंत लॉग इन राहाल." : "लॉगिन अपडेट हुआ है। कृपया अपने मोबाइल नंबर और OTP से एक बार लॉगिन करें। इसके बाद आप खुद लॉग आउट करने तक लॉग इन रहेंगे।"}</div>
-              <button type="button" onClick={() => setRelogNotice(false)} className="w-full rounded-xl py-3 text-sm font-extrabold text-white" style={{ background: C.navy }}>OK</button>
-            </div>
-          </div>
         )}
         {kickedNotice && (
           <div data-session-kicked className="fixed inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(15,27,45,0.55)" }}>
