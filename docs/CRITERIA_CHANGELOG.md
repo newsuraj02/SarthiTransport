@@ -871,3 +871,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Merge: GPS service crash guards + startup ANR fix (native, owner said push 2026-11-25)
 - changed (5): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java, code:android/app/src/main/java/com/apnatransport/app/MainActivity.java, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- docs: SMS_ACTIVATION.md (parked SMS activation procedure) + CLAUDE.md pointer
+- changed (2): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks
+- added (1): code:docs/SMS_ACTIVATION.md
+
+## 2026-11-25 -- re-point activation-file check
+- changed (1): code:scripts/verifyInvariants.mjs#checks
