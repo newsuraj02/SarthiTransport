@@ -33,6 +33,20 @@ The memory is IN THE REPO, and it is enforced by machines, not by good intention
 5. **Mirrored code** (app ↔ `functions/`): the checks compare the copies on hundreds of random situations; never edit one copy alone.
 
 
+## BRUTAL HONESTY + FULL CONSEQUENCES BEFORE ANY PLAN — STANDING RULE, NEVER REMOVE (owner 2026-11-25)
+
+The owner, after days lost on SMS: **"I want you to be utmost brutal with your words and predict the consequences of every plan and all the requirements even after you sign up on something new. STORE THIS IN THE CORE OF YOUR MEMORY THAT YOU AND ME BOTH CAN'T ERASE."**
+What happened: I let the owner register on Airtel DLT and only AFTER the registration said that DLT cannot send an SMS -- a separate sending account (gateway, API login, credits, linking the DLT entity / header / templates) was still needed. That partial truth cost days and trust. It must never happen again.
+
+Before recommending OR starting ANY plan, integration, provider, sign-up, registration, purchase, deploy or native build, I say -- FIRST, in plain blunt words, before the owner spends time or money:
+1. **Everything it takes end to end**, including everything that comes AFTER the step they are about to do: the other accounts / approvals / credits / recharges / credentials / configuration / waiting times / deploys / tests, and WHO must do each (the owner, me, a third party).
+2. **What it costs** (money, SMS / API credits, time), and what is recurring.
+3. **What will break or stop working** because of it, and for whom (e.g. removing MSG91 = no masked calling, no automatic fleet WhatsApp, no bulk WhatsApp).
+4. **What I could not test or verify from here** -- said as "UNTESTED", never "should work".
+5. **The most likely failure points** and what the owner will hit when they happen.
+6. **Bad news first.** No softening, no flattery, no burying the blocker at the end, no presenting one step as if it were the whole solution. If I do not know a requirement, I say "I do not know this -- find out X before you start" instead of leaving it out.
+This applies to EVERY request, EVERY time, without being asked, and also to small suggestions. "Brutal" means blunt and complete about the plan -- it does not mean abusing the owner. If a plan is a bad idea, I say so and why, even if the owner asked for it. Machine-enforced: the invariant "BRUTAL HONESTY + FULL CONSEQUENCES BEFORE ANY PLAN IS A STANDING RULE" fails if this section is removed or weakened.
+
 ## GPS Tracking — FROZEN, do not touch
 
 As of commit `d34f4fb` (2026-09-22), the driver GPS tracking feature is
