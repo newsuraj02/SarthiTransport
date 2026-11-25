@@ -36,7 +36,7 @@ function loadKycFns() {
   const start = app.indexOf("const DRIVER_KYC_FIELDS");
   const end = app.indexOf("// END driver KYC completeness helpers");
   const code = app.slice(start, end).replace(/\bexport /g, "");
-  return new Function(code + "; return { DRIVER_KYC_FIELDS, getKycMissingFromValues, getDriverKycMissing, isDriverKycComplete, driverKycBucket };")();
+  return new Function(code + "; return { DRIVER_KYC_FIELDS, getKycMissingFromValues, getDriverKycMissing, isDriverKycComplete, driverKycBucket, driverDutyBucket };")();
 }
 // Runs the REAL isLikelyUninstalled (pure JS between UNINSTALL_INACTIVE_DAYS and driverInstallStatus).
 function loadUninstallFn() {
@@ -699,15 +699,19 @@ const checks = [
   ["ADMIN KYC LISTS: A DRIVER WITH EVERY DOCUMENT IS NEVER 'INCOMPLETE'; AN ADMIN EDIT OF AN INCOMPLETE DRIVER SENDS IT BACK TO PENDING APPROVAL (owner 2026-11-25: 'users in the Incomplete KYC with proper documentation'; 'if edited by Admin from Incomplete list it must ask for approval again')", () => {
     const k = loadKycFns(); const full = fullDriver();
     const b = (kyc, mutate) => { const d = JSON.parse(JSON.stringify(full)); d.kyc = kyc; if (mutate) mutate(d); return k.driverKycBucket(d); };
-    const rule = b("Pending") === "pending" && b(undefined) === "pending" && b("Approved") === "complete" && b("Rejected") === "complete"
+    const rule = b("Pending") === "pending" && b(undefined) === "pending" && b("Approved") === "complete" && b("Rejected") === "incomplete"
       && b("Pending", (d) => { delete d.docs.dl; }) === "incomplete" && b("Approved", (d) => { d.vehicleSpec.vehicleNumber = ""; }) === "incomplete"
-      && k.driverKycBucket({ kyc: "Pending" }) === "incomplete" && k.driverKycBucket(null) === "incomplete";
+      && k.driverKycBucket({ kyc: "Pending" }) === "incomplete" && k.driverKycBucket(null) === "incomplete"
+      && k.driverKycBucket({ fleetOwner: true, kyc: "Approved", fleetSetupDone: true, fleetVehicleCount: 2 }) === "complete" && k.driverKycBucket({ fleetOwner: true, kyc: "Approved" }) === "incomplete";
+    // DUTY BOX: the switch decides, for everyone -- On + Off always add up to the whole list (the old rule listed only KYC-Approved drivers)
+    const duty = k.driverDutyBucket({ online: true, kyc: "Pending" }) === "on" && k.driverDutyBucket({ online: false, kyc: "Rejected" }) === "off" && k.driverDutyBucket({}) === "off" && k.driverDutyBucket({ online: true, kyc: "Approved" }) === "on" && k.driverDutyBucket(null) === "off";
+    const dutyUsed = admin.includes('driverDutyBucket(d) === "on"') && admin.includes('driverDutyBucket(d) === "off"') && !/const (onlineSection|offDutySection) = bySection\(totalInstalled\.filter\([^\n]*kyc === "Approved"/.test(admin);
     const bucketOnly = ["incompleteSection", "pendingSection", "completeSection"].every((n) => admin.includes(`const ${n} = bySection(`)) && !admin.includes("isIncompleteKyc");
     const reapprove = (admin.match(/driverKycBucket\(d\) === "incomplete" && d\.kyc !== "Pending" && d\.kyc !== "Rejected"/g) || []).length === 2
       && (admin.match(/if \(reapprove\) await updateDriverKyc\?\.\(d\.id, "Pending"\)/g) || []).length === 2
       && /<AdminDriverList[^>]*updateDriverKyc=\{updateDriverKyc\}/.test(admin);
     const decide = admin.includes("data-driver-kyc-decision") && admin.includes("data-driver-approve") && admin.includes("data-driver-reject") && admin.includes("data-driver-kyc-note");
-    return rule && bucketOnly && reapprove && decide;
+    return rule && duty && dutyUsed && bucketOnly && reapprove && decide;
   }],
   ["ADMIN DRIVER LIST = CUSTOMER LIST ROW, ONE OPEN AT A TIME (owner 2026-11-08: 'show the list exactly like Customer list: Name, Number, Phone icon (linked) and Down arrow which shows every detail below, even the tags; only one down arrow open at a time, no 2 customers or drivers'): a collapsed driver row is just number, photo, name, mobile, the linked call button and the arrow; the GPS / KYC / duty / blocked tags, vehicle details, documents, Edit and Block / Delete live INSIDE the arrow; one expandedId per list so opening a row closes the other (and cancels an edit in progress)", () => {
     const adm = stripComments(read("src/AdminPanel.jsx"), "AdminPanel.jsx"); const i = adm.indexOf("const renderRow = (d, i) => {"); const j = adm.indexOf("const L3 = (en, mr, hi)", i); const row = adm.slice(i, j);

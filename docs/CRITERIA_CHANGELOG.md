@@ -933,3 +933,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- KYC edit note: wording depends on whether a document is still missing
 - changed (1): code:src/AdminPanel.jsx#AdminDriverList
+
+## 2026-11-25 -- Admin lists: Rejected KYC is Incomplete, fleet owner judged by fleet setup, Status box = duty switch for every installed driver (owner 2026-11-25)
+- changed (7): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#loadKycFns, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminDriverList, code:src/App.jsx#driverKycBucket
+- added (1): code:src/App.jsx#driverDutyBucket

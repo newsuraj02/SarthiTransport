@@ -39,7 +39,7 @@ import {
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate, categoryLoadCapacityKg,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
-  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText, isDriverKycComplete, driverKycBucket,
+  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText, isDriverKycComplete, driverKycBucket, driverDutyBucket,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
@@ -3195,8 +3195,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // instead as 3 more accordion sections over the same totalInstalled
   // population, rather than dropped.
   const lowWalletSection = bySection(totalInstalled.filter((d) => d.online && d.wallet < minWallet));
-  const onlineSection = bySection(totalInstalled.filter((d) => d.online && d.kyc === "Approved"));
-  const offDutySection = bySection(totalInstalled.filter((d) => !d.online && d.kyc === "Approved" && !isLikelyUninstalled(d)));
+  // Status = the duty switch for EVERY installed driver (driverDutyBucket): the two lists always add up to the whole list (the old "Approved only" filter left Pending / Rejected / never-submitted drivers in neither)
+  const onlineSection = bySection(totalInstalled.filter((d) => driverDutyBucket(d) === "on"));
+  const offDutySection = bySection(totalInstalled.filter((d) => driverDutyBucket(d) === "off"));
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
   // installed drivers are ever listed here, full stop. A blacklisted or
   // likely-uninstalled driver isn't findable from this screen at all
@@ -3318,10 +3319,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           </div>
         )}
 
-          {driverKycBucket(d) === "pending" && updateDriverKyc && (
+          {(driverKycBucket(d) === "pending" || (d.kyc === "Rejected" && isDriverKycComplete(d))) && updateDriverKyc && (
             <div data-driver-kyc-decision className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "All documents are in -- waiting for your approval." : lang === "mr" ? "सर्व कागदपत्रे आली आहेत -- तुमच्या मंजुरीची वाट पाहत आहे." : "सारे दस्तावेज़ आ गए हैं -- आपकी मंज़ूरी का इंतज़ार है।"}</p>
-              {confirmRejectId === d.id ? (
+              <p className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{d.kyc === "Rejected" ? (lang === "en" ? "Rejected earlier. Every document is in -- you can reverse it." : lang === "mr" ? "आधी नाकारले. सर्व कागदपत्रे आली आहेत -- तुम्ही उलट करू शकता." : "पहले रिजेक्ट हुआ। सारे दस्तावेज़ हैं -- आप इसे पलट सकते हैं।") : lang === "en" ? "All documents are in -- waiting for your approval." : lang === "mr" ? "सर्व कागदपत्रे आली आहेत -- तुमच्या मंजुरीची वाट पाहत आहे." : "सारे दस्तावेज़ आ गए हैं -- आपकी मंज़ूरी का इंतज़ार है।"}</p>
+              {d.kyc === "Rejected" ? (
+                <button data-driver-approve onClick={() => { updateDriverKyc(d.id, "Approved"); setKycNote(""); }} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Rejected earlier -- approve now" : lang === "mr" ? "आधी नाकारले -- आता अप्रूव्ह करा" : "पहले रिजेक्ट हुआ -- अब अप्रूव करें"}</button>
+              ) : confirmRejectId === d.id ? (
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] flex-1" style={{ color: C.safety }}>{lang === "en" ? "Reject this KYC?" : lang === "mr" ? "हे KYC नाकारायचे?" : "यह KYC रिजेक्ट करें?"}</span>
                   <button onClick={() => { updateDriverKyc(d.id, "Rejected"); setConfirmRejectId(null); }} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: C.safety }}>{lang === "en" ? "Yes, reject" : lang === "mr" ? "हो, नाकारा" : "हाँ, रिजेक्ट करें"}</button>
