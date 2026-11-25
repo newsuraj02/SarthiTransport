@@ -12841,6 +12841,9 @@ export default function App() {
   // bookings collection (see the comment above -- no separate history
   // store), this clears all of them at once, not just AdminFinance's own
   // Reports table.
+  // DELETE EVERY RIDE, ALL STATUSES (owner 2026-11-25: "delete every ride from the Booking list permanently"): unlike deleteAllRideHistory this also removes open requests and trips
+  // that are running right now. Admin's Danger Zone "Option 3" asks for the typed words DELETE EVERYTHING first; firestore.rules already let Admin delete any booking.
+  const deleteEveryRide = () => bulkDeleteDocs("bookings", bookings.map((b) => b.id));
   const deleteAllRideHistory = () => {
     const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
     return bulkDeleteDocs("bookings", ids);
@@ -13591,7 +13594,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
+              <AdminPanel waStatus={waStatus} deleteEveryRide={deleteEveryRide} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
