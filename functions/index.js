@@ -3,6 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
+const { isUnmatchedExpired } = require("./unmatchedExpiry");
 const { evaluateNewLoadDriver, RING_EXTRA_CATEGORIES } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
@@ -699,6 +700,34 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
   await batch.commit().catch((e) => console.error("[escalateUnmatchedBookings] ringDeliveries", e.message));
   await Promise.all(sends.map((send) => send()));
 }
+
+// UNMATCHED BOOKINGS EXPIRE AFTER ONE HOUR (owner 2026-11-25): a Current / Advance booking (Return included) that nobody has taken within 1 hour of being
+// requested is deleted PERMANENTLY -- the one shared `bookings` document, so it disappears from the customer's, every driver's and Admin's screens at once.
+// The rule is `functions/unmatchedExpiry.js` (only `AwaitingDriver` with nobody on it, age known and >= 1 h); a trip somebody accepted is never touched. The ring's
+// own leftovers (`ringDeliveries`) go with it. Runs every 5 minutes; the first run also clears every old open request that is already over an hour old.
+exports.deleteUnmatchedBookings = onSchedule(
+  { schedule: "every 5 minutes", timeZone: "Asia/Kolkata", region: "asia-south1" },
+  async () => {
+    const snap = await db.collection("bookings").where("status", "==", "AwaitingDriver").get();
+    if (snap.empty) return;
+    const now = Date.now();
+    const expired = snap.docs.filter((d) => isUnmatchedExpired(d.data(), now)).slice(0, 300);
+    let deleted = 0;
+    for (const d of expired) {
+      try {
+        const rings = await db.collection("ringDeliveries").where("bookingId", "==", d.id).get();
+        const batch = db.batch();
+        batch.delete(d.ref);
+        rings.docs.forEach((r) => batch.delete(r.ref));
+        await batch.commit();
+        deleted += 1;
+      } catch (e) {
+        console.error("[deleteUnmatchedBookings]", d.id, e.message);
+      }
+    }
+    if (deleted) console.log(`[deleteUnmatchedBookings] deleted ${deleted} booking(s) nobody took within 1 hour`);
+  }
+);
 
 exports.escalateUnmatchedBookings = onSchedule(
   { schedule: "every 2 minutes", timeZone: "Asia/Kolkata", region: "asia-south1" },

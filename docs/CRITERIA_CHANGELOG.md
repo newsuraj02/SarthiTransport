@@ -799,3 +799,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- Force-update safety docs: standing rule + contract N50
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- Unmatched bookings expire after 1 hour (new scheduled deleteUnmatchedBookings + functions/unmatchedExpiry.js, owner 2026-11-25); fraud-account removal script; helper facts
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/helpKnowledge.js#other, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks
+- added (16): fn:deleteUnmatchedBookings, code:functions/index.js#fn:deleteUnmatchedBookings, code:functions/unmatchedExpiry.js, code:scripts/removeFraudUsers.js#path, code:scripts/removeFraudUsers.js#readline, code:scripts/removeFraudUsers.js#FRAUD_PATTERNS, code:scripts/removeFraudUsers.js#norm, code:scripts/removeFraudUsers.js#matchedPatterns, code:scripts/removeFraudUsers.js#pinAuthEmail, code:scripts/removeFraudUsers.js#tsMs, code:scripts/removeFraudUsers.js#when, code:scripts/removeFraudUsers.js#main, code:scripts/removeFraudUsers.js#exportsList, code:scripts/removeFraudUsers.js#other, code:scripts/serverTests/removeFraudUsers.cjs, code:scripts/serverTests/unmatchedExpiry.cjs
