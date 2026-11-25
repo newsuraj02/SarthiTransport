@@ -213,7 +213,7 @@ export async function sendBulkDriverWhatsApp(kind, mobiles) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "sendBulkDriverWhatsApp");
+    const call = httpsCallable(functions, "sendBulkDriverSms"); // DLT SMS (owner 2026-11-25: MSG91 / WhatsApp bulk was removed); the name of this wrapper is unchanged so the Admin buttons are too
     const result = await call({ kind, mobiles });
     return result.data;
   } catch (e) {
@@ -712,16 +712,15 @@ export async function listenForegroundPush(onMessageReceived) {
   return onMessage(messaging, onMessageReceived);
 }
 
-// WhatsApp delivery ticks (owner 2026-11-14; functions/index.js: getWhatsAppWebhookInfo). Admin only. Never throws: { ok, url?, lastAt?, count?, reason? }.
-export async function getWhatsAppWebhookInfo() {
+// DLT SMS (owner 2026-11-25; functions/smsFunctions.js): Admin's "Send test SMS". Never throws: { ok, detail?, reason? }.
+export async function sendTestSms(kind, mobile) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "getWhatsAppWebhookInfo");
-    const result = await call({});
-    return { ok: true, ...result.data };
+    const result = await httpsCallable(functions, "sendTestSms")({ kind, mobile });
+    return result.data;
   } catch (e) {
-    console.error("[whatsapp webhook info] callable failed", e);
-    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 200) };
+    console.error("[sendTestSms] callable failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 220) };
   }
 }

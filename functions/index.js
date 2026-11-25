@@ -208,8 +208,6 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // references it; that function is frozen (CLAUDE.md), so this declaration
 // isn't removed along with the rest.
 const { buildFleetConversion } = require("./fleetConvert");
-const { judgeMsg91Response } = require("./bulkWhatsApp");
-const wa = require("./whatsappStatus");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
 const { planOtpSignIn, isClientPinSignup } = require("./phoneSignup");
 const { planRoleSwitch, plainSnapshot } = require("./roleSwitch");
@@ -219,159 +217,7 @@ const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
 const MSG91_WHATSAPP_NAMESPACE = defineSecret("MSG91_WHATSAPP_NAMESPACE");
 
-// Bulk WhatsApp sends for Admin's retention/reminder tiles (Uninstalled/
-// Blocked, Off duty, and AdminDriverList's Incomplete-KYC and GPS-off
-// sections) -- replaces the old "open wa.me, admin taps send, one driver at
-// a time" queue with a single real API call reaching every matching driver
-// at once. MSG91's own bulk endpoint takes an ARRAY of recipients
-// (to_and_components) in one request, so this is genuinely one send, not a
-// loop of individual ones -- same endpoint/account as sendDirectRequestWhatsApp
-// above, no new secrets needed. Each template's own approved name and
-// variable shape (see the 4 templates submitted/approved on MSG91's
-// dashboard -- driver_reinstall_offer, driver_kyc_incomplete, driver_gps_off,
-// driver_off_duty) is fixed by what Meta actually approved, not
-// admin-configurable, so hardcoded here the same way direct_booking_request's
-// is above.
-const MSG91_BULK_TEMPLATES = {
-  reinstall: { name: "driver_reinstall_offer", vars: () => ({}) },
-  kycIncomplete: {
-    name: "driver_kyc_incomplete",
-    // The one template with a real variable -- each driver's own KYC
-    // portal deep link, not shared across recipients.
-    vars: (mobile) => ({ body_1: `https://sarthi-transport-74865.web.app/?driverKyc=1&mobile=${mobile}` }),
-  },
-  gpsOff: { name: "driver_gps_off", vars: () => ({}) },
-  offDuty: { name: "driver_off_duty", vars: () => ({}) },
-};
-// MSG91's own limit on recipients per bulk call isn't documented anywhere
-// public -- chunking defensively rather than assuming an unbounded array is
-// safe, same reasoning bulkUpdateDocs already applies to Firestore writes
-// (a several-hundred-entry single request is exactly the kind of thing that
-// silently fails partway on a flaky connection).
-const MSG91_BULK_CHUNK_SIZE = 100;
-exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
-  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
-  const { kind, mobiles } = request.data || {};
-  const template = MSG91_BULK_TEMPLATES[kind];
-  if (!template) throw new HttpsError("invalid-argument", "Unknown template kind.");
-  const list = Array.isArray(mobiles) ? mobiles.filter(Boolean) : [];
-  if (list.length === 0) throw new HttpsError("invalid-argument", "mobiles is required.");
-
-  const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
-  if (!authKey || !fromNumber || !namespace) throw new HttpsError("failed-precondition", `MSG91 WhatsApp is not configured (missing: ${[!authKey && "MSG91_AUTH_KEY", !fromNumber && "MSG91_WHATSAPP_NUMBER", !namespace && "MSG91_WHATSAPP_NAMESPACE"].filter(Boolean).join(", ")}).`);
-
-  const chunks = [];
-  for (let i = 0; i < list.length; i += MSG91_BULK_CHUNK_SIZE) chunks.push(list.slice(i, i + MSG91_BULK_CHUNK_SIZE));
-
-  let sent = 0;
-  let failure = null; // the last real reason a chunk did not go out -- returned to Admin so a failure is never just "try again"
-  const batchId = `${Date.now()}`;
-  // Delivery ticks (owner 2026-11-14, src/AdminPanel.jsx WaTicks): one record per driver, written the moment MSG91 answers; the Sent / Delivered / Read news arrives later on msg91WhatsAppStatus.
-  const recordState = async (mobilesList, stateFor) => {
-    try {
-      const at = Date.now();
-      const batch = db.batch();
-      mobilesList.forEach((m) => {
-        const mob = wa.mobile10(m);
-        if (mob.length !== 10) return;
-        const ref = db.collection("whatsappStatus").doc(mob);
-        batch.set(ref, { mobile: mob, lastKind: kind, updatedAt: at }, { merge: true });
-        batch.update(ref, { [`byKind.${kind}`]: stateFor(at) }); // replaces the WHOLE record of this kind: a new send starts its ticks over (old read / delivered stamps gone)
-      });
-      await batch.commit();
-    } catch (e) { console.error(`[whatsapp bulk:${kind}] could not record ticks:`, e.message); }
-  };
-  for (const chunk of chunks) {
-    const to_and_components = chunk.map((mobile) => ({
-      to: [`91${mobile}`],
-      components: Object.fromEntries(Object.entries(template.vars(mobile)).map(([key, value]) => [key, { type: "text", value }])),
-    }));
-    try {
-      const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
-        method: "POST",
-        headers: { authkey: authKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          integrated_number: fromNumber,
-          content_type: "template",
-          payload: {
-            messaging_product: "whatsapp",
-            type: "template",
-            template: { name: template.name, language: { code: "hi", policy: "deterministic" }, namespace, to_and_components },
-          },
-        }),
-      });
-      // Logged on every outcome, not just a non-2xx one -- MSG91's bulk
-      // endpoint can return HTTP 200 with an error described only inside
-      // the body (seen when driver_reinstall_offer reported "Sent" to the
-      // admin here but never actually appeared in MSG91's own Logs panel:
-      // res.ok was true, so the old code never looked at the body at all).
-      // console.log, not console.error, on the success path so normal
-      // sends don't spam Cloud Functions' error-level logs.
-      const bodyText = await res.text();
-      const verdict = judgeMsg91Response(res.status, bodyText);
-      if (!verdict.ok) {
-        console.error(`[whatsapp bulk:${kind}] rejected by MSG91 (HTTP ${res.status}):`, bodyText);
-        failure = { reason: "msg91_rejected", detail: verdict.detail };
-        await recordState(chunk, (at) => wa.failedSendState(batchId, verdict.detail, at));
-        continue;
-      }
-      console.log(`[whatsapp bulk:${kind}] MSG91 response (HTTP ${res.status}):`, bodyText);
-      sent += chunk.length;
-      const requestId = wa.requestIdFromReply(bodyText);
-      await recordState(chunk, (at) => wa.submittedState(batchId, requestId, at));
-    } catch (e) {
-      console.error(`[whatsapp bulk:${kind}] send failed:`, e.message);
-      failure = { reason: "send_failed", detail: String(e.message || e).slice(0, 220) };
-      await recordState(chunk, (at) => wa.failedSendState(batchId, failure.detail, at));
-    }
-  }
-  return { ok: sent > 0, sent, requested: list.length, ...(sent < list.length && failure ? failure : {}) };
-});
-
-// ---- WhatsApp delivery ticks (owner 2026-11-14) ---------------------------------------------------------------------------------------------------------------
-// MSG91 posts one report per recipient (Sent / Delivered / Read / Failed) to this URL once Admin pastes it into MSG91 -> Webhooks -> WhatsApp "Outbound Report"
-// (Admin -> Settings -> "WhatsApp delivery ticks" shows the exact URL with a Copy button). The URL carries a token made from MSG91_AUTH_KEY, so nobody else can post ticks.
-// Whatever MSG91 posts is read by whatsappStatus.parseMsg91Reports; the last raw body is kept (Admin-only doc) so a wording difference can be seen and fixed.
-exports.msg91WhatsAppStatus = onRequest({ region: "asia-south1", cors: false, secrets: [MSG91_AUTH_KEY] }, async (req, res) => {
-  const authKey = MSG91_AUTH_KEY.value();
-  if (!authKey || !wa.tokenMatches(req.query && req.query.k, authKey)) { res.status(403).send("forbidden"); return; }
-  if (req.method !== "POST") { res.status(200).send("ok"); return; }
-  const body = req.body;
-  let events = [];
-  try { events = wa.parseMsg91Reports(body); } catch (e) { console.error("[whatsapp status] unreadable report:", e.message); }
-  let applied = 0;
-  for (const ev of events) {
-    const ref = db.collection("whatsappStatus").doc(ev.mobile);
-    try {
-      await db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists) return; // a message this app did not send (or the send record is not written yet): nothing to tick
-        const d = snap.data() || {};
-        const byKind = d.byKind || {};
-        const kindOf = ev.requestId ? Object.keys(byKind).find((k) => byKind[k] && byKind[k].requestId === ev.requestId) : null;
-        const kind = kindOf || d.lastKind;
-        if (!kind) return;
-        tx.set(ref, { updatedAt: Date.now(), byKind: { [kind]: wa.mergeMessageState(byKind[kind], ev) } }, { merge: true });
-        applied += 1;
-      });
-    } catch (e) { console.error("[whatsapp status] could not apply:", e.message); }
-  }
-  try {
-    await db.collection("whatsappStatus").doc("_webhook").set({ lastAt: Date.now(), count: FieldValue.increment(1), lastEvents: events.length, lastApplied: applied, lastRaw: JSON.stringify(body == null ? null : body).slice(0, 3500) }, { merge: true });
-  } catch (e) { console.error("[whatsapp status] could not log:", e.message); }
-  res.status(200).send("ok");
-});
-
-// Admin-only: the webhook URL to paste into MSG91, and whether MSG91 has called it yet.
-exports.getWhatsAppWebhookInfo = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY] }, async (request) => {
-  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
-  const authKey = MSG91_AUTH_KEY.value();
-  if (!authKey) throw new HttpsError("failed-precondition", "MSG91_AUTH_KEY is not set.");
-  const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
-  const snap = await db.collection("whatsappStatus").doc("_webhook").get();
-  const w = snap.exists ? snap.data() : {};
-  return { url: `https://asia-south1-${project}.cloudfunctions.net/msg91WhatsAppStatus?k=${wa.webhookToken(authKey)}`, lastAt: w.lastAt || null, count: w.count || 0, lastEvents: w.lastEvents || 0, lastApplied: w.lastApplied || 0 };
-});
+// (The bulk WhatsApp buttons, the delivery webhook and its setup callable were REMOVED 2026-11-25 with MSG91 -- owner: "terminate the plan with MSG91". Admin's bulk KYC reminder is now a DLT SMS: functions/smsFunctions.js sendBulkDriverSms.)
 
 // Full-screen "incoming call" ring alert -- see AppFirebaseMessagingService.java/
 // RingingBookingActivity.java on the Android side. Deliberately sent as a
@@ -1102,32 +948,11 @@ async function sendFleetDispatch(bookingId, booking) {
   const token = await fleetLinkFor(bookingId);
   const link = `${FLEET_TRIP_PAGE}?b=${encodeURIComponent(bookingId)}&k=${token}`;
   const driverMobile = fleetCleanMobile(priv?.driverMobile || booking.fleetDriverMobile);
-  let sent = false;
-  try {
-    const cfg = (await db.collection("settings").doc("main").get()).data() || {};
-    const templateName = typeof cfg.fleetDispatchTemplate === "string" ? cfg.fleetDispatchTemplate.trim() : "";
-    const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
-    if (templateName && authKey && fromNumber && namespace && driverMobile.length === 10) {
-      const vars = [booking.pickup || "-", booking.drop || "-", fleetCleanMobile(booking.customerMobile) || "-", fleetCleanMobile(booking.driverMobile), link];
-      const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
-        method: "POST",
-        headers: { authkey: authKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          integrated_number: fromNumber, content_type: "template",
-          payload: { messaging_product: "whatsapp", type: "template", template: { name: templateName, language: { code: "hi", policy: "deterministic" }, namespace,
-            to_and_components: [{ to: [`91${driverMobile}`], components: Object.fromEntries(vars.map((v, i) => [`body_${i + 1}`, { type: "text", value: String(v).slice(0, 900) }])) }] } },
-        }),
-      });
-      const bodyText = await res.text();
-      if (res.ok) { sent = true; console.log(`[dispatchFleetTrip] ${bookingId}: MSG91 response (HTTP ${res.status}):`, bodyText); }
-      else console.error(`[dispatchFleetTrip] ${bookingId}: rejected by MSG91 (HTTP ${res.status}):`, bodyText);
-    }
-  } catch (e) {
-    console.error("[dispatchFleetTrip] send failed:", e.message);
-  }
+  // The driver has no app: since MSG91 was removed (2026-11-25) nothing is sent from here, so `sent` is false and the owner's / Admin's screen offers the one-tap WhatsApp button with `text`.
+  const sent = false;
   return { link, sent, text: buildFleetDispatchText({ booking, ownerName: booking.ownerName, ownerMobile: booking.driverMobile, link }) };
 }
-exports.dispatchFleetTrip = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
+exports.dispatchFleetTrip = onCall({ region: "asia-south1" }, async (request) => {
   const callerPhone = callerPhoneFromAuth(request.auth?.token);
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
   const { bookingId } = request.data || {};
@@ -1703,94 +1528,7 @@ exports.rateHelperAnswer = onCall({ region: "asia-south1" }, async (request) => 
   return { ok: true };
 });
 
-// ---------------- Number masking + WhatsApp (both MSG91) ----------------
-// Replaces Kaleyra for masked calling below -- the owner closed their
-// Kaleyra account, and MSG91 (already in use for WhatsApp direct-request
-// alerts above) offers the same kind of Voice click-to-call/bridge API
-// under the same account/AuthKey, so this moved onto MSG91 too rather than
-// picking a third vendor.
-//
-// Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
-// or committed):
-//   MSG91_AUTH_KEY           -- reused from the WhatsApp integration above
-//                                (one AuthKey per MSG91 account, shared
-//                                across all of that account's channels).
-//   MSG91_VOICE_CALLER_ID    -- the Voice number provisioned on MSG91's
-//                                dashboard for this account (the number
-//                                both sides see as caller ID).
-// Until both are set, initiateMaskedCall returns reason: "not_configured"
-// and the client falls back to a plain tel: link, instead of throwing.
-const MSG91_VOICE_CALLER_ID = defineSecret("MSG91_VOICE_CALLER_ID");
-
-exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_VOICE_CALLER_ID] }, async (request) => {
-  const { bookingId } = request.data || {};
-  // Real Firebase Phone Auth sessions carry the verified number as
-  // request.auth.token.phone_number automatically (e.g. "+919876543210").
-  // PIN-based sessions (see callerPhoneFromAuth below) don't have that
-  // claim -- their identity comes from the synthetic email instead, so it
-  // has to be parsed back out to get the same "+91XXXXXXXXXX" shape.
-  const callerPhone = callerPhoneFromAuth(request.auth?.token);
-  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
-  if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
-
-  const bookingSnap = await db.collection("bookings").doc(bookingId).get();
-  if (!bookingSnap.exists) throw new HttpsError("not-found", "Booking not found.");
-  const booking = bookingSnap.data();
-
-  const isCustomer = callerPhone === `+91${booking.customerMobile}`;
-  const isDriver = !!booking.driverMobile && callerPhone === `+91${booking.driverMobile}`;
-  if (!isCustomer && !isDriver) throw new HttpsError("permission-denied", "You're not a party to this booking.");
-
-  const otherMobile = isCustomer ? booking.driverMobile : booking.customerMobile;
-  if (!otherMobile) return { ok: false, reason: "no_other_party" };
-
-  const authKey = MSG91_AUTH_KEY.value(), callerId = MSG91_VOICE_CALLER_ID.value();
-  if (!authKey || !callerId) return { ok: false, reason: "not_configured" };
-
-  // MSG91's click-to-call ("2-way call"): `destination` is rung first,
-  // then on answer each number in `destinationB` is dialed and bridged in
-  // -- the same shape as Kaleyra's old from/to, just destination(A)/
-  // destinationB(array) instead. caller_id is the registered Voice number
-  // both sides see as caller ID -- see
-  // control.msg91.com/api/v5/voice/call/ctc docs.
-  const body = JSON.stringify({
-    caller_id: callerId,
-    destination: callerPhone.replace(/^\+/, ""),
-    destinationB: [`91${otherMobile}`],
-  });
-  let msg91CallId = null;
-  try {
-    const res = await fetch("https://control.msg91.com/api/v5/voice/call/ctc", {
-      method: "POST",
-      headers: { accept: "application/json", authkey: authKey, "content-type": "application/json" },
-      body,
-    });
-    const data = await res.json();
-    if (!res.ok) { console.error("[maskedCall] MSG91 rejected the request:", data); return { ok: false, reason: "msg91_error" }; }
-    // MSG91's click-to-call response shape for the call-id field hasn't
-    // been confirmed against their docs yet (only the request shape was
-    // available when this was written) -- tried in order of how MSG91's
-    // other v5 APIs name this field. Worst case this stays null and the
-    // call itself still goes through; it only affects the ID shown in the
-    // audit log below.
-    msg91CallId = data?.data?.call_id || data?.call_id || data?.request_id || data?.data?.id || data?.id || null;
-  } catch (e) {
-    console.error("[maskedCall] MSG91 request failed:", e.message);
-    return { ok: false, reason: "msg91_error" };
-  }
-
-  // Audit trail for dispute resolution -- which booking, who initiated,
-  // when. Written server-side with Admin privileges (bypasses Firestore
-  // rules), readable by admin only -- see firestore.rules.
-  await db.collection("callLogs").add({
-    bookingId,
-    initiatedBy: isCustomer ? "customer" : "driver",
-    msg91CallId,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return { ok: true };
-});
+// (Number masking -- initiateMaskedCall, MSG91 Voice click-to-call -- was REMOVED 2026-11-25 with MSG91 (owner: "terminate the plan with MSG91"). The app's Call button falls back to a plain tel: call.)
 
 // ---------------- Number + OTP login, no PIN (owner 2026-11-24) ----------------
 // "Remove the PIN procedure, just keep the Number + OTP login" (2026-11-23: "I want the OTP back during signup and Login as I have got multiple fraud bookings"). The OTP is a real
@@ -1802,10 +1540,21 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [MSG91_AUT
 // OTP being the proof the number is theirs). A login on a number with no account gets "no_account": nothing is created, so no driver account exists without the completed form (the client
 // calls signup only at the final "Create Account" of the documents form). The session then lives on the phone until the person logs out: Firebase's refresh token does not expire.
 exports.otpSignIn = onCall({ region: "asia-south1" }, async (request) => {
-  const { role, mode } = request.data || {};
+  const { role, mode, mobile: proofMobile, proof } = request.data || {};
   const toRole = role === "driver" ? "driver" : "customer";
   const toMode = mode === "signup" ? "signup" : "login";
-  const token = request.auth && request.auth.token;
+  let token = request.auth && request.auth.token;
+  // DLT SMS OTP (owner 2026-11-25): no Firebase phone sign-in, but a one-time proof that verifySmsOtp handed out for this number (functions/smsOtp.js). It is turned into the same
+  // phone-proof shape planOtpSignIn already judges, and used up only when the sign-in succeeds.
+  let smsProofMobile = null;
+  if (!(typeof token?.phone_number === "string") && proof && /^\d{10}$/.test(String(proofMobile || ""))) {
+    try {
+      if (await smsProofs.checkSmsProof(String(proofMobile), String(proof))) {
+        smsProofMobile = String(proofMobile);
+        token = { phone_number: `+91${smsProofMobile}`, firebase: { sign_in_provider: "phone" }, auth_time: Math.floor(Date.now() / 1000) };
+      }
+    } catch (e) { console.error("[otpSignIn] proof check failed:", e.message); }
+  }
   let roles = null;
   const preMobile = typeof token?.phone_number === "string" ? (token.phone_number.match(/^\+91(\d{10})$/) || [])[1] : null;
   try {
@@ -1826,13 +1575,20 @@ exports.otpSignIn = onCall({ region: "asia-south1" }, async (request) => {
     if (uid && toMode === "signup") return { ok: false, reason: "exists" };
     if (!uid) uid = (await getAuth().createUser({ email, password: crypto.randomBytes(24).toString("base64url") })).uid;
     // `email` is also sent as a claim so firestore.rules / storage.rules (isOwnPhone) see it for certain, whatever the token exchange copies from the user record.
-    return { ok: true, token: await getAuth().createCustomToken(uid, { email }) };
+    const customToken = await getAuth().createCustomToken(uid, { email });
+    if (smsProofMobile) await smsProofs.consumeSmsProof(smsProofMobile); // single use
+    return { ok: true, token: customToken };
   } catch (e) {
     if (e.code === "auth/email-already-exists") return { ok: false, reason: "exists" };
     console.error("[otpSignIn] failed:", e.message);
     return { ok: false, reason: "error" };
   }
 });
+
+// DLT SMS (owner 2026-11-25): requestSmsOtp / verifySmsOtp / sendBulkDriverSms / sendTestSms / smsBookingConfirmed / smsNewLoad -- see functions/smsFunctions.js.
+const smsFns = require("./smsFunctions")({ db, FieldValue, lookupMobileRoles, mobileHasRoleAccount });
+const smsProofs = smsFns.__smsProof;
+Object.assign(exports, smsFns);
 
 // OPTIONAL hard lock (off until the owner turns it on, because it needs Google Identity Platform): with ENFORCE_OTP_SIGNUP=1 in functions/.env, this blocking function refuses every
 // browser-side sign-up of a PIN login (the synthetic <mobile>@customer|driver.apnatransport.local e-mail), so the only way to get a PIN account is the callable above (the Admin SDK
@@ -2010,7 +1766,7 @@ exports.adminDeleteBookings = onCall({ region: "asia-south1", timeoutSeconds: 54
 // driver (status Ongoing, driver + vehicle filled in, pickup OTP made -- what the driver's own Accept would produce), so nobody else is rung and the ring code is not
 // involved at all. The customer pays the driver directly (`paymentBy: "customer"`); nothing is charged to Admin. Decisions live in functions/adminBooking.js.
 // Written with the Admin SDK, so firestore.rules need no change (a customer / driver session still cannot create a booking for someone else).
-exports.adminBookForCustomer = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
+exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const checked = validateAdminBookingInput(request.data);
   if (!checked.ok) return { ok: false, reason: checked.reason, message: checked.message };

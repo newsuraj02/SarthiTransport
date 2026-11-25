@@ -4922,9 +4922,9 @@ function useOtpFlow(lang) {
     return () => clearTimeout(t);
   }, [resendIn]);
   // -> { ok: true } | { ok: false, message }
-  const send = async (mobile, containerId) => {
+  const send = async (mobile, containerId, mode) => {
     setOtpSending(true); setOtpError("");
-    const r = await sendPhoneOtp(mobile, containerId);
+    const r = await sendPhoneOtp(mobile, containerId, { mode });
     setOtpSending(false);
     if (!r.ok) { const message = otpMessage(r.reason, lang); setOtpError(message); return { ok: false, message }; }
     confirmationRef.current = r.confirmation; setOtp(""); setResendIn(OTP_RESEND_SECONDS);
@@ -5087,7 +5087,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         : (!res.exists ? (res.otherRoleExists ? numberOtherRoleMsg(lang, "customer") : numberNotRegisteredMsg(lang)) : "");
       if (blocked) { setSending(false); setError(blocked); return; }
     }
-    const sent = await otpFlow.send(mobile, "recaptcha-otp-customer");
+    const sent = await otpFlow.send(mobile, "recaptcha-otp-customer", mode);
     setSending(false);
     if (!sent.ok) { setError(sent.message); return; }
     setError("");
@@ -5111,7 +5111,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     if (mode === "signup" && detailsValid) submitProfile();
     setSending(false);
   };
-  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-customer"); };
+  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-customer", mode); };
 
   const submitProfile = async () => {
     if (!detailsValid) return;
@@ -5511,7 +5511,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         : (!res.exists ? (res.otherRoleExists ? numberOtherRoleMsg(lang, "driver") : numberNotRegisteredMsg(lang)) : "");
       if (blocked) { setSending(false); setError(blocked); return; }
     }
-    const sent = await otpFlow.send(mobile, "recaptcha-otp-driver");
+    const sent = await otpFlow.send(mobile, "recaptcha-otp-driver", mode);
     setSending(false);
     if (!sent.ok) { setError(sent.message); return; }
     setError("");
@@ -5537,7 +5537,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     onOtpVerified(mobile, true);
     setSending(false);
   };
-  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-driver"); };
+  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-driver", mode); };
 
   // The ONLY place a driver account is created: the final "Create Account" tap
   // at the end of the documents form, once everything is filled in and the

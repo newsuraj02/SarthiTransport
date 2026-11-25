@@ -21,7 +21,8 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { useBackHandler } from "./backButton.js";
-import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx";
+import { WaStatusContext, WaTicks, WaSummary } from "./waTicks.jsx";
+import AdminSmsSettings from "./AdminSmsSettings.jsx";
 import SearchableList, { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
 import { needsListSearch, filterByQuery, matchesQuery, personSearchText, bookingSearchText } from "./adminListSearch.js";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
@@ -4216,7 +4217,7 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
 
-      <div className="mt-2 mb-4"><WaSetupCard lang={lang} /></div>
+      <div className="mt-2 mb-4"><AdminSmsSettings lang={lang} /></div>
 
       {/* IN-APP HELPER LOG (owner 2026-11-24): what the AI helper was asked and could not answer -- see src/AdminHelperLog.jsx. */}
       <AdminHelperLog lang={lang} />

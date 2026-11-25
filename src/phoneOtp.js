@@ -5,6 +5,10 @@
 // it answers with a Firebase custom token for that number's customer / driver login, and `signInAfterOtp` below signs the person in with it. That session is stored on the phone
 // (IndexedDB) and stays until the person taps Logout -- the OTP is asked ONCE per login, never again on later app opens. The UI (CustomerOnboarding / DriverOnboarding in
 // App.jsx) talks only to the functions below.
+// DLT SMS OTP (owner 2026-11-25: "implement the DLT SMS ... Signup / Login OTP ... no more MSG91"): when Admin has switched "SMS OTP" on (Admin -> Settings -> SMS (DLT), only after a
+// successful test), `sendPhoneOtp` first asks the server to text the code (callable requestSmsOtp, a DLT template through the Airtel gateway) and `confirmPhoneOtp` checks it on the
+// server (verifySmsOtp), which hands back a one-time PROOF that `signInAfterOtp` passes to otpSignIn. While the switch is off -- or if the SMS cannot be sent -- the Firebase Phone Auth
+// path below runs exactly as before, so a gateway problem never locks anybody out.
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithCustomToken } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { otpFirebaseAuth, otpFunctions } from "./firebaseClient";
@@ -40,6 +44,9 @@ export function otpMessage(reason, lang) {
     wrong_code: ["Incorrect OTP -- try again.", "गलत OTP -- फिर कोशिश करें।", "चुकीचा OTP -- पुन्हा प्रयत्न करा."],
     expired: ["This OTP has expired -- tap Resend OTP.", "यह OTP पुराना हो गया -- OTP दोबारा भेजें दबाएं।", "हा OTP जुना झाला -- OTP पुन्हा पाठवा दाबा."],
     not_enabled: ["OTP is not switched on yet -- please call us.", "OTP अभी चालू नहीं है -- कृपया हमें फोन करें।", "OTP अजून सुरू नाही -- कृपया आम्हाला फोन करा."],
+    wait: ["Please wait a few seconds before asking for another OTP.", "कृपया दूसरा OTP मांगने से पहले कुछ सेकंड रुकें।", "दुसरा OTP मागण्यापूर्वी काही सेकंद थांबा."],
+    exists: ["This number already has an account -- please log in.", "इस नंबर का खाता पहले से है -- कृपया लॉगिन करें।", "या नंबरचे खाते आधीच आहे -- कृपया लॉगिन करा."],
+    other_role: ["This number is registered in the other app -- use a different number.", "यह नंबर दूसरे ऐप में रजिस्टर है -- दूसरा नंबर इस्तेमाल करें।", "हा नंबर दुसऱ्या अ‍ॅपमध्ये नोंदणीकृत आहे -- दुसरा नंबर वापरा."],
     not_configured: ["The app isn't ready -- please try again in a moment.", "ऐप अभी तैयार नहीं है -- थोड़ी देर बाद कोशिश करें।", "अॅप अजून तयार नाही -- थोड्या वेळाने प्रयत्न करा."],
     no_account: ["No account found for this number. Please sign up first.", "इस नंबर का खाता नहीं मिला। कृपया पहले साइन अप करें।", "या नंबरचे खाते सापडले नाही. कृपया आधी साइन अप करा."],
     otp_expired: ["Your OTP check has expired -- please verify your number again.", "OTP वेरिफिकेशन पुराना हो गया -- कृपया नंबर दोबारा वेरीफाई करें।", "OTP पडताळणी जुनी झाली -- कृपया नंबर पुन्हा पडताळा."],
@@ -52,8 +59,22 @@ export function otpMessage(reason, lang) {
 let verifier = null, verifierBox = null;
 function dropVerifier() { try { verifier && verifier.clear(); } catch { /* already gone */ } verifier = null; verifierBox = null; }
 
-// Sends the SMS OTP. -> { ok: true, confirmation } | { ok: false, reason }
-export async function sendPhoneOtp(mobile, containerId) {
+// DLT SMS path: the one-time proof the server gave after the right code (kept in memory only, like the Firebase OTP session).
+let smsProof = null;
+// reasons that must reach the person (they cannot be fixed by falling back to Firebase); anything else -> fall back to Firebase Phone Auth
+const SMS_FINAL_REASONS = new Set(["invalid_phone", "no_account", "exists", "other_role", "wait", "too_many", "quota"]);
+
+// Sends the SMS OTP. -> { ok: true, confirmation } | { ok: false, reason }.  `opts.mode` = "login" | "signup"; the role comes from the box id (recaptcha-otp-driver / -customer).
+export async function sendPhoneOtp(mobile, containerId, opts = {}) {
+  if (otpFunctions) {
+    try {
+      const role = String(containerId || "").includes("driver") ? "driver" : "customer";
+      const r = (await httpsCallable(otpFunctions, "requestSmsOtp")({ mobile, role, mode: opts.mode === "signup" ? "signup" : "login" })).data;
+      if (r && r.ok) { smsProof = null; return { ok: true, confirmation: { sms: true, mobile } }; }
+      if (r && SMS_FINAL_REASONS.has(r.reason)) return { ok: false, reason: r.reason };
+      // "sms_otp_off", "sms_failed", "error" ... -> the Firebase path below
+    } catch (e) { console.error("[sendPhoneOtp] SMS OTP not available, using Firebase Phone Auth:", e && e.code); }
+  }
   if (!otpFirebaseAuth) return { ok: false, reason: "not_configured" };
   try {
     if (!verifier || verifierBox !== containerId) { dropVerifier(); verifier = new RecaptchaVerifier(otpFirebaseAuth, containerId, { size: "invisible" }); verifierBox = containerId; }
@@ -68,6 +89,14 @@ export async function sendPhoneOtp(mobile, containerId) {
 
 // Checks the 6 digits. -> { ok: true } | { ok: false, reason }
 export async function confirmPhoneOtp(confirmation, code) {
+  if (confirmation && confirmation.sms) {
+    try {
+      const r = (await httpsCallable(otpFunctions, "verifySmsOtp")({ mobile: confirmation.mobile, code })).data;
+      if (r && r.ok && r.proof) { smsProof = { mobile: confirmation.mobile, proof: r.proof }; return { ok: true }; }
+      const reason = r && r.reason;
+      return { ok: false, reason: reason === "wrong_code" ? "wrong_code" : reason === "locked" ? "too_many" : reason === "expired" ? "expired" : "error" };
+    } catch (e) { console.error("[confirmPhoneOtp] SMS check failed", e); return { ok: false, reason: e && e.code === "functions/unavailable" ? "network" : "error" }; }
+  }
   try { await confirmation.confirm(code); return { ok: true }; }
   catch (e) { console.error("[confirmPhoneOtp]", e); return { ok: false, reason: otpReason(e && e.code) }; }
 }
@@ -79,7 +108,7 @@ export async function signInAfterOtp(authInstance, role, mode) {
   if (!otpFunctions || !authInstance) return { ok: false, reason: "not_configured" };
   let data;
   try {
-    data = (await httpsCallable(otpFunctions, "otpSignIn")({ role, mode })).data;
+    data = (await httpsCallable(otpFunctions, "otpSignIn")({ role, mode, ...(smsProof ? { mobile: smsProof.mobile, proof: smsProof.proof } : {}) })).data;
   } catch (e) {
     console.error("[signInAfterOtp] callable failed", e);
     return { ok: false, reason: e && e.code === "functions/unauthenticated" ? "otp_expired" : "error" };
@@ -91,6 +120,7 @@ export async function signInAfterOtp(authInstance, role, mode) {
 
 // Forget the OTP session (after the account / login is done, or when the person backs out). Best effort.
 export async function endOtpSession() {
+  smsProof = null;
   dropVerifier();
   try { if (otpFirebaseAuth && otpFirebaseAuth.currentUser) await signOut(otpFirebaseAuth); } catch { /* nothing to do */ }
 }
