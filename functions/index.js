@@ -4,6 +4,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
 const { isUnmatchedExpired } = require("./unmatchedExpiry");
+const { deleteBookingsCascade } = require("./rideDelete");
 const { evaluateNewLoadDriver, RING_EXTRA_CATEGORIES } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
@@ -1976,6 +1977,23 @@ exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) =
     return { ok: true, role, hadLogin: !!loginUser, removed: gone.length };
   } catch (e) {
     console.error("[adminDeleteAccount] failed:", e.message);
+    return { ok: false, reason: "error", message: String(e.message || "").slice(0, 200) };
+  }
+});
+
+// DELETE RIDES EVERYWHERE (owner 2026-11-25): Admin-only. Deletes rides together with everything attached to them (pickup OTP, extras, ring receipts, uploaded bills, and -- when
+// every ride is wiped -- the "Booked" customer-activity tries) so nothing is left behind in Earnings / history / Storage. Logic and modes: functions/rideDelete.js.
+exports.adminDeleteBookings = onCall({ region: "asia-south1", timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { mode, ids } = request.data || {};
+  if (mode !== "all" && mode !== "finished") throw new HttpsError("invalid-argument", "mode must be 'all' or 'finished'.");
+  if (ids != null && (!Array.isArray(ids) || ids.length > 5000 || ids.some((x) => typeof x !== "string" || !x || x.length > 200))) throw new HttpsError("invalid-argument", "ids must be a list of booking ids.");
+  try {
+    const result = await deleteBookingsCascade({ db, bucket: getStorage().bucket(), mode, ids: ids || null });
+    console.log(`[adminDeleteBookings] mode=${mode}`, JSON.stringify(result));
+    return { ok: true, ...result };
+  } catch (e) {
+    console.error("[adminDeleteBookings] failed:", e.message);
     return { ok: false, reason: "error", message: String(e.message || "").slice(0, 200) };
   }
 });

@@ -93,6 +93,8 @@ async function main(argv) {
     const bookingIds = [...refs.values()].map((x) => x.id);
     for (const id of bookingIds) {
       try { await db.collection("bookingOtps").doc(id).delete(); } catch (e) { /* none */ }
+      const ex = await db.collection("bookingExtras").where("bookingId", "==", id).get();
+      for (const d of ex.docs) await d.ref.delete();
       const r = await db.collection("ringDeliveries").where("bookingId", "==", id).get();
       for (const d of r.docs) await d.ref.delete();
     }

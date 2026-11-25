@@ -43,7 +43,7 @@ import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLike
 import { signOut } from "firebase/auth";
 import { sendPhoneOtp, confirmPhoneOtp, signInAfterOtp, endOtpSession, otpMessage, OTP_RESEND_SECONDS } from "./phoneOtp.js";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress, adminDeleteBookings } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
@@ -12843,17 +12843,28 @@ export default function App() {
   // Reports table.
   // DELETE EVERY RIDE, ALL STATUSES (owner 2026-11-25: "delete every ride from the Booking list permanently"): unlike deleteAllRideHistory this also removes open requests and trips
   // that are running right now. Admin's Danger Zone "Option 3" asks for the typed words DELETE EVERYTHING first; firestore.rules already let Admin delete any booking.
-  const deleteEveryRide = () => bulkDeleteDocs("bookings", bookings.map((b) => b.id));
+  // DELETING A RIDE REMOVES IT EVERYWHERE (owner 2026-11-25): all three Danger Zone options go through the server (adminDeleteBookings -> functions/rideDelete.js), which deletes each ride
+  // together with its pickup OTP, extras, ring receipts and uploaded bills (and, for "every ride", the Booked customer-activity tries). Only when that function is not deployed yet
+  // (hosting before functions) does it fall back to deleting the booking documents from here; any other failure is thrown so the screen shows "try again".
+  const deleteRidesEverywhere = async (mode, ids, fallbackIds) => {
+    const res = await adminDeleteBookings({ mode, ...(ids ? { ids } : {}) });
+    if (res && res.ok) return;
+    if (res && /not.?found|unimplemented|unavailable|not_configured/i.test(`${res.code || ""} ${res.reason || ""} ${res.message || ""}`)) { await bulkDeleteDocs("bookings", fallbackIds); return; }
+    throw new Error((res && (res.message || res.reason)) || "delete failed");
+  };
+  const deleteEveryRide = () => deleteRidesEverywhere("all", null, bookings.map((b) => b.id));
   const deleteAllRideHistory = () => {
     const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
-    return bulkDeleteDocs("bookings", ids);
+    return deleteRidesEverywhere("finished", null, ids);
   };
   // Admin's "select what to delete" (owner 2026-11-11): only the picked ids, and only if they are still finished rides -- a live trip is never deleted, even if its id is passed in.
   // Customer activity "Delete" (owner 2026-11-13): removes the given customerFlow sessions (tries) -- Admin only (firestore.rules: customerFlow delete = isAdmin).
   const deleteCustomerFlowSessions = (ids) => bulkDeleteDocs("customerFlow", (ids || []).filter(Boolean));
   const deleteSelectedRides = (ids) => {
     const finished = new Set(bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id));
-    return bulkDeleteDocs("bookings", (ids || []).filter((id) => finished.has(id)));
+    const picked = (ids || []).filter((id) => finished.has(id));
+    if (!picked.length) return Promise.resolve();
+    return deleteRidesEverywhere("finished", picked, picked);
   };
 
   // Money taps are guarded against a double tap (deep-clean 2026-11-02): the wallet/status the button reads only refreshes after

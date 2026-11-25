@@ -809,3 +809,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Admin Danger Zone Option 3: prop wiring order
 - changed (3): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-25 -- Deleting a ride removes it everywhere: adminDeleteBookings cascade (OTP, extras, ring receipts, Storage bills, Booked activity) behind all three Danger Zone options (owner 2026-11-25)
+- changed (8): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/removeFraudUsers.js#main, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#App
+- added (5): fn:adminDeleteBookings, code:functions/index.js#fn:adminDeleteBookings, code:src/firebaseClient.js#adminDeleteBookings, code:functions/rideDelete.js, code:scripts/serverTests/rideDelete.cjs
+
+## 2026-11-25 -- ride delete: fall back also when the functions client is not configured
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#App
