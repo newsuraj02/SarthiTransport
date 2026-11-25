@@ -920,3 +920,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Admin Bookings: per-list Delete all removed, individual Delete this ride only (N64)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#DeleteRideControls, code:src/AdminPanel.jsx#AdminBookings
+
+## 2026-11-25 -- Driver menu: My Fleet renamed My vehicles / मेरी गाड़ियाँ / माझ्या गाड्या, menu entry and screen heading (N65)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverApp, code:src/FleetOwner.jsx#FleetSetup

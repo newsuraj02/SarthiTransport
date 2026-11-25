@@ -11638,7 +11638,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
               </button>
               {driver.fleetOwner && (
                 <button data-menu-my-fleet onClick={() => { setTab("fleet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                  <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Fleet" : lang === "mr" ? "माझी फ्लीट" : "मेरी फ्लीट"}
+                  <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My vehicles" : lang === "mr" ? "माझ्या गाड्या" : "मेरी गाड़ियाँ"}
                 </button>
               )}
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>

@@ -114,7 +114,7 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   );
 }
 
-// Setup (the gate right after a fleet owner signs up) and "My fleet" (manage later) in one component.
+// Setup (the gate right after a fleet owner signs up) and "My vehicles" (manage later) in one component.
 // mode "setup": form -> "Add another vehicle?" Yes/No loop -> onFinish() on No (needs at least one vehicle).
 // mode "manage": the list with Add / on-off / remove.
 export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup", openForm = false, onFinish, onClose, onCountChange }) {
@@ -125,7 +125,7 @@ export function FleetSetup({ owner, vehicles, privateById, lang, mode = "setup",
   return (
     <div className="flex-1 overflow-y-auto" data-fleet-setup>
       <div className="px-5 py-4 flex items-center justify-between" style={{ background: C.navy }}>
-        <h3 className="text-sm font-bold text-white">{mode === "setup" ? T(lang, "Add your vehicles and drivers", "अपनी गाड़ियाँ और ड्राइवर जोड़ें", "तुमच्या गाड्या व ड्रायव्हर जोडा") : T(lang, "My fleet", "मेरी फ्लीट", "माझी फ्लीट")}</h3>
+        <h3 className="text-sm font-bold text-white">{mode === "setup" ? T(lang, "Add your vehicles and drivers", "अपनी गाड़ियाँ और ड्राइवर जोड़ें", "तुमच्या गाड्या व ड्रायव्हर जोडा") : T(lang, "My vehicles", "मेरी गाड़ियाँ", "माझ्या गाड्या")}</h3>
         {mode === "manage" && onClose && <button onClick={onClose} className="text-base font-bold text-white">✕</button>}
       </div>
       <div className="mx-4 mt-3 rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>

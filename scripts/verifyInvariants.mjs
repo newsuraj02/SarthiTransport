@@ -1032,6 +1032,11 @@ const checks = [
     const rules = /match \/smsConfig\/\{id\} \{\s*allow read, write: if isAdmin\(\);/.test(read("firestore.rules")) && /match \/smsOtps\/\{id\} \{\s*allow read, write: if false;/.test(read("firestore.rules"));
     return real && server && signin && client && rules;
   }],
+  ["DRIVER MENU ENTRY IS 'MY VEHICLES' / 'मेरी गाड़ियाँ' / 'माझ्या गाड्या', NOT 'MY FLEET' (owner 2026-11-25: 'Replace My Fleet to My vehicles / meri gaadiyan from drivers hamburger menu'): the hamburger-menu entry that opens the owner's vehicle list and the heading of that screen say the new name in en / hi / mr; the old 'My Fleet' / 'मेरी फ्लीट' / 'माझी फ्लीट' labels are gone from both", () => {
+    const fo = read("src/FleetOwner.jsx");
+    return app.includes('{lang === "en" ? "My vehicles" : lang === "mr" ? "माझ्या गाड्या" : "मेरी गाड़ियाँ"}') && fo.includes('T(lang, "My vehicles", "मेरी गाड़ियाँ", "माझ्या गाड्या")')
+      && !app.includes('"My Fleet"') && !app.includes('"मेरी फ्लीट"') && !app.includes('"माझी फ्लीट"') && !fo.includes('"My fleet"') && !fo.includes('"मेरी फ्लीट"') && !fo.includes('"माझी फ्लीट"');
+  }],
   ["ADMIN BOOKINGS: INDIVIDUAL DELETE ONLY, NO 'DELETE ALL' BUTTON (owner 2026-11-25: 'in the booking section it has delete all button and delete individual booking button so just keep the delete individual button only'): every ride row in Admin -> Bookings (the four live groups, today's lists, Total advance, All rides) keeps its own two-tap 'Delete this ride' (DeleteRideControls with ONE id, the same server removal of the ride with its OTP / extras / bills); the per-list 'Delete all N in this list' button, its `all` mode and the all-rides `allIds` are gone; the Finance -> Danger Zone options are a different screen and unchanged", () => {
     const ap = stripComments(read("src/AdminPanel.jsx"), "AdminPanel.jsx");
     const dStart = ap.indexOf("function DeleteRideControls("); const ctl = ap.slice(dStart, ap.indexOf("\n}\n", dStart));
