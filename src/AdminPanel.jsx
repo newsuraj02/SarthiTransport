@@ -3500,11 +3500,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 <ChevronRight size={16} color={C.inkSoft} />
               </div>
               {box.opts ? (
-                <div className={box.opts.length === 3 ? "grid grid-cols-3 gap-1" : "flex items-baseline gap-3"}>
+                <div className={box.opts.length === 3 ? "flex flex-col gap-1" : "flex items-baseline gap-3"}>
                   {box.opts.map((o) => (
-                    <div key={o.v} className="min-w-0">
+                    <div key={o.v} className={box.opts.length === 3 ? "min-w-0 flex items-baseline gap-2" : "min-w-0"}>
                       <div className="text-xl font-extrabold leading-none" style={{ color: o.color }}>{o.list.length}</div>
-                      <div className="text-[11px] font-bold mt-1 break-words min-w-0" style={{ color: C.inkSoft }}>{o.label}</div>
+                      <div className={`text-[11px] font-bold break-words min-w-0 ${box.opts.length === 3 ? "" : "mt-1"}`} style={{ color: C.inkSoft }}>{o.label}</div>
                     </div>
                   ))}
                 </div>
