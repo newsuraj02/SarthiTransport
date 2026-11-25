@@ -7,6 +7,7 @@
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
 import { useAppBadge, badgeTotal } from "./appBadge.js";
+import CountPill from "./CountPill.jsx";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
@@ -4915,11 +4916,12 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   // Launcher-icon number (owner 2026-11-25): alerts not yet replied to + pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
-  useAppBadge(badgeTotal({
-    alerts: (alerts || []).filter((a) => !a.adminReply).length + (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length,
-    kycIncomplete: (drivers || []).filter((d) => d.kyc === "Pending").length,
-    bookings: (bookings || []).filter((b) => b.status && b.status !== "Completed" && b.status !== "Cancelled").length,
-  }));
+  // The same three numbers are shown on the tabs themselves (owner 2026-11-25: "number needs to be inside the app too"): Send notice / Alerts, Drivers and Bookings.
+  const badgeAlerts = (alerts || []).filter((a) => !a.adminReply).length + (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length;
+  const badgeKyc = (drivers || []).filter((d) => d.kyc === "Pending").length;
+  const badgeBookings = (bookings || []).filter((b) => b.status && b.status !== "Completed" && b.status !== "Cancelled").length;
+  const tabCounts = { notify: badgeAlerts, drivers: badgeKyc, bookings: badgeBookings };
+  useAppBadge(badgeTotal({ alerts: badgeAlerts, kycIncomplete: badgeKyc, bookings: badgeBookings }));
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   useBackHandler(showTransporters, () => setShowTransporters(false), 10);
   // "kyc" is deliberately not in this list -- KYC review lives inside the
@@ -4941,6 +4943,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
             style={{ background: (tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigold, color: (tab === k || (k === "notify" && tab === "alerts")) ? "#fff" : "#000000", border: `1.5px solid ${(tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
+            <CountPill n={tabCounts[k]} />
           </button>
         ))}
       </div>

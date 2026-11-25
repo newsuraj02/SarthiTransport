@@ -830,3 +830,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-25 -- Launcher-icon badge (appBadge.js + useAppBadge in Driver/Customer/Admin apps)
 - changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp
 - added (1): code:src/appBadge.js
+
+## 2026-11-25 -- In-app number pills (CountPill) matching the launcher badge
+- changed (8): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverApp
+- added (1): code:src/CountPill.jsx
+
+## 2026-11-25 -- Re-point badge invariant to badgeWallet const
+- changed (1): code:scripts/verifyInvariants.mjs#checks

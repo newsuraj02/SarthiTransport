@@ -49,6 +49,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
 import { useNativeSpeech, startNativeListening, stopNativeListening } from "./nativeSpeech.js";
 import { useAppBadge, badgeTotal } from "./appBadge.js";
+import CountPill from "./CountPill.jsx";
 
 // Custom native plugin (android/app + android-admin/app:
 // FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
@@ -9341,7 +9342,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, raiseAlert, locationPermission, bookingExtras, fleetVehicles }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, raiseAlert, locationPermission, bookingExtras, fleetVehicles, walletBadge = 0 }) {
   const [cancelError, setCancelError] = useState("");
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
@@ -10189,6 +10190,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       <div className="flex items-center gap-2.5 p-2.5 rounded-full shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5 shadow-sm" style={{ background: "#0052CC" }}>
           <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
+          <CountPill n={walletBadge} />
         </button>
         <div className="flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1.5" style={{ background: C.marigoldDeep }}>
           <div className="flex flex-col items-center leading-none" style={{ color: "#FFFFFF" }}>
@@ -11581,13 +11583,19 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   const badgeNewLoads = bookings.filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && (driver.fleetOwner
     ? fleetPseudoDrivers(driver, fleetVehicles).some((pv) => isDriverBroadcastEligible(pv, b, vehicleTypes, bookings, fareTiers, lang))
     : isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang))).length;
+  // The SAME numbers are shown inside the app (owner 2026-11-25, "number needs to be inside the app too wherever the notification is"): My Profile (KYC), My Trips (earnings), the My Wallet
+  // button, Admin Announcements and the menu button carry a CountPill, so the launcher number and the screens can never disagree.
+  const badgeKyc = isDriverKycComplete(driver) ? 0 : 1;
+  const badgeEarnings = earningsSeenAt ? (tripLog || []).filter((b) => b.status === "Completed" && isDriverRecord(b, driver) && Number(b.completedAt) > earningsSeenAt).length : 0;
+  const badgeWallet = !isInTrial(driver.createdAt) && Number(driver.wallet) < Number(minWallet) ? 1 : 0;
+  const menuBadgeCount = announcementAlerts.unreadCount + badgeKyc + badgeEarnings; // everything that sits INSIDE the hamburger menu
   useAppBadge(badgeTotal({
     announcements: announcementAlerts.unreadCount,
     newLoads: driver.online && driver.kyc === "Approved" && !myTrip ? badgeNewLoads : 0,
-    kycIncomplete: isDriverKycComplete(driver) ? 0 : 1,
+    kycIncomplete: badgeKyc,
     rides: (myTrip ? 1 : 0) + advanceBookings.length,
-    earnings: earningsSeenAt ? (tripLog || []).filter((b) => b.status === "Completed" && isDriverRecord(b, driver) && Number(b.completedAt) > earningsSeenAt).length : 0,
-    wallet: !isInTrial(driver.createdAt) && Number(driver.wallet) < Number(minWallet) ? 1 : 0,
+    earnings: badgeEarnings,
+    wallet: badgeWallet,
   }));
   const appOpenForLoads = tab === "home" && rideView === "current";
   useEffect(() => {
@@ -11712,9 +11720,9 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                 <Menu size={18} color="#fff" strokeWidth={2.5} />
               </button>
               <HamburgerHint show={showBookingHint} lang={lang} />
-              {announcementAlerts.unreadCount > 0 && (
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
-                  {announcementAlerts.unreadCount}
+              {menuBadgeCount > 0 && (
+                <span data-menu-badge className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                  {menuBadgeCount > 99 ? "99+" : menuBadgeCount}
                 </span>
               )}
             </div>
@@ -11763,9 +11771,11 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
               {/* "View Advance Booking" was REMOVED from this menu (owner 2026-11-13: same job as the header's "Advance (N)" button, but two taps instead of one). */}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
+                <CountPill n={badgeKyc} />
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : lang === "mr" ? "माझ्या ट्रिप्स" : "मेरी ट्रिप्स"}
+                <CountPill n={badgeEarnings} />
               </button>
               {driver.fleetOwner && (
                 <button data-menu-my-fleet onClick={() => { setTab("fleet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -11819,7 +11829,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles}/>}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles} walletBadge={badgeWallet}/>}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
