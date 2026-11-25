@@ -3017,34 +3017,77 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 }
 
 // WITHDRAWAL + RECHARGE APPROVALS (owner 2026-11-25: the Alerts section was removed from the Notify tab; these two lists were inside it and are the ONLY place a driver's withdrawal /
-// recharge request is approved, so they moved to the top of the Finance tab). Shown only while something is pending; nothing renders otherwise.
-function AdminMoneyRequests({ withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
+// recharge request is approved, so they moved to the top of the Finance tab).
+// WALLET RECHARGE REQUESTS DROPDOWN (owner 2026-11-25: "In Finance section of Admin, Wallet Recharge request dropdown where all the requests are shown here and every entry has accept or
+// reject button. Note: this wallet recharge request is temporary as we will soon have a payment gateway"): ALWAYS shown, closed by default; opens to EVERY request (pending first, then
+// newest first, any status), each pending one with Accept (credits the driver's wallet, once) and Reject (credits nothing), both behind a second confirm tap. Withdrawals still show only while pending.
+function AdminMoneyRequests({ withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, rejectRecharge, lang }) {
+  const L = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const [rechargeOpen, setRechargeOpen] = useState(false);
+  const [confirmAct, setConfirmAct] = useState(null); // { id, kind: "accept" | "reject" }
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
-  const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
+  const allRecharges = [...(rechargeRequests || [])];
+  const ms = (r) => (r.createdAt?.toMillis ? r.createdAt.toMillis() : 0);
+  allRecharges.sort((a, b) => (Number(b.status === "Pending") - Number(a.status === "Pending")) || (ms(b) - ms(a)));
+  const pendingCount = allRecharges.filter((r) => r.status === "Pending").length;
   // Docs only ever get a createdAt (server timestamp) -- there's no separate "time" field.
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
-  if (pendingRecharges.length === 0 && pendingWithdrawals.length === 0) return null;
-  return (
-    <div data-money-requests className="space-y-4 mb-4">
-      {pendingRecharges.length > 0 && (
-        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
-          <div className="space-y-2">
-            {pendingRecharges.map((r) => (
-              <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <div>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{r.driverName}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(r.createdAt)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</span>
-                  <button onClick={() => approveRecharge(r.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                </div>
-              </div>
-            ))}
+  const statusMeta = (st) => st === "Approved" ? { label: L("Accepted", "स्वीकारले", "स्वीकार"), bg: C.success } : st === "Rejected" ? { label: L("Rejected", "नाकारले", "अस्वीकार"), bg: C.safety } : { label: L("Pending", "प्रलंबित", "लंबित"), bg: C.marigoldDeep };
+  const renderRecharge = (r) => {
+    const m = statusMeta(r.status);
+    const confirming = confirmAct && confirmAct.id === r.id ? confirmAct.kind : null;
+    return (
+      <div key={r.id} data-recharge-row data-recharge-status={r.status} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-bold break-words" style={{ color: C.ink }}>{r.driverName || r.driverMobile}</div>
+            {r.driverMobile && <div className="text-[11px] font-semibold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{r.driverMobile}</div>}
+            <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(r.createdAt)}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</div>
+            <span className="inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: m.bg }}>{m.label}</span>
           </div>
         </div>
-      )}
+        {r.status === "Pending" && (confirming ? (
+          <div data-recharge-confirm className="mt-2 rounded-lg p-2" style={{ background: "#FFF6DB", border: `1px solid ${C.marigoldDeep}` }}>
+            <p className="text-[11px] font-bold mb-2" style={{ color: C.ink }}>
+              {confirming === "accept"
+                ? L(`Add ${fmt(r.amount)} to ${r.driverName || r.driverMobile}'s wallet?`, `${r.driverName || r.driverMobile} च्या वॉलेटमध्ये ${fmt(r.amount)} जमा करायचे?`, `${r.driverName || r.driverMobile} के वॉलेट में ${fmt(r.amount)} जोड़ें?`)
+                : L(`Reject this ${fmt(r.amount)} request? Nothing is added to the wallet.`, `ही ${fmt(r.amount)} ची रिक्वेस्ट नाकारायची? वॉलेटमध्ये काहीही जमा होणार नाही.`, `यह ${fmt(r.amount)} की रिक्वेस्ट रिजेक्ट करें? वॉलेट में कुछ नहीं जुड़ेगा।`)}
+            </p>
+            <div className="flex gap-2">
+              <button data-recharge-confirm-yes onClick={() => { (confirming === "accept" ? approveRecharge : rejectRecharge)(r.id); setConfirmAct(null); }} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: confirming === "accept" ? C.metallicGreen : C.safety }}>{confirming === "accept" ? L("Yes, accept", "होय, स्वीकारा", "हाँ, स्वीकार करें") : L("Yes, reject", "होय, नाकारा", "हाँ, रिजेक्ट करें")}</button>
+              <button onClick={() => setConfirmAct(null)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>{L("Cancel", "रद्द करा", "रद्द")}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 mt-2">
+            <button data-recharge-reject onClick={() => setConfirmAct({ id: r.id, kind: "reject" })} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>{L("Reject", "नाकारा", "रिजेक्ट")}</button>
+            <button data-recharge-accept onClick={() => setConfirmAct({ id: r.id, kind: "accept" })} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>{L("Accept", "स्वीकारा", "स्वीकार करें")}</button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  return (
+    <div data-money-requests className="space-y-4 mb-4">
+      <div data-recharge-dropdown data-open={rechargeOpen ? "true" : "false"} className="rounded-xl shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <button data-recharge-head type="button" onClick={() => setRechargeOpen((o) => !o)} className="w-full flex items-center justify-between gap-2 p-4 text-left">
+          <span className="text-sm font-bold flex items-center gap-1.5 min-w-0" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {L("Wallet Recharge Requests", "वॉलेट रिचार्ज रिक्वेस्ट", "वॉलेट रीचार्ज रिक्वेस्ट")} <span className="font-semibold" style={{ color: C.inkSoft }}>({allRecharges.length})</span></span>
+          <span className="flex items-center gap-2 shrink-0">
+            {pendingCount > 0 && <span data-recharge-pending-count className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: C.safety }}>{pendingCount} {L("pending", "प्रलंबित", "लंबित")}</span>}
+            <ChevronDown size={18} color={C.ink} style={{ transform: rechargeOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+          </span>
+        </button>
+        {rechargeOpen && (
+          <div className="px-4 pb-4">
+            {allRecharges.length === 0
+              ? <p className="text-xs text-center py-4" style={{ color: C.inkSoft }}>{L("No recharge requests yet.", "अजून कोणतीही रिचार्ज रिक्वेस्ट नाही.", "अभी तक कोई रीचार्ज रिक्वेस्ट नहीं।")}</p>
+              : <SearchableList items={allRecharges} renderItem={renderRecharge} lang={lang} textOf={(r) => `${r.driverName || ""} ${r.driverMobile || ""} ${r.amount || ""} ${r.status || ""}`} placeholder={L("Search by name, mobile or amount...", "नाव, मोबाइल किंवा रकमेने शोधा...", "नाम, मोबाइल या रकम से खोजें...")} />}
+          </div>
+        )}
+      </div>
       {pendingWithdrawals.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
@@ -4683,7 +4726,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, rejectRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   // Launcher-icon number (owner 2026-11-25): pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
@@ -4733,7 +4776,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
               <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
             </button>} />)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock} />}
-      {tab === "finance" && <><AdminMoneyRequests withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} /><AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} /></>}
+      {tab === "finance" && <><AdminMoneyRequests withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} rejectRecharge={rejectRecharge} lang={lang} /><AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} /></>}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}

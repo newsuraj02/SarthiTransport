@@ -12798,6 +12798,13 @@ export default function App() {
     if (req && req.status === "Pending" && claimMoneyTap(`R${id}`, 15000)) adjustDriverWallet(req.driverMobile, { walletDelta: req.amount });
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
+  // REJECT (owner 2026-11-25, Finance -> Wallet Recharge Requests): marks a still-Pending request Rejected and credits NOTHING. Same double-tap guard as approving; a request that is not
+  // Pending any more (already accepted / rejected on another device) is left alone.
+  const rejectRecharge = (id) => {
+    const req = rechargeRequests.find((r) => r.id === id);
+    if (!req || req.status !== "Pending" || !claimMoneyTap(`RJ${id}`, 15000)) return;
+    patchDoc("rechargeRequests", id, { status: "Rejected" }).catch((e) => console.error(e));
+  };
 
   // Category-based booking (see DIRECT_REQUEST_RADIUS_KM/
   // isDriverBroadcastEligible): every driver within DIRECT_REQUEST_RADIUS_KM
@@ -13505,7 +13512,7 @@ export default function App() {
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
-                withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
+                withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} rejectRecharge={rejectRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}
                 expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
                 bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth}

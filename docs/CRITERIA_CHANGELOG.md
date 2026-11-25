@@ -940,3 +940,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- KYC box tile: three counts stacked so labels are never cut mid-word
 - changed (1): code:src/AdminPanel.jsx#AdminDriverList
+
+## 2026-11-25 -- Finance: Wallet Recharge Requests dropdown with every request + Accept/Reject (owner 2026-11-25, temporary until payment gateway)
+- changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminMoneyRequests, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
