@@ -923,3 +923,13 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Driver menu: My Fleet renamed My vehicles / मेरी गाड़ियाँ / माझ्या गाड्या, menu entry and screen heading (N65)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverApp, code:src/FleetOwner.jsx#FleetSetup
+
+## 2026-11-25 -- Admin KYC lists: one driverKycBucket rule (Incomplete / Pending approval / Complete), Admin edit of Incomplete driver sends it back to Pending, Approve/Reject in Pending rows (owner 2026-11-25)
+- changed (8): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#loadKycFns, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminPanel
+- added (1): code:src/App.jsx#driverKycBucket
+
+## 2026-11-25 -- N66 citation fix
+- changed (1): code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- KYC edit note: wording depends on whether a document is still missing
+- changed (1): code:src/AdminPanel.jsx#AdminDriverList

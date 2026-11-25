@@ -39,7 +39,7 @@ import {
   suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate, categoryLoadCapacityKg,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
-  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText, isDriverKycComplete,
+  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, partitionDriversByInstallAndKyc, kycProblemText, isDriverKycComplete, driverKycBucket,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
@@ -752,10 +752,13 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       setApprovalEditError(lang === "en" ? "Vehicle number and the vehicle (company + model, or weight category) are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
       return;
     }
+    // same re-approval rule as the Drivers list (owner 2026-11-25): an Admin edit of an Incomplete driver sends it back to Pending approval
+    const reapprove = driverKycBucket(d) === "incomplete" && d.kyc !== "Pending" && d.kyc !== "Rejected";
     await updateDriverVehicleSpec(d.id, {
       ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: approvalEditDraft.vehicleNumber.trim().toUpperCase(),
     });
+    if (reapprove) await updateDriverKyc?.(d.id, "Pending");
     cancelApprovalEdit();
   };
   const approvalDocLabels = lang === "en"
@@ -3072,7 +3075,7 @@ function AdminMoneyRequests({ withdrawals, approveWithdrawal, rechargeRequests, 
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, addVehicleType, minWallet, lang, topExtra = null }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, updateDriverKyc, vehicleTypes, addVehicleType, minWallet, lang, topExtra = null }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -3082,6 +3085,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [editError, setEditError] = useState("");
+  const [confirmRejectId, setConfirmRejectId] = useState(null); // two-tap Reject on a driver waiting for approval
+  const [kycNote, setKycNote] = useState(""); // what just happened to a driver after an Admin edit (it leaves the Incomplete list)
   const startEdit = (d) => {
     setEditingId(d.id);
     setEditDraft({
@@ -3097,10 +3102,20 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
       setEditError(lang === "en" ? "Vehicle number and the vehicle (company + model, or weight category) are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
       return;
     }
+    // RE-APPROVAL (owner 2026-11-25: "if edited by Admin from the Incomplete list it must ask for approval again to Admin"): an Admin edit of a driver whose KYC is Incomplete never finishes it
+    // by itself -- the driver goes to "Pending approval" and stays there until Admin approves (Approve below, or in New Registrations).
+    const reapprove = driverKycBucket(d) === "incomplete" && d.kyc !== "Pending" && d.kyc !== "Rejected";
+    const wasIncomplete = driverKycBucket(d) === "incomplete";
     await updateDriverVehicleSpec(d.id, {
       ...(vehiclePatch.keep ? {} : vehiclePatch),
       vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
     });
+    if (reapprove) await updateDriverKyc?.(d.id, "Pending");
+    // a driver who still lacks a PHOTO / LICENCE cannot be approved from here (only the driver uploads those): say so instead of promising an approval
+    const docsMissing = !(d.docs?.photo || d.photo) || !d.docs?.dl;
+    if (wasIncomplete) setKycNote(docsMissing
+      ? (lang === "en" ? `Saved. ${d.name || d.mobile} still has a document missing (photo / licence) -- the driver must upload it; after that it waits in Pending approval.` : lang === "mr" ? `सेव्ह झाले. ${d.name || d.mobile} चे फोटो / लायसन्स बाकी आहे -- ड्रायव्हरने अपलोड केल्यावर ते प्रलंबित मंजुरीत येईल.` : `सेव हो गया। ${d.name || d.mobile} का फोटो / लाइसेंस बाकी है -- ड्राइवर के अपलोड करने के बाद यह मंज़ूरी बाकी में आएगा।`)
+      : (lang === "en" ? `Saved. ${d.name || d.mobile} now waits for your approval -- open KYC -> Pending approval and tap Approve.` : lang === "mr" ? `सेव्ह झाले. ${d.name || d.mobile} आता तुमच्या मंजुरीची वाट पाहत आहे -- KYC -> प्रलंबित मंजुरी उघडून अप्रूव्ह दाबा.` : `सेव हो गया। ${d.name || d.mobile} अब आपकी मंज़ूरी का इंतज़ार कर रहा है -- KYC -> मंज़ूरी बाकी खोलकर अप्रूव दबाएँ।`));
     cancelEdit();
   };
   // "Total Drivers" and every tab/count below it all report the SAME
@@ -3170,9 +3185,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // still needs admin's attention (never submitted, or submitted and
   // sitting in Pending review); Complete = resolved either way (Approved
   // or Rejected/Blocked).
-  const isIncompleteKyc = (d) => !d.vehicleSpec || d.kyc === "Pending";
-  const incompleteSection = bySection(totalInstalled.filter(isIncompleteKyc));
-  const completeSection = bySection(totalInstalled.filter((d) => !isIncompleteKyc(d)));
+  // (2026-11-25, owner: "drivers with proper documentation are in the Incomplete KYC list") THREE lists now, from the one shared rule driverKycBucket (App.jsx): Incomplete = a mandatory item is
+  // really missing; Pending approval = everything is there and Admin has not approved yet; Complete = Approved or Rejected. "Pending" used to be counted as Incomplete.
+  const incompleteSection = bySection(totalInstalled.filter((d) => driverKycBucket(d) === "incomplete"));
+  const pendingSection = bySection(totalInstalled.filter((d) => driverKycBucket(d) === "pending"));
+  const completeSection = bySection(totalInstalled.filter((d) => driverKycBucket(d) === "complete"));
   // Low Wallet / Online / Off Duty -- same filters the Live Dashboard's own
   // tiles used before those tiles were removed from there; surfaced here
   // instead as 3 more accordion sections over the same totalInstalled
@@ -3301,6 +3318,23 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           </div>
         )}
 
+          {driverKycBucket(d) === "pending" && updateDriverKyc && (
+            <div data-driver-kyc-decision className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+              <p className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "All documents are in -- waiting for your approval." : lang === "mr" ? "सर्व कागदपत्रे आली आहेत -- तुमच्या मंजुरीची वाट पाहत आहे." : "सारे दस्तावेज़ आ गए हैं -- आपकी मंज़ूरी का इंतज़ार है।"}</p>
+              {confirmRejectId === d.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] flex-1" style={{ color: C.safety }}>{lang === "en" ? "Reject this KYC?" : lang === "mr" ? "हे KYC नाकारायचे?" : "यह KYC रिजेक्ट करें?"}</span>
+                  <button onClick={() => { updateDriverKyc(d.id, "Rejected"); setConfirmRejectId(null); }} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: C.safety }}>{lang === "en" ? "Yes, reject" : lang === "mr" ? "हो, नाकारा" : "हाँ, रिजेक्ट करें"}</button>
+                  <button onClick={() => setConfirmRejectId(null)} className="rounded-lg px-3 py-2 text-xs font-bold" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>{lang === "en" ? "Cancel" : "रद्द"}</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button data-driver-reject onClick={() => setConfirmRejectId(d.id)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "रिजेक्ट करें"}</button>
+                  <button data-driver-approve onClick={() => { updateDriverKyc(d.id, "Approved"); setKycNote(""); }} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                </div>
+              )}
+            </div>
+          )}
           {d.vehicleSpec && (
             <div className="flex gap-2 mt-2 justify-end">
               <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
@@ -3350,6 +3384,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
       { v: "off", label: L3("Off", "ऑफ", "ऑफ"), list: gpsOffSection, color: C.safety }] },
     { key: "kyc", title: "KYC", opts: [
       { v: "complete", label: L3("Complete", "पूर्ण", "पूरी"), list: completeSection, color: C.success },
+      { v: "pending", label: L3("Pending approval", "प्रलंबित मंजुरी", "मंज़ूरी बाकी"), list: pendingSection, color: C.marigoldDeep },
       { v: "incomplete", label: L3("Incomplete", "अपूर्ण", "अधूरी"), list: incompleteSection, color: C.safety }] },
     { key: "status", title: L3("Status", "स्टेटस", "स्टेटस"), opts: [
       { v: "on", label: L3("On Duty", "ऑन ड्युटी", "ऑन ड्यूटी"), list: onlineSection, color: C.success },
@@ -3383,13 +3418,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{shownTitle}</h2>
+        {kycNote && <div data-driver-kyc-note className="rounded-lg p-2.5 mb-3 text-[11px] font-bold" style={{ background: "#FFF6DB", border: `1px solid ${C.marigoldDeep}`, color: C.ink }}>{kycNote}</div>}
         {openDef?.opts && (
-          <div className="grid grid-cols-2 gap-1 rounded-xl p-1 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          <div data-driver-kyc-toggle className={`grid ${openDef.opts.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl p-1 mb-3`} style={{ background: C.bg, border: `1px solid ${C.line}` }}>
             {openDef.opts.map((o) => {
               const on = boxPick[openBox] === o.v;
               return (
                 <button key={o.v} type="button" aria-pressed={on} onClick={() => setBoxPick((prev) => ({ ...prev, [openBox]: o.v }))}
-                  className="rounded-lg py-2.5 px-2 text-sm font-extrabold leading-tight" style={{ background: on ? o.color : "transparent", color: on ? "#fff" : C.inkSoft }}>
+                  className={`rounded-lg py-2.5 px-1 ${openDef.opts.length === 3 ? "text-xs" : "text-sm"} font-extrabold leading-tight break-words`} style={{ background: on ? o.color : "transparent", color: on ? "#fff" : C.inkSoft }}>
                   {o.label} ({o.list.length})
                 </button>
               );
@@ -3461,7 +3497,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 <ChevronRight size={16} color={C.inkSoft} />
               </div>
               {box.opts ? (
-                <div className="flex items-baseline gap-3">
+                <div className={box.opts.length === 3 ? "grid grid-cols-3 gap-1" : "flex items-baseline gap-3"}>
                   {box.opts.map((o) => (
                     <div key={o.v} className="min-w-0">
                       <div className="text-xl font-extrabold leading-none" style={{ color: o.color }}>{o.list.length}</div>
@@ -4689,7 +4725,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
             </button>
             <AdminFleetVehicles fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} drivers={drivers} lang={lang} setKyc={setFleetKyc} />
           </div>)
-        : <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet}
+        : <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} updateDriverKyc={updateDriverKyc} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet}
             topExtra={<button data-all-transporters-btn onClick={() => setShowTransporters(true)} className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
               <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
             </button>} />)}

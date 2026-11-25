@@ -2850,6 +2850,17 @@ export function getDriverKycMissing(driver) {
   });
 }
 export const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
+// WHICH ADMIN KYC LIST A DRIVER BELONGS TO (owner 2026-11-25: "drivers with proper documentation are in the Incomplete KYC list"): the list used to treat "submitted and
+// sitting in Pending" as Incomplete, so a driver who had uploaded everything and was only waiting for Admin's approval was shown -- and messaged -- as incomplete.
+//  "incomplete" = never submitted the form, OR any mandatory item is missing (isDriverKycComplete) whatever the KYC status says;
+//  "pending"    = every mandatory item is there and Admin has not approved yet (Pending, or no status);
+//  "complete"   = Approved with everything there, or Rejected (resolved, as before).
+export function driverKycBucket(driver) {
+  if (!driver || !driver.vehicleSpec) return "incomplete";
+  if (driver.kyc === "Rejected") return "complete";
+  if (!isDriverKycComplete(driver)) return "incomplete";
+  return driver.kyc === "Approved" ? "complete" : "pending";
+}
 const kycFieldLabel = (key, lang) => {
   if (key === "fleetVehicle") return lang === "en" ? "Add your vehicles and drivers" : lang === "mr" ? "तुमच्या गाड्या व ड्रायव्हर जोडा" : "अपनी गाड़ियाँ और ड्राइवर जोड़ें";
   const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);
