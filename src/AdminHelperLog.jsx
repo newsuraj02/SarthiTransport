@@ -11,9 +11,10 @@ const pad = (n) => String(n).padStart(2, "0");
 const atMs = (l) => (l && l.at && typeof l.at.toMillis === "function" ? l.at.toMillis() : Number(l && l.at) || 0);
 const when = (ms) => { if (!ms) return ""; const d = new Date(ms); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-export default function AdminHelperLog({ lang }) {
+export default function AdminHelperLog({ lang, embedded = false }) {
   const [rows, setRows] = useState(null);
-  const [open, setOpen] = useState(false);
+  const [openOwn, setOpen] = useState(false);
+  const open = embedded ? true : openOwn; // embedded = the Settings dropdown row already opens / closes it (it is only mounted while open, so it only reads then)
   const [filter, setFilter] = useState("unanswered"); // unanswered | down | all
   useEffect(() => { if (!open) return undefined; return subscribeRecent("helperLog", (r) => setRows(r), "at", 150, () => setRows([])); }, [open]);
   const list = useMemo(() => {
@@ -26,13 +27,7 @@ export default function AdminHelperLog({ lang }) {
     ["down", T(lang, "Not helpful", "काम का नहीं", "उपयुक्त नाही"), n((l) => l.helpful === false)],
     ["all", T(lang, "All", "सभी", "सर्व"), (rows || []).length],
   ];
-  return (
-    <div data-admin-helper-log className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
-        <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{T(lang, "Helper questions (AI helper)", "हेल्पर के सवाल (AI)", "हेल्परचे प्रश्न (AI)")}</div>
-        <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", color: C.inkSoft }} />
-      </button>
-      {open && (
+  const body = (
         <div className="mt-2">
           <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{T(lang, "Newest 150 questions. 'Not answered' ones show what to add to the helper's knowledge. No names or numbers are stored.", "सबसे नए 150 सवाल। 'जवाब नहीं मिला' वाले बताते हैं कि हेल्पर की जानकारी में क्या जोड़ना है। नाम या नंबर सेव नहीं होते।", "सर्वात नवीन 150 प्रश्न. 'उत्तर नाही' वाले दाखवतात की हेल्परच्या माहितीत काय जोडायचे. नाव किंवा नंबर साठवले जात नाहीत.")}</div>
           <div className="flex gap-2 mb-2 flex-wrap">
@@ -58,7 +53,15 @@ export default function AdminHelperLog({ lang }) {
             ))}
           </div>
         </div>
-      )}
+  );
+  if (embedded) return <div data-admin-helper-log>{body}</div>;
+  return (
+    <div data-admin-helper-log className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
+        <div className="text-xs font-bold break-words min-w-0" style={{ color: C.ink }}>{T(lang, "Helper questions (AI helper)", "हेल्पर के सवाल (AI)", "हेल्परचे प्रश्न (AI)")}</div>
+        <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", color: C.inkSoft }} />
+      </button>
+      {open && body}
     </div>
   );
 }

@@ -23,12 +23,13 @@ import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { useBackHandler } from "./backButton.js";
 import { WaStatusContext, WaTicks, WaSummary } from "./waTicks.jsx";
 import AdminSmsSettings from "./AdminSmsSettings.jsx";
+import SettingsDropdown from "./SettingsDropdown.jsx";
 import SearchableList, { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
 import { needsListSearch, filterByQuery, matchesQuery, personSearchText, bookingSearchText } from "./adminListSearch.js";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import AdminHelperLog from "./AdminHelperLog.jsx";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverSms, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity, removeVehicleSidePhotos } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverSms, createCsvDownloadLink, runHealthCheckNow } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -3976,23 +3977,23 @@ function buildMetaUsersCsv(drivers, customers) {
 }
 // END Meta users export helpers
 
-function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
+function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang }) {
   // Force-update version codes are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit.
   // (Commission/Bonus/Min-wallet used to be part of this same draft object
   // -- they moved to AdminFinance's own "System Settings" section with
   // their own independent draft/save, since that's where Finance now lives.)
-  const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
+  const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   // FORCE-UPDATE SAFETY (owner 2026-11-24: users saw "Update required" while the Play Store had no update -- "Required versionCode" had been set above the
   // build that was live): RAISING the required version needs an explicit "it is live on Google Play" confirmation first. Lowering / clearing saves at once (that unblocks people).
   const [versionConfirm, setVersionConfirm] = useState(false);
   useEffect(() => {
-    if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
+    if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
+  }, [latestVersionCode, updateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const metaExport = buildMetaUsersCsv(drivers, customers);
   // The Android app's WebView can't save a blob <a download> (owner 2026-10-29:
@@ -4003,28 +4004,6 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   const [metaCopied, setMetaCopied] = useState(false);
   const [metaShowText, setMetaShowText] = useState(false);
   const [metaPreparing, setMetaPreparing] = useState(false);
-  // 16-wheeler capacity repair (owner 2026-11-04): "Check" is a dry run (lists what would change), "Fix" writes 30,000 kg; see functions/vehicleSpecRepair.js.
-  const [repairBusy, setRepairBusy] = useState(false);
-  const [repairResult, setRepairResult] = useState(null);
-  const runRepair = async (apply) => {
-    if (repairBusy) return;
-    if (apply && !window.confirm(lang === "en" ? "Set the capacity of the listed drivers / vehicle types to 30,000 kg?" : lang === "mr" ? "यादीतील ड्रायव्हर / वाहन प्रकारांची क्षमता 30,000 किग्रा करायची?" : "सूची के ड्राइवर / वाहन प्रकार की क्षमता 30,000 किग्रा करें?")) return;
-    setRepairBusy(true);
-    const res = await repairSixteenWheelerCapacity(apply);
-    setRepairBusy(false);
-    setRepairResult(res || { ok: false });
-  };
-  // Vehicle side photo removal (owner 2026-11-25): "Check" only COUNTS what is stored, "Delete" removes it for good; see functions/vehiclePhotoCleanup.js.
-  const [sideBusy, setSideBusy] = useState(false);
-  const [sideResult, setSideResult] = useState(null);
-  const runSideCleanup = async (apply) => {
-    if (sideBusy) return;
-    if (apply && !window.confirm(lang === "en" ? "Delete every stored vehicle side photo (database fields and files)? This cannot be undone." : lang === "mr" ? "साठवलेले सर्व गाडीचे बाजूचे फोटो (डेटाबेस व फाइल) कायमचे हटवायचे? हे परत आणता येणार नाही." : "सभी सेव किए हुए गाड़ी के साइड फोटो (डेटाबेस और फाइलें) हमेशा के लिए हटाएँ? यह वापस नहीं हो सकता।")) return;
-    setSideBusy(true);
-    const res = await removeVehicleSidePhotos(apply);
-    setSideBusy(false);
-    setSideResult(res || { ok: false });
-  };
   const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
   const downloadMetaUsers = async () => {
     if (metaPreparing) return;
@@ -4050,16 +4029,32 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
     catch { /* clipboard blocked -- the visible box below lets them select and copy by hand */ }
   };
   const raisingRequiredVersion = draft.latestVersionCode !== "" && Number(draft.latestVersionCode) > Number(latestVersionCode || 0);
-  const saveSettings = () => {
+  // ONE Save for the whole Settings screen (owner 2026-11-25: "8 needs to save changes for the whole changes that we did in the system settings. No multiple buttons to save changes"):
+  // the Force Update fields (still behind the "is it live on Google Play?" confirmation when RAISING the required version) AND the SMS settings (their dropdowns have no Save of their own;
+  // they hand over through smsRef). Nothing is written until this button is pressed, and a failed SMS save is shown here, never swallowed.
+  const smsRef = useRef(null);
+  const savedTimerRef = useRef(null);
+  const [smsDirty, setSmsDirty] = useState(false);
+  const [openRow, setOpenRow] = useState(""); // which dropdown of the "More settings" box is open (one at a time)
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const anyDirty = dirty || smsDirty;
+  const saveSettings = async () => {
+    if (saving) return;
     if (raisingRequiredVersion && !versionConfirm) { setVersionConfirm(true); return; }
-    setVersionConfirm(false);
-    setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
-    setUpdateUrl(draft.updateUrl.trim());
-    setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
-    setAdminUpdateUrl(draft.adminUpdateUrl.trim());
-    setDirty(false);
+    setVersionConfirm(false); setSaving(true); setSaveError("");
+    if (dirty) {
+      setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
+      setUpdateUrl(draft.updateUrl.trim());
+      setDirty(false);
+    }
+    let smsFailed = "";
+    if (smsDirty && smsRef.current) { const r = await smsRef.current.save(); if (!r.ok) smsFailed = r.message || "error"; }
+    setSaving(false);
+    if (smsFailed) { setSaveError(smsFailed); return; }
     setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaved(false), 3000); // a newer save restarts the 3 s, an older timer can never hide it early
   };
   return (
     <div>
@@ -4077,28 +4072,15 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
 
-      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Force Update (Admin app)" : lang === "mr" ? "फोर्स अपडेट (Admin अ‍ॅप)" : "फोर्स अपडेट (Admin ऐप)"}</div>
-        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Separate from the field above — this is a completely different install (its own versionCode, sideloaded rather than Play Store). Set this only when you've actually sideloaded the new Admin APK somewhere admins can reach it, and paste that link below. Leave blank to turn off." : lang === "mr" ? "वरच्या फील्डपेक्षा वेगळे — ही एक वेगळी इन्स्टॉल आहे (स्वतःचा versionCode, Play Store नाही तर साइडलोड). नवीन Admin APK प्रत्यक्ष साइडलोड करून अ‍ॅडमिन्सना उपलब्ध करून दिल्यावरच हे सेट करा, आणि खाली तो लिंक टाका. बंद करण्यासाठी रिकामे ठेवा." : "ऊपर वाले फील्ड से अलग — यह एक बिल्कुल अलग इंस्टॉल है (अपना versionCode, Play Store नहीं बल्कि साइडलोड)। नया Admin APK असल में साइडलोड करके एडमिन तक पहुंचाने के बाद ही इसे सेट करें, और नीचे वह लिंक डालें। बंद करने के लिए खाली छोड़ें।"}
-        </div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Required versionCode" : lang === "mr" ? "आवश्यक versionCode" : "आवश्यक versionCode"}</div>
-          <input type="number" placeholder={lang === "en" ? "Off" : lang === "mr" ? "बंद" : "बंद"} value={draft.latestAdminVersionCode} onChange={(e) => updateDraft({ latestAdminVersionCode: e.target.value })}
-            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
-        </div>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "APK download link" : lang === "mr" ? "APK डाउनलोड लिंक" : "APK डाउनलोड लिंक"}</div>
-        <input type="text" placeholder="https://..." value={draft.adminUpdateUrl} onChange={(e) => updateDraft({ adminUpdateUrl: e.target.value })}
-          className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
-      </div>
-
-      <div className="mt-2 mb-4"><AdminSmsSettings lang={lang} /></div>
-
-      {/* IN-APP HELPER LOG (owner 2026-11-24): what the AI helper was asked and could not answer -- see src/AdminHelperLog.jsx. */}
-      <AdminHelperLog lang={lang} />
-
-      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Export app users for ads (Meta)" : lang === "mr" ? "जाहिरातींसाठी अ‍ॅप वापरकर्ते एक्सपोर्ट करा (Meta)" : "विज्ञापनों के लिए ऐप यूज़र एक्सपोर्ट करें (Meta)"}</div>
+      {/* THE COMMON "MORE SETTINGS" BOX (owner 2026-11-25): a separate dropdown for each SMS part, then the Helper questions and the Meta export under them. One row open at a time. */}
+      <div data-more-settings className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "More settings" : lang === "mr" ? "अधिक सेटिंग्स" : "और सेटिंग्स"}</div>
+        <AdminSmsSettings ref={smsRef} lang={lang} openRow={openRow} setOpenRow={setOpenRow} onDirtyChange={setSmsDirty} />
+        <SettingsDropdown id="helper" title={lang === "en" ? "Helper questions (AI helper)" : lang === "mr" ? "हेल्परचे प्रश्न (AI)" : "हेल्पर के सवाल (AI)"} open={openRow === "helper"} onToggle={() => setOpenRow(openRow === "helper" ? "" : "helper")}>
+          {openRow === "helper" && <AdminHelperLog lang={lang} embedded />}
+        </SettingsDropdown>
+        <SettingsDropdown id="meta" title={lang === "en" ? "Export app users for ads (Meta)" : lang === "mr" ? "जाहिरातींसाठी अ‍ॅप वापरकर्ते एक्सपोर्ट करा (Meta)" : "विज्ञापनों के लिए ऐप यूज़र्स एक्सपोर्ट करें (Meta)"} open={openRow === "meta"} onToggle={() => setOpenRow(openRow === "meta" ? "" : "meta")}>
+          <div>
         <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
           {lang === "en" ? "Downloads the mobile numbers of every driver and customer (blocked and inactive too) as a CSV in Meta's format. In Meta: Audiences → Create audience → Custom audience → Customer list → upload it, then EXCLUDE that audience in your ad set so existing users never see your install ads." : lang === "mr" ? "प्रत्येक ड्रायव्हर आणि कस्टमरचे (ब्लॉक्ड व निष्क्रिय सुद्धा) मोबाइल नंबर Meta च्या फॉरमॅटमध्ये CSV म्हणून डाउनलोड करते. Meta मध्ये: Audiences → Create audience → Custom audience → Customer list → अपलोड करा, मग जाहिरातीच्या ad set मध्ये ती ऑडियन्स EXCLUDE करा, म्हणजे विद्यमान वापरकर्त्यांना इन्स्टॉल जाहिराती दिसणार नाहीत." : "हर ड्राइवर और कस्टमर (ब्लॉक्ड और निष्क्रिय भी) के मोबाइल नंबर Meta के फॉर्मेट में CSV के रूप में डाउनलोड करता है। Meta में: Audiences → Create audience → Custom audience → Customer list → इसे अपलोड करें, फिर अपने ad set में उस ऑडियंस को EXCLUDE करें ताकि मौजूदा यूज़र को इंस्टॉल विज्ञापन कभी न दिखें।"}
         </div>
@@ -4124,75 +4106,11 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
             <textarea readOnly value={metaNumbersText} onFocus={(e) => e.target.select()} rows={6} className="w-full rounded-lg p-2 text-xs" style={{ border: `1.5px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
           </div>
         )}
-      </div>
-
-      <div data-side-photo-cleanup className="rounded-lg p-3 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Remove vehicle side photos" : lang === "mr" ? "गाडीचे बाजूचे फोटो हटवा" : "गाड़ी के साइड फोटो हटाएँ"}</div>
-        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "The app no longer asks for a vehicle side photo. \"Check\" only counts what is still stored; \"Delete\" removes those photos from drivers, transporter vehicles and file storage for good. Nothing else is touched."
-            : lang === "mr" ? "अ‍ॅप आता गाडीचा बाजूचा फोटो मागत नाही. \"तपासा\" फक्त किती साठवले आहेत ते मोजते; \"हटवा\" ते फोटो ड्रायव्हर, ट्रान्सपोर्टर गाड्या आणि फाइल स्टोरेजमधून कायमचे काढते. इतर काहीही बदलत नाही."
-            : "ऐप अब गाड़ी का साइड फोटो नहीं माँगता। \"जाँचें\" सिर्फ़ गिनती बताता है; \"हटाएँ\" ड्राइवर, ट्रांसपोर्टर गाड़ियों और फाइल स्टोरेज से वे फोटो हमेशा के लिए हटा देता है। और कुछ नहीं बदलता।"}
-        </div>
-        <button data-side-photo-check onClick={() => runSideCleanup(false)} disabled={sideBusy} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: "#FFFFFF", color: C.ink, border: `1.5px solid ${C.line}` }}>
-          {sideBusy ? (lang === "en" ? "Working..." : lang === "mr" ? "काम सुरू आहे..." : "काम हो रहा है...") : (lang === "en" ? "Check (nothing is deleted)" : lang === "mr" ? "तपासा (काहीही हटत नाही)" : "जाँचें (कुछ नहीं हटता)")}
-        </button>
-        {sideResult && !sideResult.ok && (
-          <div className="mt-2 text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Could not run (needs the latest functions deploy and an Admin login)." : lang === "mr" ? "चालवता आले नाही (नवीनतम functions डिप्लॉय आणि Admin लॉगिन हवे)." : "चल नहीं सका (नया functions डिप्लॉय और Admin लॉगिन चाहिए)।"}</div>
-        )}
-        {sideResult && sideResult.ok && (
-          <div className="mt-2">
-            <div data-side-photo-result className="text-xs font-extrabold" style={{ color: sideResult.applied || sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount === 0 ? C.success : C.safety }}>
-              {sideResult.applied
-                ? (lang === "en" ? `Deleted: ${sideResult.driverCount} driver record(s), ${sideResult.fleetCount} transporter vehicle(s), ${sideResult.filesDeleted} file(s).` : lang === "mr" ? `हटवले: ${sideResult.driverCount} ड्रायव्हर नोंदी, ${sideResult.fleetCount} ट्रान्सपोर्टर गाड्या, ${sideResult.filesDeleted} फाइल.` : `हटाया: ${sideResult.driverCount} ड्राइवर रिकॉर्ड, ${sideResult.fleetCount} ट्रांसपोर्टर गाड़ियाँ, ${sideResult.filesDeleted} फाइलें।`)
-                : (sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount === 0
-                  ? (lang === "en" ? "Nothing stored. All clean." : lang === "mr" ? "काहीही साठवलेले नाही. सर्व स्वच्छ." : "कुछ सेव नहीं है। सब साफ़ है।")
-                  : (lang === "en" ? `Found: ${sideResult.driverCount} driver record(s), ${sideResult.fleetCount} transporter vehicle(s), ${sideResult.fileCount} file(s).` : lang === "mr" ? `सापडले: ${sideResult.driverCount} ड्रायव्हर नोंदी, ${sideResult.fleetCount} ट्रान्सपोर्टर गाड्या, ${sideResult.fileCount} फाइल.` : `मिले: ${sideResult.driverCount} ड्राइवर रिकॉर्ड, ${sideResult.fleetCount} ट्रांसपोर्टर गाड़ियाँ, ${sideResult.fileCount} फाइलें।`))}
-            </div>
-            {!sideResult.applied && sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount > 0 && (
-              <button data-side-photo-delete onClick={() => runSideCleanup(true)} disabled={sideBusy} className="w-full rounded-lg py-3 font-bold text-sm mt-2 text-white" style={{ background: C.safety }}>
-                {lang === "en" ? "Delete them for good" : lang === "mr" ? "कायमचे हटवा" : "हमेशा के लिए हटाएँ"}
-              </button>
-            )}
           </div>
-        )}
+        </SettingsDropdown>
       </div>
 
-      <div data-repair-16 className="rounded-lg p-3 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fix 16-wheeler vehicle sizes" : lang === "mr" ? "16 चाकी वाहनांची क्षमता दुरुस्त करा" : "16 चक्का गाड़ियों की क्षमता ठीक करें"}</div>
-        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "An old bug saved drivers who typed \"16 wheeler\" as a 6 wheeler (9,000 kg), so they were listed in the wrong category and rung for the wrong loads. \"Check\" only lists them; \"Fix\" sets them to 30,000 kg. Drivers whose capacity was typed by hand (not 9,000 kg) are never touched."
-            : lang === "mr" ? "जुन्या बगमुळे \"16 wheeler\" टाइप केलेले ड्रायव्हर 6 चाकी (9,000 किग्रा) म्हणून सेव्ह झाले, त्यामुळे ते चुकीच्या श्रेणीत दिसत होते. \"तपासा\" फक्त यादी दाखवते; \"दुरुस्त करा\" त्यांना 30,000 किग्रा करते. हाताने टाइप केलेली क्षमता (9,000 किग्रा नसल्यास) कधीही बदलली जात नाही."
-            : "पुराने बग के कारण \"16 wheeler\" लिखने वाले ड्राइवर 6 चक्का (9,000 किग्रा) के रूप में सेव हो गए, इसलिए वे गलत कैटेगरी में दिखते थे। \"जाँचें\" सिर्फ़ सूची दिखाता है; \"ठीक करें\" उन्हें 30,000 किग्रा करता है। हाथ से लिखी क्षमता (9,000 किग्रा के अलावा) कभी नहीं बदली जाती।"}
-        </div>
-        <button onClick={() => runRepair(false)} disabled={repairBusy} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: "#FFFFFF", color: C.ink, border: `1.5px solid ${C.line}` }}>
-          {repairBusy ? (lang === "en" ? "Working..." : lang === "mr" ? "काम सुरू आहे..." : "काम हो रहा है...") : (lang === "en" ? "Check (nothing is changed)" : lang === "mr" ? "तपासा (काहीही बदलत नाही)" : "जाँचें (कुछ नहीं बदलता)")}
-        </button>
-        {repairResult && !repairResult.ok && (
-          <div className="mt-2 text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Could not run (needs the latest functions deploy and an Admin login)." : lang === "mr" ? "चालवता आले नाही (नवीनतम functions deploy आणि Admin लॉगिन आवश्यक)." : "चल नहीं सका (नवीनतम functions deploy और Admin लॉगिन चाहिए)।"}</div>
-        )}
-        {repairResult && repairResult.ok && (
-          <div className="mt-2">
-            <div data-repair-16-result className="text-xs font-extrabold" style={{ color: repairResult.applied ? C.success : (repairResult.driverCount + repairResult.typeCount > 0 ? C.safety : C.success) }}>
-              {repairResult.applied
-                ? (lang === "en" ? `Fixed: ${repairResult.driverCount} driver(s), ${repairResult.typeCount} vehicle type(s) set to 30,000 kg.` : lang === "mr" ? `दुरुस्त: ${repairResult.driverCount} ड्रायव्हर, ${repairResult.typeCount} वाहन प्रकार 30,000 किग्रा केले.` : `ठीक किया: ${repairResult.driverCount} ड्राइवर, ${repairResult.typeCount} वाहन प्रकार 30,000 किग्रा किए।`)
-                : (repairResult.driverCount + repairResult.typeCount === 0
-                  ? (lang === "en" ? "Nothing to fix." : lang === "mr" ? "दुरुस्त करण्यासारखे काही नाही." : "ठीक करने लायक कुछ नहीं।")
-                  : (lang === "en" ? `${repairResult.driverCount} driver(s) and ${repairResult.typeCount} vehicle type(s) have the wrong 9,000 kg.` : lang === "mr" ? `${repairResult.driverCount} ड्रायव्हर आणि ${repairResult.typeCount} वाहन प्रकारांवर चुकीचे 9,000 किग्रा आहे.` : `${repairResult.driverCount} ड्राइवर और ${repairResult.typeCount} वाहन प्रकार में गलत 9,000 किग्रा है।`))}
-            </div>
-            {!repairResult.applied && (repairResult.drivers || []).length > 0 && (
-              <div className="mt-1 rounded-lg p-2 text-[11px] font-bold" style={{ background: "#FFFFFF", border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, maxHeight: 140, overflowY: "auto" }}>
-                {repairResult.drivers.map((d) => (<div key={d.mobile}>{d.name || "—"} · {d.mobile} · {d.vehicleName}</div>))}
-              </div>
-            )}
-            {!repairResult.applied && repairResult.driverCount + repairResult.typeCount > 0 && (
-              <button onClick={() => runRepair(true)} disabled={repairBusy} className="w-full rounded-lg py-3 font-bold text-sm mt-2" style={{ background: C.marigold, color: "#000000" }}>
-                {lang === "en" ? "Fix them (set to 30,000 kg)" : lang === "mr" ? "दुरुस्त करा (30,000 किग्रा)" : "ठीक करें (30,000 किग्रा)"}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
+      {saveError && <div data-settings-save-error className="mb-2 text-[11px] font-bold break-words" style={{ color: C.safety }}>{lang === "en" ? "The other changes were saved, but the SMS settings could not be saved: " : lang === "mr" ? "इतर बदल सेव्ह झाले, पण SMS सेटिंग्ज सेव्ह झाल्या नाहीत: " : "बाकी बदलाव सेव हुए, पर SMS सेटिंग्स सेव नहीं हुईं: "}{saveError}</div>}
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       {versionConfirm && raisingRequiredVersion && (
         <div className="rounded-lg p-3 mb-3" style={{ background: "#FFF1F1", border: `2px solid ${C.danger || "#FF2A2A"}` }} data-version-confirm>
@@ -4214,9 +4132,9 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           </div>
         </div>
       )}
-      <button onClick={saveSettings} disabled={!dirty || (versionConfirm && raisingRequiredVersion)} className="w-full rounded-lg py-3.5 font-bold text-base"
-        style={{ background: dirty ? "#0052CC" : "#E5EAF2", color: dirty ? "#fff" : "#9AA3B0" }}>
-        {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+      <button data-settings-save onClick={saveSettings} disabled={!anyDirty || saving || (versionConfirm && raisingRequiredVersion)} className="w-full rounded-lg py-3.5 font-bold text-base"
+        style={{ background: anyDirty ? "#0052CC" : "#E5EAF2", color: anyDirty ? "#fff" : "#9AA3B0" }}>
+        {saving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
       </button>
     </div>
     </div>
@@ -4819,7 +4737,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   // Launcher-icon number (owner 2026-11-25): alerts not yet replied to + pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
@@ -4885,7 +4803,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
       )}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
-      {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
+      {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} />}
     </div>
     </WaStatusContext.Provider>
   );

@@ -12343,15 +12343,7 @@ export default function App() {
   // against and simply never blocks — see the version-check effect.
   const setLatestVersionCode = (v) => patchDoc("settings", "main", { latestVersionCode: typeof v === "function" ? v(settings.latestVersionCode) : v }).catch((e) => console.error(e));
   const setUpdateUrl = (v) => patchDoc("settings", "main", { updateUrl: typeof v === "function" ? v(settings.updateUrl) : v }).catch((e) => console.error(e));
-  // Separate from latestVersionCode/updateUrl above — the Admin app is a
-  // completely different native install (its own applicationId, its own
-  // versionCode sequence, sideloaded rather than Play Store) running the
-  // exact same JS bundle. A single shared gate meant setting the
-  // Driver/Customer required version also blocked Admin outright, sending
-  // it to a Play Store listing it isn't even on -- confirmed live the
-  // first time this was actually used for a real release.
-  const setLatestAdminVersionCode = (v) => patchDoc("settings", "main", { latestAdminVersionCode: typeof v === "function" ? v(settings.latestAdminVersionCode) : v }).catch((e) => console.error(e));
-  const setAdminUpdateUrl = (v) => patchDoc("settings", "main", { adminUpdateUrl: typeof v === "function" ? v(settings.adminUpdateUrl) : v }).catch((e) => console.error(e));
+  // (The Admin app's own required version / APK link -- settings.latestAdminVersionCode / adminUpdateUrl -- are still READ by the version check below, but have no box in Admin -> Settings any more: owner 2026-11-25.)
 
   useEffect(() => {
     if (!firestoreReady) return;
@@ -12568,7 +12560,7 @@ export default function App() {
   // android/app/build.gradle) against settings.latestVersionCode (Driver/
   // Customer) or settings.latestAdminVersionCode (Admin, a completely
   // separate native install/versionCode sequence — see the comment by
-  // setLatestAdminVersionCode above for why these can't share one field).
+  // the Admin's own field: it is no longer editable in Settings (owner 2026-11-25) -- clear it in Firestore settings/main if ever needed).
   // adminEntry (the ?admin=1 query param) is what the Admin build's URL
   // always carries, so it's the same signal already used elsewhere to
   // detect "this is the Admin app". Checked once on launch and again
@@ -13542,7 +13534,7 @@ export default function App() {
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
-                latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
+               
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}

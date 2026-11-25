@@ -894,3 +894,11 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- CLAUDE.md: vehicle side photo removal paragraph + notes on the old KYC / sign-up paragraphs
 - changed (1): code:CLAUDE.md
+
+## 2026-11-25 -- Admin Settings: Admin-app force-update box, side-photo cleanup box and 16-wheeler repair box removed; SMS settings are one dropdown each inside a common More settings box with Helper questions and Meta export; ONE Save Changes for everything (contract N60)
+- changed (9): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminHelperLog.jsx, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminSettings, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+- added (11): code:src/AdminSmsSettings.jsx#imports, code:src/AdminSmsSettings.jsx#KINDS, code:src/AdminSmsSettings.jsx#DEFAULT_TEXT, code:src/AdminSmsSettings.jsx#DEFAULT_ID, code:src/AdminSmsSettings.jsx#DEFAULT_TYPE, code:src/AdminSmsSettings.jsx#VAR_RE, code:src/AdminSmsSettings.jsx#blank, code:src/AdminSmsSettings.jsx#fromDoc, code:src/AdminSmsSettings.jsx#AdminSmsSettings, code:src/AdminSmsSettings.jsx#default, code:src/SettingsDropdown.jsx
+- removed (3): code:src/AdminSmsSettings.jsx, code:src/firebaseClient.js#repairSixteenWheelerCapacity, code:src/firebaseClient.js#removeVehicleSidePhotos
+
+## 2026-11-25 -- re-point the helper invariant: the Helper questions log is now an embedded dropdown row of the Settings More settings box
+- changed (1): code:scripts/verifyInvariants.mjs#checks
