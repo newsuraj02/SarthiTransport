@@ -799,3 +799,75 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-24 -- Startup ANR fix (owner 2026-11-24): MainActivity creates its notification channel on a background thread instead of the main thread
 - changed (3): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/MainActivity.java, code:scripts/verifyInvariants.mjs#checks
+## 2026-11-24 -- Force-update safety (owner 2026-11-24): Admin asks 'is it live on Google Play?' before raising the required versionCode; standing rule + contract N50
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminSettings
+
+## 2026-11-24 -- Force-update safety docs: standing rule + contract N50
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- Unmatched bookings expire after 1 hour (new scheduled deleteUnmatchedBookings + functions/unmatchedExpiry.js, owner 2026-11-25); fraud-account removal script; helper facts
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/helpKnowledge.js#other, code:functions/index.js#other, code:scripts/verifyInvariants.mjs#checks
+- added (16): fn:deleteUnmatchedBookings, code:functions/index.js#fn:deleteUnmatchedBookings, code:functions/unmatchedExpiry.js, code:scripts/removeFraudUsers.js#path, code:scripts/removeFraudUsers.js#readline, code:scripts/removeFraudUsers.js#FRAUD_PATTERNS, code:scripts/removeFraudUsers.js#norm, code:scripts/removeFraudUsers.js#matchedPatterns, code:scripts/removeFraudUsers.js#pinAuthEmail, code:scripts/removeFraudUsers.js#tsMs, code:scripts/removeFraudUsers.js#when, code:scripts/removeFraudUsers.js#main, code:scripts/removeFraudUsers.js#exportsList, code:scripts/removeFraudUsers.js#other, code:scripts/serverTests/removeFraudUsers.cjs, code:scripts/serverTests/unmatchedExpiry.cjs
+
+## 2026-11-25 -- Admin Danger Zone Option 3: delete EVERY ride, all statuses, typed DELETE EVERYTHING (owner 2026-11-25, option C, no service key)
+- changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-25 -- Admin Danger Zone Option 3: prop wiring order
+- changed (3): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-25 -- Deleting a ride removes it everywhere: adminDeleteBookings cascade (OTP, extras, ring receipts, Storage bills, Booked activity) behind all three Danger Zone options (owner 2026-11-25)
+- changed (8): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/removeFraudUsers.js#main, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#App
+- added (5): fn:adminDeleteBookings, code:functions/index.js#fn:adminDeleteBookings, code:src/firebaseClient.js#adminDeleteBookings, code:functions/rideDelete.js, code:scripts/serverTests/rideDelete.cjs
+
+## 2026-11-25 -- ride delete: fall back also when the functions client is not configured
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#App
+
+## 2026-11-25 -- Brutal ride deletion (owner 2026-11-25): per-ride and per-list Delete in Admin Bookings for ANY status, ids mode, forced account delete removes the person's rides, client fallback on any server failure, real error text
+- changed (13): fn:adminDeleteAccount, fn:adminDeleteBookings, file:src/firebaseClient.js, code:functions/index.js#fn:adminDeleteAccount, code:functions/index.js#fn:adminDeleteBookings, code:functions/rideDelete.js, code:scripts/serverTests/rideDelete.cjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App, code:src/firebaseClient.js#adminDeleteAccount
+- added (1): code:src/AdminPanel.jsx#DeleteRideControls
+
+## 2026-11-25 -- docs for the brutal ride deletion
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- Admin Bookings: added All rides (every status) list with per-ride Delete
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings
+
+## 2026-11-25 -- Launcher-icon badge (appBadge.js + useAppBadge in Driver/Customer/Admin apps)
+- changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp
+- added (1): code:src/appBadge.js
+
+## 2026-11-25 -- In-app number pills (CountPill) matching the launcher badge
+- changed (8): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverApp
+- added (1): code:src/CountPill.jsx
+
+## 2026-11-25 -- Re-point badge invariant to badgeWallet const
+- changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- Vehicle picker: no brand names, Other option last
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
+
+## 2026-11-25 -- WaTicks: red ! shows failure reason on hover / tap
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/waTicks.jsx#WaTicks
+- added (2): code:src/waTicks.jsx#WHY_TEXT, code:src/waTicks.jsx#NO_REASON_TEXT
+
+## 2026-11-25 -- DLT SMS (smsGateway/smsOtp/smsEvents/smsFunctions, Admin SMS card, OTP by SMS behind a switch); MSG91 removed (bulk WhatsApp, webhook, masked call, fleet WhatsApp)
+- changed (18): fn:dispatchFleetTrip, fn:otpSignIn, fn:adminBookForCustomer, file:firestore.rules, file:src/firebaseClient.js, code:firestore.rules, code:functions/index.js#other, code:functions/index.js#sendFleetDispatch, code:functions/index.js#fn:dispatchFleetTrip, code:functions/index.js#fn:otpSignIn, code:functions/index.js#fn:adminBookForCustomer, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminSettings, code:src/App.jsx#useOtpFlow, code:src/App.jsx#CustomerOnboarding, code:src/App.jsx#DriverOnboarding, code:src/firebaseClient.js#sendBulkDriverWhatsApp
+- added (51): code:functions/index.js#smsFns, code:functions/index.js#smsProofs, code:src/firebaseClient.js#sendTestSms, code:src/phoneOtp.js#imports, code:src/phoneOtp.js#OTP_RESEND_SECONDS, code:src/phoneOtp.js#otpReason, code:src/phoneOtp.js#otpMessage, code:src/phoneOtp.js#verifier, code:src/phoneOtp.js#dropVerifier, code:src/phoneOtp.js#smsProof, code:src/phoneOtp.js#SMS_FINAL_REASONS, code:src/phoneOtp.js#sendPhoneOtp, code:src/phoneOtp.js#confirmPhoneOtp, code:src/phoneOtp.js#signInAfterOtp, code:src/phoneOtp.js#endOtpSession, code:src/waTicks.jsx, code:functions/smsEvents.js, code:functions/smsFunctions.js#other, code:functions/smsFunctions.js#crypto, code:functions/smsFunctions.js#gw, code:functions/smsFunctions.js#otp, code:functions/smsFunctions.js#ev, code:functions/smsFunctions.js#wa, code:functions/smsFunctions.js#SMS_API_USER, code:functions/smsFunctions.js#SMS_API_PASSWORD, code:functions/smsFunctions.js#SECRETS, code:functions/smsFunctions.js#REGION, code:functions/smsFunctions.js#exportsList, code:functions/smsGateway.js, code:functions/smsOtp.js, code:scripts/serverTests/smsGateway.cjs, code:scripts/serverTests/smsOtp.cjs#Module, code:scripts/serverTests/smsOtp.cjs#path, code:scripts/serverTests/smsOtp.cjs#store, code:scripts/serverTests/smsOtp.cjs#col, code:scripts/serverTests/smsOtp.cjs#STAMP, code:scripts/serverTests/smsOtp.cjs#HttpsError, code:scripts/serverTests/smsOtp.cjs#applyPatch, code:scripts/serverTests/smsOtp.cjs#mkRef, code:scripts/serverTests/smsOtp.cjs#fakeDb, ... +11 more (see git diff of scripts/criteria.lock.json)
+- removed (31): fn:sendBulkDriverWhatsApp, fn:msg91WhatsAppStatus, fn:getWhatsAppWebhookInfo, fn:initiateMaskedCall, code:functions/index.js#wa, code:functions/index.js#MSG91_BULK_TEMPLATES, code:functions/index.js#MSG91_BULK_CHUNK_SIZE, code:functions/index.js#fn:sendBulkDriverWhatsApp, code:functions/index.js#fn:msg91WhatsAppStatus, code:functions/index.js#fn:getWhatsAppWebhookInfo, code:functions/index.js#MSG91_VOICE_CALLER_ID, code:functions/index.js#fn:initiateMaskedCall, code:scripts/serverTests/whatsappTicks.cjs, code:src/firebaseClient.js#getWhatsAppWebhookInfo, code:src/phoneOtp.js, code:src/waTicks.jsx#imports, code:src/waTicks.jsx#WaStatusContext, code:src/waTicks.jsx#useWaStatus, code:src/waTicks.jsx#KIND_TEXT, code:src/waTicks.jsx#STATUS_TEXT, code:src/waTicks.jsx#pickText, code:src/waTicks.jsx#rankOf, code:src/waTicks.jsx#latestWaState, code:src/waTicks.jsx#tickColor, code:src/waTicks.jsx#Check, code:src/waTicks.jsx#WHY_TEXT, code:src/waTicks.jsx#NO_REASON_TEXT, code:src/waTicks.jsx#WaTicks, code:src/waTicks.jsx#waCounts, code:src/waTicks.jsx#WaSummary, code:src/waTicks.jsx#WaSetupCard
+
+## 2026-11-25 -- docs: contract N57 DLT SMS
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- SMS code matched to the registered APTRNS templates (numeric / alphanumeric slots, 10-minute OTP, name / vehicle values)
+- changed (8): code:functions/smsEvents.js, code:functions/smsFunctions.js#exportsList, code:functions/smsOtp.js, code:scripts/serverTests/smsGateway.cjs, code:scripts/serverTests/smsOtp.cjs#lastCode, code:scripts/serverTests/smsOtp.cjs#smsConfig, code:scripts/verifyInvariants.mjs#checks, code:src/AdminSmsSettings.jsx
+- added (16): code:functions/smsGateway.js#KINDS, code:functions/smsGateway.js#DEFAULT_TEXT, code:functions/smsGateway.js#DEFAULT_TYPE, code:functions/smsGateway.js#DEFAULT_API_URL, code:functions/smsGateway.js#VAR_RE, code:functions/smsGateway.js#countVars, code:functions/smsGateway.js#cleanVar, code:functions/smsGateway.js#renderTemplate, code:functions/smsGateway.js#cleanMobile, code:functions/smsGateway.js#isIndianMobile, code:functions/smsGateway.js#normalizeConfig, code:functions/smsGateway.js#templateFor, code:functions/smsGateway.js#buildRequest, code:functions/smsGateway.js#judgeGatewayReply, code:functions/smsGateway.js#sendDltSms, code:functions/smsGateway.js#exportsList
+- removed (1): code:functions/smsGateway.js
+
+## 2026-11-25 -- docs: registered templates
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- CLAUDE.md: standing rule -- brutal honesty + full consequences before any plan
+- changed (2): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- Merge: GPS service crash guards + startup ANR fix (native, owner said push 2026-11-25)
+- changed (5): code:CLAUDE.md, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerPlugin.java, code:android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java, code:android/app/src/main/java/com/apnatransport/app/MainActivity.java, code:scripts/verifyInvariants.mjs#checks

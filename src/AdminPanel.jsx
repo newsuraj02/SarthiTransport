@@ -6,6 +6,8 @@
 // eslint-scope) that every free identifier referenced below is covered by
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
+import { useAppBadge, badgeTotal } from "./appBadge.js";
+import CountPill from "./CountPill.jsx";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
@@ -19,7 +21,8 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
 import { useBackHandler } from "./backButton.js";
-import { WaStatusContext, WaTicks, WaSummary, WaSetupCard } from "./waTicks.jsx";
+import { WaStatusContext, WaTicks, WaSummary } from "./waTicks.jsx";
+import AdminSmsSettings from "./AdminSmsSettings.jsx";
 import SearchableList, { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
 import { needsListSearch, filterByQuery, matchesQuery, personSearchText, bookingSearchText } from "./adminListSearch.js";
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
@@ -1661,7 +1664,50 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
+// DELETE RIDES RIGHT FROM THE BOOKINGS LISTS (owner 2026-11-25: "cant even delete the todays ride or advance ride at all ... be brutal"): a ride of ANY status -- today's, Advance, open, running --
+// can be deleted from where it is listed. `ids` = the one ride (per-row Delete) or every ride of the list ("Delete all N"); two taps (a confirm step), then the server removes each ride together
+// with what hangs off it (functions/rideDelete.js, mode "ids"); a failure shows its real reason.
+function DeleteRideControls({ ids, onDelete, lang, all = false }) {
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (!onDelete || !ids.length) return null;
+  const n = ids.length;
+  const go = async () => {
+    setBusy(true); setErr("");
+    try { await onDelete(ids); setStep(0); }
+    catch (e) { console.error("[deleteRides]", e); setErr(String((e && e.message) || e).slice(0, 160)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div data-delete-ride-controls={all ? "all" : "one"} className={all ? "mb-2" : "mt-1.5"}>
+      {step === 0 ? (
+        <button type="button" data-delete-ride-start onClick={() => setStep(1)} className={`${all ? "w-full py-2 text-xs" : "px-2.5 py-1 text-[11px]"} rounded-lg font-bold`} style={{ color: C.safety, border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
+          {all
+            ? (lang === "en" ? `Delete all ${n} in this list` : lang === "mr" ? `या यादीतील सर्व ${n} डिलीट करा` : `इस सूची की सभी ${n} डिलीट करें`)
+            : (lang === "en" ? "Delete this ride" : lang === "mr" ? "ही राइड डिलीट करा" : "यह राइड डिलीट करें")}
+        </button>
+      ) : (
+        <div className="rounded-lg p-2" style={{ border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
+          <p className="text-[11px] font-bold mb-1.5" style={{ color: C.safety }}>
+            {lang === "en" ? `Permanently delete ${n === 1 ? "this ride" : `${n} rides`} from everywhere (customer, driver, Admin, earnings)? It cannot be undone.`
+              : lang === "mr" ? `${n === 1 ? "ही राइड" : `${n} राइड`} सगळीकडून (ग्राहक, ड्रायव्हर, अ‍ॅडमिन, कमाई) कायमची डिलीट करायची? परत येणार नाही.`
+              : `${n === 1 ? "यह राइड" : `${n} राइड`} हर जगह से (ग्राहक, ड्राइवर, एडमिन, कमाई) हमेशा के लिए डिलीट करें? वापस नहीं आएगी।`}
+          </p>
+          {err && <p data-delete-ride-error className="text-[11px] font-bold mb-1.5" style={{ color: C.safety }}>{err}</p>}
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => { setStep(0); setErr(""); }} className="flex-1 rounded-lg py-1.5 text-xs font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>{lang === "en" ? "No" : "नहीं"}</button>
+            <button type="button" data-delete-ride-confirm disabled={busy} onClick={go} className="flex-1 rounded-lg py-1.5 text-xs font-bold text-white" style={{ background: C.safety }}>
+              {busy ? (lang === "en" ? "Deleting…" : "डिलीट हो रहा है…") : (lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, डिलीट करा" : "हाँ, डिलीट करें")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct, deleteRideIds }) {
   const [bookForCustomer, setBookForCustomer] = useState(null); // the prefill (from Customer activity) of the open "Book for this customer" sheet, or null
   const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
   const [openLiveGroup, setOpenLiveGroup] = useState(null); // the ONE live group (Current / Current Return / Advance / Advance Return) whose list is open (owner 2026-11-23); null = all closed
@@ -1717,6 +1763,31 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
     renderItem: liveRow,
   }));
 
+  // ALL RIDES, EVERY STATUS (owner 2026-11-25: "it's not showing the delete button for every booking in the bookings tab"): the four live groups + today's lists only show SOME bookings
+  // (a ride finished before today, or with an unusual status, was in none of them, so it could never be deleted from here). This list holds EVERY booking, newest first, each with its Delete.
+  const ALL_RIDES_SHOWN = 300;
+  const rideMs = (b) => (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : Number(b.createdAt) || 0);
+  const allRides = [...(bookings || [])].sort((a, b) => rideMs(b) - rideMs(a));
+  const allRidesSection = {
+    key: "all-rides",
+    title: lang === "en" ? "All rides · every status" : lang === "mr" ? "सर्व राइड · प्रत्येक स्थिती" : "सभी राइड · हर स्थिति",
+    emptyMsg: lang === "en" ? "No rides." : lang === "mr" ? "कोणतीही राइड नाही." : "कोई राइड नहीं।",
+    count: allRides.length,
+    allIds: allRides.map((b) => b.id),
+    note: allRides.length > ALL_RIDES_SHOWN ? (lang === "en" ? `Showing the newest ${ALL_RIDES_SHOWN} of ${allRides.length}. "Delete all ${allRides.length}" removes every ride, including the ones not shown.` : lang === "mr" ? `${allRides.length} पैकी नवीन ${ALL_RIDES_SHOWN} दाखवत आहे. "सर्व ${allRides.length} डिलीट करा" न दिसणाऱ्या राइडसह सर्व काढते.` : `${allRides.length} में से नई ${ALL_RIDES_SHOWN} दिखा रहे हैं। "सभी ${allRides.length} डिलीट करें" न दिखने वाली राइड समेत हर राइड हटा देता है।`) : null,
+    items: allRides.slice(0, ALL_RIDES_SHOWN),
+    renderItem: (b) => (
+      <div key={b.id} data-all-ride={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
+        <div className="flex items-center justify-between gap-2 mt-1.5 flex-wrap">
+          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: statusMeta[b.status]?.bg || C.inkSoft, color: statusMeta[b.status]?.color || "#FFFFFF" }}>{statusMeta[b.status]?.label || b.status || "—"}</span>
+          <span className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{rideMs(b) ? new Date(rideMs(b)).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : "—"}{b.scheduledFor ? ` · 📅 ${b.scheduledFor}` : ""}</span>
+        </div>
+        <div className="text-[11px] mt-1 break-words" style={{ color: C.inkSoft }}>{b.customerName || "—"} {b.customerMobile ? `· ${b.customerMobile}` : ""} · {b.driverName || (lang === "en" ? "No driver" : lang === "mr" ? "ड्रायव्हर नाही" : "ड्राइवर नहीं")}{fleetTag(b)} · {fareKmText(b, lang)}</div>
+      </div>
+    ),
+  };
+
   const sections = [
     ...liveSections,
     {
@@ -1755,6 +1826,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
         </div>
       ),
     },
+    allRidesSection,
   ];
 
   return (
@@ -1783,7 +1855,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
           ) : (
             <div className="flex items-center justify-between p-4 pb-0 mb-3">
               <h3 className="text-sm font-bold" style={{ color: C.ink }}>{s.title}</h3>
-              <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
+              <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.count ?? s.items.length}</span>
             </div>
           )}
           {open && (
@@ -1791,7 +1863,11 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
               {s.items.length === 0 ? (
                 <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
               ) : (
-                <SearchableList items={s.items} renderItem={s.renderItem} textOf={bookingSearchText} lang={lang} />
+                <>
+                  {s.note && <p data-ride-list-note className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{s.note}</p>}
+                  <DeleteRideControls ids={(s.allIds || s.items.map((it) => it.id)).filter(Boolean)} onDelete={deleteRideIds} lang={lang} all />
+                  <SearchableList items={s.items} renderItem={(it) => (<div key={it.id}>{s.renderItem(it)}<DeleteRideControls ids={[it.id]} onDelete={deleteRideIds} lang={lang} /></div>)} textOf={bookingSearchText} lang={lang} />
+                </>
               )}
             </div>
           )}
@@ -4046,6 +4122,9 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  // FORCE-UPDATE SAFETY (owner 2026-11-24: users saw "Update required" while the Play Store had no update -- "Required versionCode" had been set above the
+  // build that was live): RAISING the required version needs an explicit "it is live on Google Play" confirmation first. Lowering / clearing saves at once (that unblocks people).
+  const [versionConfirm, setVersionConfirm] = useState(false);
   useEffect(() => {
     if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4095,7 +4174,10 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
     try { await navigator.clipboard.writeText(metaNumbersText); setMetaCopied(true); setTimeout(() => setMetaCopied(false), 3000); }
     catch { /* clipboard blocked -- the visible box below lets them select and copy by hand */ }
   };
+  const raisingRequiredVersion = draft.latestVersionCode !== "" && Number(draft.latestVersionCode) > Number(latestVersionCode || 0);
   const saveSettings = () => {
+    if (raisingRequiredVersion && !versionConfirm) { setVersionConfirm(true); return; }
+    setVersionConfirm(false);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
     setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
@@ -4135,7 +4217,7 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
 
-      <div className="mt-2 mb-4"><WaSetupCard lang={lang} /></div>
+      <div className="mt-2 mb-4"><AdminSmsSettings lang={lang} /></div>
 
       {/* IN-APP HELPER LOG (owner 2026-11-24): what the AI helper was asked and could not answer -- see src/AdminHelperLog.jsx. */}
       <AdminHelperLog lang={lang} />
@@ -4206,7 +4288,27 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
       </div>
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
-      <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
+      {versionConfirm && raisingRequiredVersion && (
+        <div className="rounded-lg p-3 mb-3" style={{ background: "#FFF1F1", border: `2px solid ${C.danger || "#FF2A2A"}` }} data-version-confirm>
+          <div className="text-sm font-extrabold mb-1" style={{ color: C.ink }}>
+            {lang === "en" ? `Block everyone below version ${draft.latestVersionCode}?` : lang === "mr" ? `आवृत्ती ${draft.latestVersionCode} पेक्षा जुन्या सर्वांना थांबवायचे?` : `वर्शन ${draft.latestVersionCode} से पुराने सभी लोगों को रोकना है?`}
+          </div>
+          <div className="text-[12px] font-semibold mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? `Every phone on an older build is locked on an "Update required" screen at once, and a push goes out. Save only if version ${draft.latestVersionCode} is already LIVE on Google Play and a phone with the old build shows an "Update" button there. If it is still in review or rolling out, tap Cancel.`
+              : lang === "mr" ? `जुन्या आवृत्तीवरील प्रत्येक फोन लगेच "अपडेट आवश्यक" स्क्रीनवर अडकतो आणि पुश जातो. आवृत्ती ${draft.latestVersionCode} Google Play वर आधीच LIVE असेल आणि जुन्या फोनवर तिथे "Update" बटण दिसत असेल तरच सेव्ह करा. रिव्ह्यूमध्ये असेल तर Cancel दाबा.`
+              : `पुराने वर्शन वाला हर फोन तुरंत "अपडेट आवश्यक है" स्क्रीन पर अटक जाता है और पुश जाता है। तभी सेव करें जब वर्शन ${draft.latestVersionCode} Google Play पर LIVE हो चुका हो और पुराने फोन में वहाँ "Update" बटन दिखता हो। अगर अभी रिव्यू में है या रोलआउट हो रहा है तो Cancel दबाएँ।`}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveSettings} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.danger || "#FF2A2A" }}>
+              {lang === "en" ? "Yes, it is live - block old builds" : lang === "mr" ? "हो, LIVE आहे - जुन्या बिल्ड थांबवा" : "हाँ, LIVE है - पुराने बिल्ड रोकें"}
+            </button>
+            <button onClick={() => setVersionConfirm(false)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
+              {lang === "en" ? "Cancel" : "रद्द करें"}
+            </button>
+          </div>
+        </div>
+      )}
+      <button onClick={saveSettings} disabled={!dirty || (versionConfirm && raisingRequiredVersion)} className="w-full rounded-lg py-3.5 font-bold text-base"
         style={{ background: dirty ? "#0052CC" : "#E5EAF2", color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
@@ -4215,7 +4317,7 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   );
 }
 
-function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, tripLog, bookings, deleteAllRideHistory, deleteSelectedRides, expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
+function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, tripLog, bookings, deleteAllRideHistory, deleteEveryRide, deleteSelectedRides, expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
   // Commission/Bonus/Min-wallet System Settings form -- moved here from
   // AdminSettings (see that component's own comment) with its own
   // independent draft/dirty/Save, same fields/validation/setters as
@@ -4265,6 +4367,22 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
   const [deleteError, setDeleteError] = useState("");
   const [justDeleted, setJustDeleted] = useState(0);
   const deletableCount = (bookings || []).filter((b) => b.status === "Completed" || b.status === "Cancelled").length;
+  // OPTION 3 (owner 2026-11-25): EVERY ride of every status, including open requests and trips running right now. Its own typed words, so Option 2's DELETE can never trigger it.
+  const EVERY_WORD = "DELETE EVERYTHING";
+  const [everyOpen, setEveryOpen] = useState(false);
+  const [everyText, setEveryText] = useState("");
+  const [everyBusy, setEveryBusy] = useState(false);
+  const [everyError, setEveryError] = useState("");
+  const [everyDone, setEveryDone] = useState(0);
+  const everyTotal = (bookings || []).length;
+  const everyRunning = (bookings || []).filter((b) => b.status === "Ongoing").length;
+  const everyOpenReq = (bookings || []).filter((b) => b.status === "AwaitingDriver").length;
+  const runDeleteEvery = async () => {
+    setEveryBusy(true); setEveryError("");
+    try { await deleteEveryRide(); setEveryDone(everyTotal); setEveryOpen(false); setEveryText(""); }
+    catch (e) { console.error("[deleteEveryRide]", e); setEveryError((lang === "en" ? "Couldn't delete everything — please try again." : lang === "mr" ? "सर्व डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सब डिलीट नहीं हो सका — फिर कोशिश करें.") + " " + String((e && e.message) || "").slice(0, 160)); }
+    finally { setEveryBusy(false); }
+  };
   const runDelete = async () => {
     setDeleting(true);
     setDeleteError("");
@@ -4275,7 +4393,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       setConfirmText("");
     } catch (e) {
       console.error("[deleteAllRideHistory]", e);
-      setDeleteError(lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।");
+      setDeleteError((lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।") + " " + String((e && e.message) || "").slice(0, 160));
     } finally {
       setDeleting(false);
     }
@@ -4528,6 +4646,46 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
           </div>
         </div>
       )}
+      {/* OPTION 3 -- every ride, every status (owner 2026-11-25) */}
+      <div data-danger-option-every className="mt-3 rounded-lg p-3" style={{ border: `2px solid ${C.safety}`, background: "#FFF1F1" }}>
+        {everyDone > 0 && (
+          <p className="text-xs font-bold mb-2" style={{ color: C.success }}>
+            {lang === "en" ? `Deleted ${everyDone} ride record(s), every status.` : lang === "mr" ? `${everyDone} राइड रेकॉर्ड डिलीट केले, सर्व स्थिती.` : `${everyDone} राइड रिकॉर्ड डिलीट किए, हर स्थिति के।`}
+          </p>
+        )}
+        {!everyOpen ? (
+          <button data-danger-every-start onClick={() => { setEveryOpen(true); setEveryDone(0); setEveryError(""); }} disabled={everyTotal === 0}
+            className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: everyTotal ? C.safety : "#E2E8F0", color: everyTotal ? "#FFFFFF" : C.inkSoft }}>
+            {lang === "en" ? `Option 3 · Delete EVERY ride, all statuses (${everyTotal})` : lang === "mr" ? `पर्याय 3 · प्रत्येक राइड डिलीट करा, सर्व स्थिती (${everyTotal})` : `विकल्प 3 · हर राइड डिलीट करें, सभी स्थिति (${everyTotal})`}
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs font-extrabold" style={{ color: C.safety }}>
+              {lang === "en"
+                ? `This permanently deletes ALL ${everyTotal} ride record(s): ${everyRunning} trip(s) running RIGHT NOW (customer and driver lose them mid-journey), ${everyOpenReq} open request(s), and every Completed / Cancelled ride. Trip history, invoices, earnings and commission numbers all go to zero. Wallet balances stay. It cannot be undone.`
+                : lang === "mr"
+                ? `यामुळे सर्व ${everyTotal} राइड रेकॉर्ड कायमचे डिलीट होतात: आत्ता चालू असलेल्या ${everyRunning} ट्रिप (ग्राहक आणि ड्रायव्हर प्रवासातच गमावतात), ${everyOpenReq} खुल्या रिक्वेस्ट आणि प्रत्येक Completed / Cancelled राइड. ट्रिप हिस्टरी, इन्व्हॉइस, कमाई आणि कमिशन शून्य होते. वॉलेट शिल्लक तशीच राहते. हे परत येत नाही.`
+                : `इससे सभी ${everyTotal} राइड रिकॉर्ड स्थायी रूप से डिलीट हो जाते हैं: अभी चल रही ${everyRunning} ट्रिप (ग्राहक और ड्राइवर रास्ते में ही खो देते हैं), ${everyOpenReq} खुली रिक्वेस्ट और हर Completed / Cancelled राइड। ट्रिप हिस्ट्री, इनवॉइस, कमाई और कमीशन के आँकड़े शून्य हो जाते हैं। वॉलेट बैलेंस वैसा ही रहता है। इसे वापस नहीं लाया जा सकता।`}
+            </p>
+            <p className="text-xs font-bold" style={{ color: C.ink }}>
+              {lang === "en" ? `Type ${EVERY_WORD} below to confirm.` : lang === "mr" ? `पुष्टीसाठी खाली ${EVERY_WORD} टाका.` : `पुष्टि के लिए नीचे ${EVERY_WORD} लिखें।`}
+            </p>
+            <input data-danger-every-input value={everyText} onChange={(e) => setEveryText(e.target.value)} placeholder={EVERY_WORD}
+              className="w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none" style={{ border: `1.5px solid ${C.safety}`, color: C.ink }} />
+            {everyError && <p className="text-xs font-bold" style={{ color: C.safety }}>{everyError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setEveryOpen(false); setEveryText(""); setEveryError(""); }} disabled={everyBusy}
+                className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+              </button>
+              <button data-danger-every-run onClick={runDeleteEvery} disabled={everyText !== EVERY_WORD || everyBusy}
+                className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: everyText === EVERY_WORD ? C.safety : "#E2E8F0", color: everyText === EVERY_WORD ? "#FFFFFF" : C.inkSoft }}>
+                {everyBusy ? (lang === "en" ? "Deleting…" : lang === "mr" ? "डिलीट होत आहे…" : "डिलीट हो रहा है…") : (lang === "en" ? "Delete everything" : lang === "mr" ? "सर्व डिलीट करा" : "सब डिलीट करें")}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
     </div>
   );
@@ -4755,9 +4913,16 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
+  // Launcher-icon number (owner 2026-11-25): alerts not yet replied to + pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
+  // The same three numbers are shown on the tabs themselves (owner 2026-11-25: "number needs to be inside the app too"): Send notice / Alerts, Drivers and Bookings.
+  const badgeAlerts = (alerts || []).filter((a) => !a.adminReply).length + (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length;
+  const badgeKyc = (drivers || []).filter((d) => d.kyc === "Pending").length;
+  const badgeBookings = (bookings || []).filter((b) => b.status && b.status !== "Completed" && b.status !== "Cancelled").length;
+  const tabCounts = { notify: badgeAlerts, drivers: badgeKyc, bookings: badgeBookings };
+  useAppBadge(badgeTotal({ alerts: badgeAlerts, kycIncomplete: badgeKyc, bookings: badgeBookings }));
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   useBackHandler(showTransporters, () => setShowTransporters(false), 10);
   // "kyc" is deliberately not in this list -- KYC review lives inside the
@@ -4779,11 +4944,12 @@ export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, delete
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
             style={{ background: (tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigold, color: (tab === k || (k === "notify" && tab === "alerts")) ? "#fff" : "#000000", border: `1.5px solid ${(tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
+            <CountPill n={tabCounts[k]} />
           </button>
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
+      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} deleteRideIds={deleteRideIds} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -4796,7 +4962,7 @@ export function AdminPanel({ toggleCustomerBlock, waStatus, flowSessions, delete
               <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
             </button>} />)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock} />}
-      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
+      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {/* Alerts now live INSIDE the Notify tab (owner 2026-11-03, handwritten note: "shift Alerts into the Notifications column"):

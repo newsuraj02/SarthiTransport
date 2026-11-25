@@ -8,7 +8,6 @@
 //   red !          = failed (the reason is the tooltip)
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { C } from "./App.jsx";
-import { getWhatsAppWebhookInfo } from "./firebaseClient";
 
 export const WaStatusContext = createContext({});
 export const useWaStatus = () => useContext(WaStatusContext);
@@ -39,14 +38,27 @@ function Check({ x, color }) {
   return <path d={`M${x + 1} 8.5 L${x + 4} 11.5 L${x + 10} 4.5`} fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />;
 }
 
+const WHY_TEXT = ["Why it failed", "फेल क्यों हुआ", "अयशस्वी का?"];
+const NO_REASON_TEXT = ["No reason was reported (the number may not be on WhatsApp, or the template was not accepted)", "कारण नहीं बताया गया (नंबर WhatsApp पर नहीं होगा, या टेम्पलेट मंज़ूर नहीं हुआ)", "कारण दिले नाही (नंबर WhatsApp वर नसेल, किंवा टेम्पलेट मंजूर नाही)"];
+
 export function WaTicks({ mobile, lang = "en", compact = false }) {
   const map = useWaStatus();
+  const [showWhy, setShowWhy] = useState(false); // red "!" only: hover (computer) or tap (phone) shows the reason right there (owner 2026-11-25)
   const st = latestWaState(map, mobile);
   if (!st) return null;
   const color = tickColor(st.status);
   const label = `${pickText(STATUS_TEXT[st.status] || STATUS_TEXT.submitted, lang)}${KIND_TEXT[st.kind] ? ` · ${pickText(KIND_TEXT[st.kind], lang)}` : ""}${st.status === "failed" && st.reason ? ` · ${st.reason}` : ""}`;
+  const failed = st.status === "failed";
+  const whyText = failed ? (st.reason ? String(st.reason) : pickText(NO_REASON_TEXT, lang)) : "";
   return (
-    <span data-wa-ticks={st.status} data-wa-kind={st.kind} title={label} aria-label={label} className="inline-flex items-center gap-1 shrink-0" style={{ color }}>
+    <span data-wa-ticks={st.status} data-wa-kind={st.kind} title={label} aria-label={label} className={`inline-flex items-center gap-1 shrink-0${failed ? " relative cursor-pointer" : ""}`} style={{ color }}
+      {...(failed ? { role: "button", tabIndex: 0, onClick: (e) => { e.stopPropagation(); if (e.nativeEvent && e.nativeEvent.pointerType === "mouse") setShowWhy(true); else setShowWhy((v) => !v); }, onPointerEnter: (e) => { if (e.pointerType === "mouse") setShowWhy(true); }, onPointerLeave: (e) => { if (e.pointerType === "mouse") setShowWhy(false); } } : {})}>
+      {failed && showWhy && (
+        <span data-wa-fail-reason className="absolute left-0 top-full mt-1 z-40 w-56 rounded-lg px-2.5 py-2 text-[11px] font-semibold leading-snug break-words shadow-lg text-left" style={{ background: C.paper, color: C.ink, border: `1px solid ${C.safety}` }}>
+          <span className="block font-extrabold mb-0.5" style={{ color: C.safety }}>{pickText(WHY_TEXT, lang)}{KIND_TEXT[st.kind] ? ` · ${pickText(KIND_TEXT[st.kind], lang)}` : ""}</span>
+          {whyText}
+        </span>
+      )}
       <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
         {st.status === "submitted" && <g fill="none" stroke="#8696A0" strokeWidth="1.5" strokeLinecap="round"><circle cx="9" cy="7" r="4.6" /><path d="M9 4.6 V7 L10.8 8.2" /></g>}
         {st.status === "sent" && <Check x={3} color={color} />}
@@ -77,48 +89,6 @@ export function WaSummary({ mobiles, kind, lang = "en" }) {
       <span style={{ color: "#8696A0" }}>✓✓ {T("Delivered", "पहुँचा", "पोहोचले")} {c.atLeastDelivered}</span>
       <span style={{ color: "#53BDEB" }}>✓✓ {T("Read", "पढ़ा", "वाचले")} {c.read}</span>
       {c.failed > 0 && <span style={{ color: C.safety }}>! {T("Failed", "फेल", "अयशस्वी")} {c.failed}</span>}
-    </div>
-  );
-}
-
-// Admin -> Settings: the one-time MSG91 hookup (the webhook URL) + whether MSG91 has called it yet.
-export function WaSetupCard({ lang = "en" }) {
-  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  const [info, setInfo] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const load = () => { setInfo(null); getWhatsAppWebhookInfo().then(setInfo); };
-  useEffect(() => { load(); }, []);
-  const lastAt = info && info.ok && info.lastAt ? new Date(info.lastAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN") : "";
-  return (
-    <div data-wa-setup className="rounded-xl p-4 shadow-sm space-y-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T("WhatsApp delivery ticks", "WhatsApp डिलीवरी टिक", "WhatsApp डिलिव्हरी टिक")}</div>
-      <p className="text-[11px] leading-snug" style={{ color: C.inkSoft }}>
-        {T("Every driver you message shows ✓ sent, ✓✓ delivered and blue ✓✓ read, like WhatsApp. MSG91 sends these updates to a web address: copy it below and paste it once in MSG91 → Webhooks → WhatsApp → Outbound Report.",
-          "जिस ड्राइवर को आप मैसेज भेजते हैं उसके आगे WhatsApp की तरह ✓ भेजा, ✓✓ पहुँचा और नीला ✓✓ पढ़ा दिखता है। ये अपडेट MSG91 एक वेब पते पर भेजता है: नीचे का पता कॉपी करके MSG91 → Webhooks → WhatsApp → Outbound Report में एक बार पेस्ट करें।",
-          "तुम्ही मेसेज पाठवलेल्या ड्रायव्हरपुढे WhatsApp सारखे ✓ पाठवले, ✓✓ पोहोचले आणि निळे ✓✓ वाचले दिसते. हे अपडेट MSG91 एका वेब पत्त्यावर पाठवतो: खालील पत्ता कॉपी करून MSG91 → Webhooks → WhatsApp → Outbound Report मध्ये एकदा पेस्ट करा.")}
-      </p>
-      {info === null && <div className="text-[11px]" style={{ color: C.inkSoft }}>{T("Loading...", "लोड हो रहा है...", "लोड होत आहे...")}</div>}
-      {info && !info.ok && (
-        <div data-wa-setup-error className="rounded-lg p-2 text-[11px] font-bold break-words" style={{ background: "#FDECEA", color: C.safety }}>
-          {T("Could not get the address", "पता नहीं मिल सका", "पत्ता मिळाला नाही")}: {info.reason}{info.detail ? ` - ${info.detail}` : ""} ({T("deploy the functions first", "पहले functions deploy करें", "आधी functions deploy करा")})
-          <button type="button" onClick={load} className="ml-2 underline">{T("Retry", "फिर कोशिश", "पुन्हा")}</button>
-        </div>
-      )}
-      {info && info.ok && (
-        <>
-          <textarea data-wa-setup-url readOnly value={info.url} rows={3} onFocus={(e) => e.target.select()} className="w-full rounded-lg p-2 text-[10px] break-all" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: "monospace" }} />
-          <div className="flex items-center gap-2">
-            <button type="button" data-wa-setup-copy onClick={() => { try { navigator.clipboard?.writeText(info.url); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard unavailable: the box above is selectable */ } }}
-              className="rounded-lg px-3 py-2 text-xs font-extrabold" style={{ background: C.navy, color: "#FFFFFF" }}>{copied ? T("Copied ✓", "कॉपी हुआ ✓", "कॉपी झाले ✓") : T("Copy address", "पता कॉपी करें", "पत्ता कॉपी करा")}</button>
-            <button type="button" onClick={load} className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>{T("Check again", "फिर जाँचें", "पुन्हा तपासा")}</button>
-          </div>
-          <div data-wa-setup-status className="text-[11px] font-bold" style={{ color: info.count ? C.success : C.inkSoft }}>
-            {info.count
-              ? T(`MSG91 is connected. Last update ${lastAt} (${info.count} received).`, `MSG91 जुड़ गया है। आखिरी अपडेट ${lastAt} (${info.count} मिले)।`, `MSG91 जोडले आहे. शेवटचे अपडेट ${lastAt} (${info.count} मिळाले).`)
-              : T("MSG91 has not sent anything yet. Paste the address in MSG91, then send one test message.", "MSG91 ने अभी कुछ नहीं भेजा। पता MSG91 में पेस्ट करें, फिर एक टेस्ट मैसेज भेजें।", "MSG91 ने अजून काहीही पाठवले नाही. पत्ता MSG91 मध्ये पेस्ट करा, मग एक टेस्ट मेसेज पाठवा.")}
-          </div>
-        </>
-      )}
     </div>
   );
 }

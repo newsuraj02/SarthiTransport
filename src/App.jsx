@@ -43,11 +43,13 @@ import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLike
 import { signOut } from "firebase/auth";
 import { sendPhoneOtp, confirmPhoneOtp, signInAfterOtp, endOtpSession, otpMessage, OTP_RESEND_SECONDS } from "./phoneOtp.js";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress, adminDeleteBookings } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
 import { useNativeSpeech, startNativeListening, stopNativeListening } from "./nativeSpeech.js";
+import { useAppBadge, badgeTotal } from "./appBadge.js";
+import CountPill from "./CountPill.jsx";
 
 // Custom native plugin (android/app + android-admin/app:
 // FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
@@ -4920,9 +4922,9 @@ function useOtpFlow(lang) {
     return () => clearTimeout(t);
   }, [resendIn]);
   // -> { ok: true } | { ok: false, message }
-  const send = async (mobile, containerId) => {
+  const send = async (mobile, containerId, mode) => {
     setOtpSending(true); setOtpError("");
-    const r = await sendPhoneOtp(mobile, containerId);
+    const r = await sendPhoneOtp(mobile, containerId, { mode });
     setOtpSending(false);
     if (!r.ok) { const message = otpMessage(r.reason, lang); setOtpError(message); return { ok: false, message }; }
     confirmationRef.current = r.confirmation; setOtp(""); setResendIn(OTP_RESEND_SECONDS);
@@ -5085,7 +5087,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         : (!res.exists ? (res.otherRoleExists ? numberOtherRoleMsg(lang, "customer") : numberNotRegisteredMsg(lang)) : "");
       if (blocked) { setSending(false); setError(blocked); return; }
     }
-    const sent = await otpFlow.send(mobile, "recaptcha-otp-customer");
+    const sent = await otpFlow.send(mobile, "recaptcha-otp-customer", mode);
     setSending(false);
     if (!sent.ok) { setError(sent.message); return; }
     setError("");
@@ -5109,7 +5111,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     if (mode === "signup" && detailsValid) submitProfile();
     setSending(false);
   };
-  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-customer"); };
+  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-customer", mode); };
 
   const submitProfile = async () => {
     if (!detailsValid) return;
@@ -5509,7 +5511,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         : (!res.exists ? (res.otherRoleExists ? numberOtherRoleMsg(lang, "driver") : numberNotRegisteredMsg(lang)) : "");
       if (blocked) { setSending(false); setError(blocked); return; }
     }
-    const sent = await otpFlow.send(mobile, "recaptcha-otp-driver");
+    const sent = await otpFlow.send(mobile, "recaptcha-otp-driver", mode);
     setSending(false);
     if (!sent.ok) { setError(sent.message); return; }
     setError("");
@@ -5535,7 +5537,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     onOtpVerified(mobile, true);
     setSending(false);
   };
-  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-driver"); };
+  const resendOtp = async () => { await otpFlow.send(mobile, "recaptcha-otp-driver", mode); };
 
   // The ONLY place a driver account is created: the final "Create Account" tap
   // at the end of the documents form, once everything is filled in and the
@@ -8688,6 +8690,8 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = findBookingDriver(drivers, activeBooking)?.vehicleSpec;
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer", lang);
+  // Launcher-icon number (owner 2026-11-25): unread notices + the current ride / request + every advance ride. Needs the native badge plugin (next native build); a no-op until then.
+  useAppBadge(badgeTotal({ announcements: announcementAlerts.unreadCount, rides: (activeBooking ? 1 : 0) + advanceBookings.length }));
   // Lifted up here (rather than owned inside CustomerBooking) so the same
   // permission state/banner carries across from the booking-entry screen
   // into the Ongoing-trip GPS sharing below, instead of resetting the
@@ -9338,7 +9342,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, raiseAlert, locationPermission, bookingExtras, fleetVehicles }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, raiseAlert, locationPermission, bookingExtras, fleetVehicles, walletBadge = 0 }) {
   const [cancelError, setCancelError] = useState("");
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
@@ -10186,6 +10190,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       <div className="flex items-center gap-2.5 p-2.5 rounded-full shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5 shadow-sm" style={{ background: "#0052CC" }}>
           <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
+          <CountPill n={walletBadge} />
         </button>
         <div className="flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1.5" style={{ background: C.marigoldDeep }}>
           <div className="flex flex-col items-center leading-none" style={{ color: "#FFFFFF" }}>
@@ -11571,6 +11576,27 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver", lang);
+  // Launcher-icon number (owner 2026-11-25): unread notices, open loads this driver can accept, KYC incomplete (1), the current trip + advance rides, trips completed since Earnings was
+  // last opened, and a wallet below the minimum (1). Read-only: it only READS what the screens already hold (the load filter is the same one DriverHome uses). Needs the native badge plugin.
+  const [earningsSeenAt, setEarningsSeenAt] = usePersistedState(`sarthi_earningsSeen_${driver.mobile}`, 0);
+  useEffect(() => { if (tab === "history" || !earningsSeenAt) setEarningsSeenAt(Date.now()); }, [tab, earningsSeenAt]); // first run = baseline, so old trips never count
+  const badgeNewLoads = bookings.filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && (driver.fleetOwner
+    ? fleetPseudoDrivers(driver, fleetVehicles).some((pv) => isDriverBroadcastEligible(pv, b, vehicleTypes, bookings, fareTiers, lang))
+    : isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang))).length;
+  // The SAME numbers are shown inside the app (owner 2026-11-25, "number needs to be inside the app too wherever the notification is"): My Profile (KYC), My Trips (earnings), the My Wallet
+  // button, Admin Announcements and the menu button carry a CountPill, so the launcher number and the screens can never disagree.
+  const badgeKyc = isDriverKycComplete(driver) ? 0 : 1;
+  const badgeEarnings = earningsSeenAt ? (tripLog || []).filter((b) => b.status === "Completed" && isDriverRecord(b, driver) && Number(b.completedAt) > earningsSeenAt).length : 0;
+  const badgeWallet = !isInTrial(driver.createdAt) && Number(driver.wallet) < Number(minWallet) ? 1 : 0;
+  const menuBadgeCount = announcementAlerts.unreadCount + badgeKyc + badgeEarnings; // everything that sits INSIDE the hamburger menu
+  useAppBadge(badgeTotal({
+    announcements: announcementAlerts.unreadCount,
+    newLoads: driver.online && driver.kyc === "Approved" && !myTrip ? badgeNewLoads : 0,
+    kycIncomplete: badgeKyc,
+    rides: (myTrip ? 1 : 0) + advanceBookings.length,
+    earnings: badgeEarnings,
+    wallet: badgeWallet,
+  }));
   const appOpenForLoads = tab === "home" && rideView === "current";
   useEffect(() => {
     if (!firestoreReady || !driver?.mobile || !appOpenForLoads) return undefined;
@@ -11694,9 +11720,9 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                 <Menu size={18} color="#fff" strokeWidth={2.5} />
               </button>
               <HamburgerHint show={showBookingHint} lang={lang} />
-              {announcementAlerts.unreadCount > 0 && (
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
-                  {announcementAlerts.unreadCount}
+              {menuBadgeCount > 0 && (
+                <span data-menu-badge className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                  {menuBadgeCount > 99 ? "99+" : menuBadgeCount}
                 </span>
               )}
             </div>
@@ -11745,9 +11771,11 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
               {/* "View Advance Booking" was REMOVED from this menu (owner 2026-11-13: same job as the header's "Advance (N)" button, but two taps instead of one). */}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
+                <CountPill n={badgeKyc} />
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : lang === "mr" ? "माझ्या ट्रिप्स" : "मेरी ट्रिप्स"}
+                <CountPill n={badgeEarnings} />
               </button>
               {driver.fleetOwner && (
                 <button data-menu-my-fleet onClick={() => { setTab("fleet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -11801,7 +11829,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles}/>}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras}  fleetVehicles={fleetVehicles} walletBadge={badgeWallet}/>}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -12841,16 +12869,34 @@ export default function App() {
   // bookings collection (see the comment above -- no separate history
   // store), this clears all of them at once, not just AdminFinance's own
   // Reports table.
+  // DELETE EVERY RIDE, ALL STATUSES (owner 2026-11-25: "delete every ride from the Booking list permanently"): unlike deleteAllRideHistory this also removes open requests and trips
+  // that are running right now. Admin's Danger Zone "Option 3" asks for the typed words DELETE EVERYTHING first; firestore.rules already let Admin delete any booking.
+  // DELETING A RIDE REMOVES IT EVERYWHERE (owner 2026-11-25): all three Danger Zone options go through the server (adminDeleteBookings -> functions/rideDelete.js), which deletes each ride
+  // together with its pickup OTP, extras, ring receipts and uploaded bills (and, for "every ride", the Booked customer-activity tries). Only when that function is not deployed yet
+  // (hosting before functions) does it fall back to deleting the booking documents from here; any other failure is thrown so the screen shows "try again".
+  const deleteRidesEverywhere = async (mode, ids, fallbackIds) => {
+    const res = await adminDeleteBookings({ mode, ...(ids ? { ids } : {}) });
+    if (res && res.ok) return;
+    // BRUTAL (owner 2026-11-25: "it didn't work ... be brutal about deletion"): whatever stopped the server (not deployed yet, a timeout, anything), the ride documents themselves are
+    // still deleted from here, so a ride can never refuse to go; the leftovers it would have cleaned (OTP, extras, receipts, bills) are orphans nothing reads. Only when this fails too
+    // is the real reason thrown, so the screen can show it.
+    try { await bulkDeleteDocs("bookings", fallbackIds); }
+    catch (e) { throw new Error(`${(res && (res.message || res.reason)) || "server"} / ${(e && e.message) || "delete failed"}`); }
+  };
+  const deleteRideIds = (ids) => deleteRidesEverywhere("ids", ids, ids);
+  const deleteEveryRide = () => deleteRidesEverywhere("all", null, bookings.map((b) => b.id));
   const deleteAllRideHistory = () => {
     const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
-    return bulkDeleteDocs("bookings", ids);
+    return deleteRidesEverywhere("finished", null, ids);
   };
   // Admin's "select what to delete" (owner 2026-11-11): only the picked ids, and only if they are still finished rides -- a live trip is never deleted, even if its id is passed in.
   // Customer activity "Delete" (owner 2026-11-13): removes the given customerFlow sessions (tries) -- Admin only (firestore.rules: customerFlow delete = isAdmin).
   const deleteCustomerFlowSessions = (ids) => bulkDeleteDocs("customerFlow", (ids || []).filter(Boolean));
   const deleteSelectedRides = (ids) => {
     const finished = new Set(bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id));
-    return bulkDeleteDocs("bookings", (ids || []).filter((id) => finished.has(id)));
+    const picked = (ids || []).filter((id) => finished.has(id));
+    if (!picked.length) return Promise.resolve();
+    return deleteRidesEverywhere("finished", picked, picked);
   };
 
   // Money taps are guarded against a double tap (deep-clean 2026-11-02): the wallet/status the button reads only refreshes after
@@ -13249,12 +13295,17 @@ export default function App() {
   // callable removes the login, the profile and the activity (functions/index.js adminDeleteAccount); deleting only the profile document let the person's still-valid login
   // re-create a blank profile on the next open. A running trip refuses the delete.
   const deleteAccountFor = async (mobile, role) => {
-    const res = await adminDeleteAccount(mobile, role);
+    let res = await adminDeleteAccount(mobile, role, true); // force: Admin already confirmed, so the person's unfinished rides are deleted too (owner 2026-11-25)
+    if (res?.reason === "trip-running") {
+      // a server that does not know "force" yet (functions not redeployed): delete this person's rides from here, then ask again
+      const mine = bookings.filter((b) => b.customerMobile === mobile || b.driverMobile === mobile).map((b) => b.id);
+      try { await bulkDeleteDocs("bookings", mine); res = await adminDeleteAccount(mobile, role, true); } catch (e) { console.error("[deleteAccountFor] rides", e); }
+    }
     // loaded on demand: only Admin ever reaches this, and the customer / driver bundle must not carry Admin code
     const { showSwitchToast } = await import("./AdminSwitchRole.jsx");
     const who = role === "driver" ? { en: "Driver", hi: "ड्राइवर", mr: "ड्रायव्हर" } : { en: "Customer", hi: "कस्टमर", mr: "कस्टमर" };
     if (res?.ok) {
-      showSwitchToast(lang === "en" ? `${who.en} ${mobile} deleted everywhere (login + profile).` : lang === "mr" ? `${who.mr} ${mobile} पूर्णपणे हटवला (लॉगिन + प्रोफाइल).` : `${who.hi} ${mobile} पूरी तरह हटा दिया गया (लॉगिन + प्रोफ़ाइल)।`, true);
+      showSwitchToast(lang === "en" ? `${who.en} ${mobile} deleted everywhere (login + profile${res.ridesDeleted ? ` + ${res.ridesDeleted} ride(s)` : ""}).` : lang === "mr" ? `${who.mr} ${mobile} पूर्णपणे हटवला (लॉगिन + प्रोफाइल).` : `${who.hi} ${mobile} पूरी तरह हटा दिया गया (लॉगिन + प्रोफ़ाइल)।`, true);
     } else if (res?.reason === "trip-running") {
       showSwitchToast(lang === "en" ? `Not deleted: ${mobile} has a trip running. Finish or cancel it first.` : lang === "mr" ? `हटवले नाही: ${mobile} ची ट्रिप सुरू आहे. आधी ती पूर्ण किंवा रद्द करा.` : `हटाया नहीं गया: ${mobile} की ट्रिप चल रही है। पहले उसे पूरा या रद्द करें।`, false);
     } else if (res?.reason === "not-found") {
@@ -13591,7 +13642,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel waStatus={waStatus} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
+              <AdminPanel waStatus={waStatus} deleteEveryRide={deleteEveryRide} deleteRideIds={deleteRideIds} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}

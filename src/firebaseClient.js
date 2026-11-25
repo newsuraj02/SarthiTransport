@@ -213,7 +213,7 @@ export async function sendBulkDriverWhatsApp(kind, mobiles) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "sendBulkDriverWhatsApp");
+    const call = httpsCallable(functions, "sendBulkDriverSms"); // DLT SMS (owner 2026-11-25: MSG91 / WhatsApp bulk was removed); the name of this wrapper is unchanged so the Admin buttons are too
     const result = await call({ kind, mobiles });
     return result.data;
   } catch (e) {
@@ -255,16 +255,31 @@ export async function adminSwitchRole(mobile, to) {
 
 // ADMIN DELETE ACCOUNT (owner 2026-11-22: "once deleted, delete it from the system (even in firebase backend)"; functions/index.js: adminDeleteAccount): removes the login, the
 // profile and the activity of a customer / driver for real. Never throws: { ok, removed?, reason? } -- reason "trip-running" / "not-found" / "not-admin" or a short error code.
-export async function adminDeleteAccount(mobile, role) {
+export async function adminDeleteAccount(mobile, role, force = false) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
     const call = httpsCallable(functions, "adminDeleteAccount");
-    const result = await call({ mobile, role });
+    const result = await call({ mobile, role, ...(force ? { force: true } : {}) });
     return result.data;
   } catch (e) {
     console.error("[adminDeleteAccount] callable failed", e);
     return { ok: false, reason: "error", message: String(e?.message || "").slice(0, 200) };
+  }
+}
+
+// DELETE RIDES EVERYWHERE (owner 2026-11-25; functions/index.js adminDeleteBookings, logic in functions/rideDelete.js): deletes rides together with everything attached to them (pickup OTP,
+// extras, ring receipts, uploaded bills, and -- for mode "all" -- the Booked customer-activity tries). Never throws: { ok, deleted?, reason?, code?, message? }.
+export async function adminDeleteBookings(data) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "adminDeleteBookings");
+    const result = await call(data);
+    return result.data;
+  } catch (e) {
+    console.error("[adminDeleteBookings] callable failed", e);
+    return { ok: false, reason: "error", code: String(e?.code || ""), message: String(e?.message || "").slice(0, 200) };
   }
 }
 
@@ -697,16 +712,15 @@ export async function listenForegroundPush(onMessageReceived) {
   return onMessage(messaging, onMessageReceived);
 }
 
-// WhatsApp delivery ticks (owner 2026-11-14; functions/index.js: getWhatsAppWebhookInfo). Admin only. Never throws: { ok, url?, lastAt?, count?, reason? }.
-export async function getWhatsAppWebhookInfo() {
+// DLT SMS (owner 2026-11-25; functions/smsFunctions.js): Admin's "Send test SMS". Never throws: { ok, detail?, reason? }.
+export async function sendTestSms(kind, mobile) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "getWhatsAppWebhookInfo");
-    const result = await call({});
-    return { ok: true, ...result.data };
+    const result = await httpsCallable(functions, "sendTestSms")({ kind, mobile });
+    return result.data;
   } catch (e) {
-    console.error("[whatsapp webhook info] callable failed", e);
-    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 200) };
+    console.error("[sendTestSms] callable failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 220) };
   }
 }

@@ -81,7 +81,7 @@ CUSTOMER: COMMON PROBLEMS
 - "The vehicle list is greyed out": enter both Pickup and Drop first (and the day for Advance).
 - "Pickup not accepted": the Pickup must be a specific place inside Pune; type an area or landmark and choose a suggestion.
 - "I chose the wrong place": tap "Change pickup / drop".
-- "No driver accepted": the request is sent first to drivers of the chosen category near the Pickup and, if nobody accepts, to the next larger vehicle categories after a couple of minutes. If still no driver, the customer may try another category, or call the support team.
+- "No driver accepted": the request is sent first to drivers of the chosen category near the Pickup and, if nobody accepts, to the next larger vehicle categories after a couple of minutes. If still no driver, the customer may try another category, or call the support team. A request that no driver has accepted within one hour is removed automatically (Current and Advance, Round trip included); the customer is welcome to book again.
 - "I cannot see the Round trip box": it is on the main screen before the cursor is placed in the Pickup box; once the Pickup has text it is hidden unless it was already ticked.
 `;
 
@@ -111,6 +111,7 @@ PARTNER: HOW LOADS REACH A PARTNER
 - Why loads may not arrive: duty is off; KYC is not approved or not complete; the vehicle category does not match the booking; the partner is more than about 15 km (50 km for Advance) from the Pickup; the partner is on another trip; permissions are missing; or there simply are no bookings nearby at that time.
 
 PARTNER: ACCEPTING AND RUNNING A TRIP
+- A booking request that nobody accepts within one hour of being made is removed automatically, so a very old open request may no longer appear in the list.
 - Accept or Reject on the load card or on the ring screen. The first partner to Accept gets the trip and the others stop ringing. Reject is only a decline; it does not cancel the customer's booking.
 - After accepting: go to the Pickup, ask the customer for the pickup OTP, enter it in the app to start the trip, and tap End Trip at the end. Wrong OTP guesses are limited (after 10 wrong guesses the entry is locked for 10 minutes).
 - For a Round trip: at the Drop tap "Reached drop - start return", then End Trip once back at the Pickup. There is one End Trip and no second OTP.

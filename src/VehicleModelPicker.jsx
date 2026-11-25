@@ -1,12 +1,12 @@
 // "Which vehicle do you drive?" -- (owner 2026-11-13: NO company dropdown any more -- ONE list of "Company Model" rows, each with its weight, and a search box; the same picker everywhere.) -- (the company's models show as a list with their weights below the company box, not a second dropdown) -- the ONE picker used by the Driver KYC form and by Admin's driver edit forms (owner 2026-11-10). Company -> Model, from the sheet
 // (src/vehicleModels.js); the weight is filled in from the sheet and shown read-only, there is NO weight box. (owner 2026-11-10: the "My model is not listed" option was removed -- a vehicle must be picked from the list.) It imports nothing from App.jsx (App and AdminPanel pass the colours, styles and category options in), so there is no import cycle.
 import React from "react";
-import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, vehicleModelChoice, isSaneCapacityKg, looksLikeVehicleName } from "./vehicleModels.js";
+import { VEHICLE_MODEL_CATALOG, VEHICLE_CHOICE_SAVED, VEHICLE_CHOICE_OTHER, vehicleModelChoice, isSaneCapacityKg, looksLikeVehicleName, vehicleNameWithoutCompany } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 
 // Every model of every company as ONE flat list; `label` is "<Company> <Model>" -- exactly the vehicle name that is saved (resolveVehicleChoice), so what is picked is what every screen shows afterwards.
-const FLAT_MODELS = VEHICLE_MODEL_CATALOG.flatMap((c, ci) => c.models.map((m, mi) => ({ ci, mi, choice: vehicleModelChoice(ci, mi), label: `${c.company} ${m.name}`, kg: m.kg })));
+const FLAT_MODELS = VEHICLE_MODEL_CATALOG.flatMap((c, ci) => c.models.map((m, mi) => ({ ci, mi, choice: vehicleModelChoice(ci, mi), label: m.name, kg: m.kg })));
 
 export default function VehicleModelPicker({
   lang, choice, setChoice, categoryIndex, setCategoryIndex, categoryOptions, saved, resolved,
@@ -29,16 +29,27 @@ export default function VehicleModelPicker({
       <select data-vehicle-select value={choice || ""} onChange={(e) => setChoice(e.target.value)} className={`${inputCls} mb-2.5`} style={inputStyle}>
         <option value="">{T(lang, "Select vehicle", "गाड़ी चुनें", "गाडी निवडा")}</option>
         {hasSaved && (
-          <option value={VEHICLE_CHOICE_SAVED} data-vehicle-keep>{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {saved.name} · {saved.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</option>
+          <option value={VEHICLE_CHOICE_SAVED} data-vehicle-keep>{T(lang, "Keep my current vehicle", "मेरी मौजूदा गाड़ी रखें", "माझी सध्याची गाडी ठेवा")}: {vehicleNameWithoutCompany(saved.name)} · {saved.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</option>
         )}
         {rows.map((r) => (
           <option key={r.choice} value={r.choice} data-vehicle-model={r.label} data-vehicle-model-kg={r.kg}>{r.label} · {r.kg} {T(lang, "kg", "किग्रा", "किग्रॅ")}</option>
         ))}
+        {/* "Other" is the LAST option (owner 2026-11-25): for a vehicle that is not in the list. No name is ever typed -- the driver picks a weight category instead. */}
+        <option value={VEHICLE_CHOICE_OTHER} data-vehicle-other>{T(lang, "Other", "अन्य", "इतर")}</option>
       </select>
+      {choice === VEHICLE_CHOICE_OTHER && (
+        <div data-vehicle-other-box className="mb-2.5">
+          <label className={lbl} style={{ color: labelColor }}>{T(lang, "My vehicle's weight category", "मेरी गाड़ी की वज़न श्रेणी", "माझ्या गाडीची वजन श्रेणी")}{req}</label>
+          <select data-vehicle-other-category value={categoryIndex == null ? "" : String(categoryIndex)} onChange={(e) => setCategoryIndex(e.target.value === "" ? null : Number(e.target.value))} className={inputCls} style={inputStyle}>
+            <option value="">{T(lang, "Select weight category", "वज़न श्रेणी चुनें", "वजन श्रेणी निवडा")}</option>
+            {(categoryOptions || []).map((o) => (<option key={o.index} value={o.index}>{o.label}</option>))}
+          </select>
+        </div>
+      )}
 
       {resolved && (
         <>
-          <p data-vehicle-selected-name className="text-xs font-extrabold mb-0.5" style={{ color: okColor }}>{resolved.name}</p>
+          <p data-vehicle-selected-name className="text-xs font-extrabold mb-0.5" style={{ color: okColor }}>{vehicleNameWithoutCompany(resolved.name)}</p>
           <p data-vehicle-weight className="text-[11px] font-semibold mb-2" style={{ color: okColor }}>
             {T(lang, `Vehicle weight: ${resolved.kg} kg (set automatically)`, `गाड़ी का वज़न: ${resolved.kg} किग्रा (अपने आप भरा गया)`, `गाडीचे वजन: ${resolved.kg} किग्रॅ (आपोआप भरले)`)}
           </p>
