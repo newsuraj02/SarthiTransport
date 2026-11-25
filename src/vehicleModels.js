@@ -59,6 +59,13 @@ export function looksLikeVehicleName(name) {
   if (words.length === 1 && junk === 1) return false;                 // "nahi", "test"
   return true;
 }
+// The vehicle name WITHOUT its company, for display only (owner 2026-11-25: "don't show the brand name (Tata Motors, Eicher, Mahindra, Piaggio ...)"): "Tata Motors Ace Gold" -> "Ace Gold".
+// The SAVED name still carries the company (nothing stored changes); a name that is not a catalogue "Company Model" is returned as it is.
+export function vehicleNameWithoutCompany(name) {
+  const n = String(name == null ? "" : name).trim();
+  for (const c of VEHICLE_MODEL_CATALOG) { const p = `${c.company} `; if (n.toLowerCase().startsWith(p.toLowerCase()) && n.length > p.length) return n.slice(p.length); }
+  return n;
+}
 export const VEHICLE_CHOICE_SAVED = "saved";   // "keep my current vehicle" (a driver who already has one saved)
 export const VEHICLE_CHOICE_OTHER = "other";   // "my model is not listed" -> a weight category is picked
 export const vehicleModelChoice = (ci, mi) => `m:${ci}:${mi}`;

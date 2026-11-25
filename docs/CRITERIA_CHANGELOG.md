@@ -837,3 +837,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Re-point badge invariant to badgeWallet const
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- Vehicle picker: no brand names, Other option last
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
