@@ -11,7 +11,7 @@ import CountPill from "./CountPill.jsx";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
-  MessageCircle, Phone, Plus, Settings2, Siren, Truck, UserCircle2, Users,
+  MessageCircle, Phone, Plus, Settings2, Truck, UserCircle2, Users,
   Wallet, XCircle,
 } from "lucide-react";
 import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
@@ -1808,8 +1808,7 @@ function relativeFixedLabel(ms, lang) {
 // a running record of what's actually changed in this app: bugs found and
 // fixed, features added, UI tweaks, config/permissions changes. Seeded
 // once per new entry with BUG_TRACKER_SEED and added to over time via the
-// form below. Nothing here is customer/driver-facing; SOS/complaint
-// reports (AdminAlerts) are a separate, unrelated inbox.
+// form below. Nothing here is customer/driver-facing.
 // A fixed Change Log entry's own card -- pulled out of AdminBugTracker
 // since it's now rendered from two separate groups (Recently Fixed /
 // Fixed Earlier, see RECENT_FIX_WINDOW_MS) instead of one flat list.
@@ -3018,27 +3017,16 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
-  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
-  // Draft reply text per complaint id, so opening one complaint's reply box
-  // doesn't touch any other's. Prefilled with the existing adminReply (if
-  // any) so re-opening shows what was already sent, editable in place.
-  const [replyDrafts, setReplyDrafts] = useState({});
-  const [openReplyId, setOpenReplyId] = useState(null);
-  const sendReply = (a) => {
-    const text = (replyDrafts[a.id] ?? a.adminReply ?? "").trim();
-    if (!text) return;
-    replyToAlert?.(a.id, text);
-    setOpenReplyId(null);
-  };
+// WITHDRAWAL + RECHARGE APPROVALS (owner 2026-11-25: the Alerts section was removed from the Notify tab; these two lists were inside it and are the ONLY place a driver's withdrawal /
+// recharge request is approved, so they moved to the top of the Finance tab). Shown only while something is pending; nothing renders otherwise.
+function AdminMoneyRequests({ withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
   const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
-  // Docs only ever get a createdAt (server timestamp) — there's no separate
-  // "time" field — so format that instead of the undefined w.time/r.time/a.time
-  // this used to read (which is why timestamps never actually showed up).
+  // Docs only ever get a createdAt (server timestamp) -- there's no separate "time" field.
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  if (pendingRecharges.length === 0 && pendingWithdrawals.length === 0) return null;
   return (
-    <div className="space-y-4">
+    <div data-money-requests className="space-y-4 mb-4">
       {pendingRecharges.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
@@ -3077,106 +3065,6 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
           </div>
         </div>
       )}
-      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : lang === "mr" ? "इमर्जन्सी अलर्ट्स" : "इमरजेंसी अलर्ट्स"}</div>
-        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : lang === "mr" ? "अजून कोणताही अलर्ट आला नाही." : "अभी कोई अलर्ट नहीं आया।"}</p> : (() => {
-          // Police Help / Emergency Call / WhatsApp Support carry no extra
-          // info per tap — a driver tapping "WhatsApp Support" 5 times just
-          // adds 5 identical rows. Collapse those into one row per role+type
-          // with a tap count, so the list reads as distinct alert kinds, not
-          // a repeated instruction. Complaints keep one row each since every
-          // one has its own real text.
-          const grouped = {};
-          const complaints = [];
-          for (const a of alerts) {
-            if (a.type === "शिकायत") { complaints.push(a); continue; }
-            const key = `${a.role}|${a.type}`;
-            if (!grouped[key]) grouped[key] = { role: a.role, type: a.type, count: 0, latest: a.createdAt };
-            grouped[key].count += 1;
-          }
-          const groupedRows = Object.values(grouped); // alerts is newest-first, so first-seen == latest per key
-          return (
-            <div className="space-y-2">
-              {groupedRows.map((g) => {
-                const urgent = g.type === "इमरजेंसी कॉल" || g.type === "पुलिस सहायता";
-                return (
-                  <div key={`${g.role}|${g.type}`} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${urgent ? C.safety : C.line}` }}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
-                        {urgent && <Siren size={12} />} {roleLabel[g.role] || g.role} · {alertTypeLabel(g.type, lang)}
-                        {g.count > 1 && <span className="font-normal" style={{ color: C.inkSoft }}>&nbsp;×{g.count}</span>}
-                      </span>
-                      <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(g.latest)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {complaints.map((a) => (
-                <div key={a.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}</span>
-                    <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
-                  </div>
-                  {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
-                  {a.adminReply && openReplyId !== a.id && (
-                    <div className="mt-2 rounded-lg p-2" style={{ background: C.metallicGreen + "22" }}>
-                      <div className="text-[10px] font-bold mb-0.5" style={{ color: C.metallicGreen }}>
-                        {a.mobile
-                          ? (lang === "en" ? "Your reply (shown in their app)" : lang === "mr" ? "तुमचे उत्तर (त्यांच्या अ‍ॅपमध्ये दिसते)" : "आपका जवाब (उनके ऐप में दिखता है)")
-                          : (lang === "en" ? "Internal note (no mobile on file to deliver to)" : lang === "mr" ? "अंतर्गत नोंद (पाठवण्यासाठी मोबाइल उपलब्ध नाही)" : "आंतरिक नोट (भेजने के लिए मोबाइल उपलब्ध नहीं)")}
-                      </div>
-                      <div className="text-[11px]" style={{ color: C.ink }}>{a.adminReply}</div>
-                    </div>
-                  )}
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    {/* Complaints filed before this shipped have no mobile on
-                        file at all -- nothing to WhatsApp, so this button is
-                        simply omitted for those instead of linking nowhere.
-                        The in-app reply below still works either way. */}
-                    {a.mobile && (
-                      <a
-                        href={`https://wa.me/91${a.mobile}?text=${encodeURIComponent(`${lang === "en" ? "Re" : "जवाब"}: "${a.note || ""}"\n\n`)}`}
-                        target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                        style={{ background: C.metallicGreen }}>
-                        <MessageCircle size={12} /> {lang === "en" ? "Reply on WhatsApp" : lang === "mr" ? "WhatsApp वर उत्तर द्या" : "WhatsApp पर जवाब दें"}
-                      </a>
-                    )}
-                    <button
-                      onClick={() => setOpenReplyId(openReplyId === a.id ? null : a.id)}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
-                      style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
-                      <Bell size={12} /> {a.adminReply
-                        ? (lang === "en" ? "Edit Reply" : lang === "mr" ? "उत्तर संपादित करा" : "जवाब संपादित करें")
-                        : (lang === "en" ? "Reply in App" : lang === "mr" ? "अ‍ॅपमध्ये उत्तर द्या" : "ऐप में जवाब दें")}
-                    </button>
-                  </div>
-                  {openReplyId === a.id && (
-                    <div className="mt-2">
-                      {!a.mobile && (
-                        <p className="text-[10px] mb-1" style={{ color: C.inkSoft }}>
-                          {lang === "en" ? "This complaint has no mobile on file, so this reply is saved as an internal note only — it can't be delivered to anyone." : lang === "mr" ? "या तक्रारीसाठी मोबाइल उपलब्ध नाही, त्यामुळे हे उत्तर फक्त अंतर्गत नोंद म्हणून जतन होईल — ते कोणालाही पाठवले जाणार नाही." : "इस शिकायत के लिए मोबाइल उपलब्ध नहीं है, इसलिए यह जवाब केवल आंतरिक नोट के रूप में सेव होगा — यह किसी को नहीं भेजा जाएगा।"}
-                        </p>
-                      )}
-                      <textarea
-                        value={replyDrafts[a.id] ?? a.adminReply ?? ""}
-                        onChange={(e) => setReplyDrafts((d) => ({ ...d, [a.id]: e.target.value }))}
-                        rows={2}
-                        placeholder={lang === "en" ? "Type your reply..." : lang === "mr" ? "तुमचे उत्तर टाइप करा..." : "अपना जवाब टाइप करें..."}
-                        className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-                      <button onClick={() => sendReply(a)} disabled={!(replyDrafts[a.id] ?? a.adminReply ?? "").trim()}
-                        className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                        style={{ background: (replyDrafts[a.id] ?? a.adminReply ?? "").trim() ? C.navy : "#B0B6BF" }}>
-                        {lang === "en" ? "Save Reply" : lang === "mr" ? "उत्तर जतन करा" : "जवाब सेव करें"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
     </div>
   );
 }
@@ -3862,7 +3750,6 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"}</div>
       <div className="flex gap-2 mb-3">
         {["driver", "customer"].map((a) => (
           <button key={a} onClick={() => { setAudience(a); setTarget("all"); setSearch(""); setPickerOpen(false); }} className="flex-1 rounded-lg py-3 text-base font-bold"
@@ -4761,16 +4648,17 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
-  // Launcher-icon number (owner 2026-11-25): alerts not yet replied to + pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
-  // The same three numbers are shown on the tabs themselves (owner 2026-11-25: "number needs to be inside the app too"): Send notice / Alerts, Drivers and Bookings.
-  const badgeAlerts = (alerts || []).filter((a) => !a.adminReply).length + (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length;
+  // Launcher-icon number (owner 2026-11-25): pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
+  // (2026-11-25, owner: the Alerts section was removed, so unanswered alerts are no longer counted; the money requests now live in Finance, so their number sits on the Finance tab.)
+  // The same three numbers are shown on the tabs themselves (owner 2026-11-25: "number needs to be inside the app too"): Finance, Drivers and Bookings.
+  const badgeMoney = (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length;
   const badgeKyc = (drivers || []).filter((d) => d.kyc === "Pending").length;
   const badgeBookings = (bookings || []).filter((b) => b.status && b.status !== "Completed" && b.status !== "Cancelled").length;
-  const tabCounts = { notify: badgeAlerts, drivers: badgeKyc, bookings: badgeBookings };
-  useAppBadge(badgeTotal({ alerts: badgeAlerts, kycIncomplete: badgeKyc, bookings: badgeBookings }));
+  const tabCounts = { finance: badgeMoney, drivers: badgeKyc, bookings: badgeBookings };
+  useAppBadge(badgeTotal({ money: badgeMoney, kycIncomplete: badgeKyc, bookings: badgeBookings }));
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   useBackHandler(showTransporters, () => setShowTransporters(false), 10);
   // "kyc" is deliberately not in this list -- KYC review lives inside the
@@ -4790,7 +4678,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
       <div className="flex gap-2 mb-5 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
-            style={{ background: (tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigold, color: (tab === k || (k === "notify" && tab === "alerts")) ? "#fff" : "#000000", border: `1.5px solid ${(tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigoldDeep}` }}>
+            style={{ background: (tab === k) ? C.navy : C.marigold, color: (tab === k) ? "#fff" : "#000000", border: `1.5px solid ${(tab === k) ? C.navy : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
             <CountPill n={tabCounts[k]} />
           </button>
@@ -4810,23 +4698,10 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
               <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
             </button>} />)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock} />}
-      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
+      {tab === "finance" && <><AdminMoneyRequests withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} /><AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} /></>}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
-      {/* Alerts now live INSIDE the Notify tab (owner 2026-11-03, handwritten note: "shift Alerts into the Notifications column"):
-          one tab, two sides. The Live Dashboard's red "Direct request" box still opens the Alerts side (onNavigate("alerts")). */}
-      {(tab === "notify" || tab === "alerts") && (
-        <div data-notify-alerts-switch className="grid grid-cols-2 gap-1 rounded-xl p-1 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          {[["notify", lang === "en" ? "Send notice" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"], ["alerts", lang === "en" ? "Alerts" : lang === "mr" ? "अलर्ट्स" : "अलर्ट्स"]].map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className="rounded-lg py-2.5 text-sm font-extrabold"
-              style={{ background: tab === k ? (k === "alerts" ? C.safety : C.navy) : "transparent", color: tab === k ? "#fff" : C.inkSoft }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} />}
     </div>
     </WaStatusContext.Provider>

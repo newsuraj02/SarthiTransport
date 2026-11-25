@@ -912,3 +912,8 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- driver wallet balance hidden by default with an eye toggle (owner: like Upstox / Zerodha)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#DriverWallet
+
+## 2026-11-25 -- Admin Notify: Alerts section, switch and header removed (starts with the Drivers/Customers toggle); recharge + withdrawal approvals moved to the top of Finance (AdminMoneyRequests); Helpline complaint box removed; alerts subscription removed (N63)
+- changed (12): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminNotify, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#EN_LABELS, code:src/App.jsx#MR_LABELS, code:src/App.jsx#SosScreen, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp, code:src/App.jsx#App
+- added (1): code:src/AdminPanel.jsx#AdminMoneyRequests
+- removed (1): code:src/AdminPanel.jsx#AdminAlerts
