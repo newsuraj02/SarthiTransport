@@ -4519,6 +4519,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
 // so they can be handed to a CA at tax time (server bills, ads, fuel,
 // office costs, etc.). Entirely separate from driver commission/earnings,
 // which already live under the Reports tab.
+const EXPENSE_LIST_SHOWN = 5; // Expense History lists only the newest 5; everything else is in the downloaded report
 function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
   const categories = [...DEFAULT_EXPENSE_CATEGORIES, ...Object.values(expenseCategories || {}).filter((c) => !DEFAULT_EXPENSE_CATEGORIES.some((d) => d.hi === c.hi))];
   const todayISO = () => localDateKey();
@@ -4563,18 +4564,33 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
     }
   };
 
-  const downloadReport = () => {
+  // WHOLE REPORT (owner 2026-11-25: "expense history is too big, show only the last 5 and only ask for the Download whole report option"): the list below shows only the newest
+  // EXPENSE_LIST_SHOWN, the report holds EVERY expense, oldest first. The Android app's WebView cannot save a blob download, so -- like the Meta export -- the file is turned into a
+  // short-lived https link by the server (createCsvDownloadLink) that the phone's browser downloads; if that is not available it falls back to a plain download.
+  const [reportBusy, setReportBusy] = useState(false);
+  const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const downloadReport = async () => {
+    if (reportBusy || expenses.length === 0) return;
     const header = "Date,Category,Amount,Description,Photo Attached\n";
     const rows = [...expenses].sort((a, b) => (a.date < b.date ? -1 : 1))
-      .map((e) => `${e.date},"${e.category}",${e.amount},"${(e.note || "").replace(/"/g, "'")}",${e.photoUrl ? "Yes" : "No"}`).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "expense-report.csv"; a.click();
-    URL.revokeObjectURL(url);
+      .map((e) => `${csvCell(e.date)},${csvCell(e.category)},${Number(e.amount) || 0},${csvCell(e.note)},${e.photoUrl ? "Yes" : "No"}`).join("\n");
+    const csv = "\uFEFF" + header + rows; // the BOM makes Excel read the Hindi / Marathi category names correctly
+    const fileName = `expense-report-${localDateKey()}.csv`;
+    setReportBusy(true);
+    const res = await createCsvDownloadLink(csv, fileName);
+    setReportBusy(false);
+    if (res?.ok && res.url) { const opened = window.open(res.url, "_blank"); if (opened) return; }
+    try {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { console.error("[expense report download]", e); }
   };
 
-  const recent = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const recentAll = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const recent = recentAll.slice(0, EXPENSE_LIST_SHOWN);
   // Expense History below shows every month ever recorded, but the total
   // tile above only counts the current month — without some marker, the two
   // numbers look inconsistent even though each is correct for what it says.
@@ -4589,7 +4605,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   return (
     <div>
       <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : lang === "mr" ? "खर्चाचे टूल:" : "खर्चे के टूल:"}</div>
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
         <button onClick={() => openAdd()} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.marigold }}>
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Plus size={18} color={C.navy} /></div>
           <span className="text-[11px] font-bold" style={{ color: "#000000" }}>{lang === "en" ? "New Expense" : lang === "mr" ? "नवीन खर्च" : "नया खर्च"}</span>
@@ -4600,10 +4616,6 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
             <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : lang === "mr" ? "कॅमेरा / बिल" : "कैमरा / बिल"}</span>
           </div>
         </PhotoPicker>
-        <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.success, opacity: expenses.length ? 1 : 0.5 }}>
-          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Download size={16} color={C.success} /></div>
-          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>Excel {lang === "en" ? "Report" : lang === "mr" ? "रिपोर्ट" : "रिपोर्ट"}</span>
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -4654,6 +4666,18 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                 );
               });
             })()}
+          </div>
+        )}
+        {recentAll.length > 0 && (
+          <div className="mt-3">
+            {recentAll.length > EXPENSE_LIST_SHOWN && (
+              <div data-expense-list-note className="text-[11px] font-bold mb-2 text-center" style={{ color: C.inkSoft }}>
+                {lang === "en" ? `Showing the latest ${EXPENSE_LIST_SHOWN} of ${recentAll.length} expenses.` : lang === "mr" ? `एकूण ${recentAll.length} पैकी नवीनतम ${EXPENSE_LIST_SHOWN} खर्च दाखवले आहेत.` : `कुल ${recentAll.length} में से नए ${EXPENSE_LIST_SHOWN} खर्चे दिखाए गए हैं।`}
+              </div>
+            )}
+            <button data-expense-download onClick={downloadReport} disabled={reportBusy} className="w-full flex items-center justify-center gap-2 rounded-xl py-4 font-extrabold text-base text-white" style={{ background: C.success, opacity: reportBusy ? 0.7 : 1 }}>
+              <Download size={18} /> {reportBusy ? (lang === "en" ? "Preparing file..." : lang === "mr" ? "फाइल तयार होत आहे..." : "फाइल तैयार हो रही है...") : (lang === "en" ? `Download whole report (${recentAll.length})` : lang === "mr" ? `संपूर्ण रिपोर्ट डाउनलोड करा (${recentAll.length})` : `पूरी रिपोर्ट डाउनलोड करें (${recentAll.length})`)}
+            </button>
           </div>
         )}
       </div>

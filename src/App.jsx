@@ -10433,22 +10433,16 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
   return (
     <div className="px-5 py-5">
       <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
-      <div className="rounded-2xl p-5 mb-3 shadow-lg" style={{ background: C.navy }}>
-        <div className="text-xs font-semibold" style={{ color: "#FFFFFF", opacity: 0.85 }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
-        <div className="text-4xl font-extrabold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(displayWallet)}</div>
+      {/* WALLET BALANCE and RECHARGE are TWO separate boxes (owner 2026-11-25: "Have a separate box for Wallet balance and Recharge as it is confusing drivers to recharge of 500 only. Here Wallet Balance and Recharge button has to be evidently big."):
+          the balance box shows only the money the driver HAS (plus the minimum-balance note, which is about the balance, not about an amount to recharge); the Recharge box carries no amount at all. */}
+      <div data-wallet-balance-box className="rounded-2xl p-6 mb-4 shadow-lg" style={{ background: C.navy }}>
+        <div className="text-base font-extrabold" style={{ color: "#FFFFFF", opacity: 0.9 }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
+        <div data-wallet-balance className="text-6xl font-black text-white mt-2 break-words" style={{ fontFamily: monoFont, lineHeight: 1.1 }}>{fmt(displayWallet)}</div>
         {!inTrial && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
         {(driver.heldCredit || 0) > 0 && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : lang === "mr" ? `रद्द झालेल्या ट्रिपमधून ${fmt(driver.heldCredit)} होल्डमध्ये आहे — पुढील ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होईल.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
-        )}
-        <button onClick={() => setShowComingSoon(true)} className="w-full mt-4 rounded-xl py-3.5 font-bold text-base flex items-center justify-center gap-1.5 shadow-md" style={{ background: "#FFFFFF", color: C.navy }}>
-          <IndianRupee size={14} /> {lang === "en" ? "Recharge" : lang === "mr" ? "रिचार्ज करा" : "रीचार्ज करें"}
-        </button>
-        {showComingSoon && (
-          <div className="rounded-lg p-2.5 mt-2 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
-            {lang === "en" ? "Online payments are coming soon." : lang === "mr" ? "ऑनलाइन पेमेंट लवकरच येत आहे." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
-          </div>
         )}
         <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-xl py-3 text-base font-bold flex items-center justify-center gap-1.5" style={{ background: "rgba(255,255,255,0.16)", color: "#fff", border: "1px solid rgba(255,255,255,0.35)" }}>
           <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी लपवा" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी" : "लेन-देन हिस्ट्री")}
@@ -10476,6 +10470,17 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
           )}
         </div>
       )}
+      <div data-wallet-recharge-box className="rounded-2xl p-5 mb-4 shadow-lg" style={{ background: C.paper, border: `3px solid ${C.success}` }}>
+        <div className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Recharge Wallet" : lang === "mr" ? "वॉलेट रिचार्ज" : "वॉलेट रीचार्ज"}</div>
+        <button data-wallet-recharge onClick={() => setShowComingSoon(true)} className="w-full mt-3 rounded-2xl py-5 font-black text-2xl flex items-center justify-center gap-2 shadow-lg" style={{ background: C.success, color: "#FFFFFF" }}>
+          <IndianRupee size={26} /> {lang === "en" ? "Recharge" : lang === "mr" ? "रिचार्ज करा" : "रीचार्ज करें"}
+        </button>
+        {showComingSoon && (
+          <div className="rounded-lg p-2.5 mt-3 text-sm font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en" ? "Online payments are coming soon." : lang === "mr" ? "ऑनलाइन पेमेंट लवकरच येत आहे." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
+          </div>
+        )}
+      </div>
       <div className="rounded-2xl p-5 mb-3 shadow-lg" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-1">
           <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस"}</div>

@@ -902,3 +902,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- re-point the helper invariant: the Helper questions log is now an embedded dropdown row of the Settings More settings box
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- Admin expense history limited to latest 5 with one Download whole report button (N61); driver wallet split into separate big Wallet Balance and Recharge boxes (N62)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminExpenses, code:src/App.jsx#DriverWallet
+- added (1): code:src/AdminPanel.jsx#EXPENSE_LIST_SHOWN
+
+## 2026-11-25 -- re-scope the expense invariant slice
+- changed (1): code:scripts/verifyInvariants.mjs#checks
