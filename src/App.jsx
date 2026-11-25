@@ -19,7 +19,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Download, IndianRupee,
-  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
+  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, Smartphone, Weight, LocateFixed,
   AlertTriangle, Volume2, Square, Plus, Mic,
 } from "lucide-react";
@@ -10392,6 +10392,8 @@ function LoadBellButton({ driver, lang, place = "home" }) {
 function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // The balance is HIDDEN every time this screen opens and shows only after the driver taps the eye (owner 2026-11-25: "Dont show figure in Wallet balance, it feels misleading ... keep it like other financial apps like Upstox, Zerodha").
+  const [showBalance, setShowBalance] = useState(false);
   // Balance/bonus count smoothly toward their real value instead of
   // snapping — see useCountUp.
   const displayWallet = useCountUp(driver.wallet || 0);
@@ -10436,8 +10438,16 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
       {/* WALLET BALANCE and RECHARGE are TWO separate boxes (owner 2026-11-25: "Have a separate box for Wallet balance and Recharge as it is confusing drivers to recharge of 500 only. Here Wallet Balance and Recharge button has to be evidently big."):
           the balance box shows only the money the driver HAS (plus the minimum-balance note, which is about the balance, not about an amount to recharge); the Recharge box carries no amount at all. */}
       <div data-wallet-balance-box className="rounded-2xl p-6 mb-4 shadow-lg" style={{ background: C.navy }}>
-        <div className="text-base font-extrabold" style={{ color: "#FFFFFF", opacity: 0.9 }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
-        <div data-wallet-balance className="text-6xl font-black text-white mt-2 break-words" style={{ fontFamily: monoFont, lineHeight: 1.1 }}>{fmt(displayWallet)}</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-base font-extrabold" style={{ color: "#FFFFFF", opacity: 0.9 }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
+          <button type="button" data-wallet-balance-toggle onClick={() => setShowBalance((v) => !v)} aria-pressed={showBalance ? "true" : "false"}
+            aria-label={showBalance ? (lang === "en" ? "Hide balance" : lang === "mr" ? "बॅलन्स लपवा" : "बैलेंस छुपाएँ") : (lang === "en" ? "Show balance" : lang === "mr" ? "बॅलन्स दाखवा" : "बैलेंस दिखाएँ")}
+            className="shrink-0 w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.35)" }}>
+            {showBalance ? <EyeOff size={24} color="#FFFFFF" /> : <Eye size={24} color="#FFFFFF" />}
+          </button>
+        </div>
+        <div data-wallet-balance data-balance-hidden={showBalance ? "false" : "true"} className="text-6xl font-black text-white mt-2 break-words" style={{ fontFamily: monoFont, lineHeight: 1.1 }}>{showBalance ? fmt(displayWallet) : "₹ ••••"}</div>
+        {!showBalance && <div data-wallet-balance-hint className="text-xs font-semibold mt-1" style={{ color: "#FFFFFF", opacity: 0.8 }}>{lang === "en" ? "Tap the eye to see your balance" : lang === "mr" ? "बॅलन्स पाहण्यासाठी डोळ्याच्या आयकॉनवर दाबा" : "बैलेंस देखने के लिए आँख के आइकन को दबाएँ"}</div>}
         {!inTrial && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}

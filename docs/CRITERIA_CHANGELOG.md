@@ -909,3 +909,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- re-scope the expense invariant slice
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- driver wallet balance hidden by default with an eye toggle (owner: like Upstox / Zerodha)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#DriverWallet
