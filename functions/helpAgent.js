@@ -10,6 +10,10 @@ const HELP_MAX_HISTORY = 6;           // earlier messages sent along (3 question
 const HELP_MAX_HISTORY_CHARS = 600;
 const HELP_MAX_TOKENS = 800;
 const NO_ANSWER_MARKER = "[[NO_ANSWER]]";
+// TEACH AI (owner 2026-11-25): answers Admin wrote for questions the helper could not answer. They are given to the model as extra, authoritative facts for the matching role.
+const TAUGHT_MAX_ENTRIES = 60;        // newest entries that are sent (cost guard: every question pays for this text)
+const TAUGHT_MAX_Q_CHARS = 300;
+const TAUGHT_MAX_A_CHARS = 800;
 
 const HELP_LANGS = { en: "English", hi: "Hindi (Devanagari script)", mr: "Marathi (Devanagari script)" };
 const HELP_ROLES = ["customer", "driver"];
@@ -70,7 +74,21 @@ const CONFIDENTIAL_REPLY = {
 };
 function isConfidentialProbe(question) { const q = String(question || ""); return CONFIDENTIAL_PATTERNS.some((re) => re.test(q)); }
 
-function buildSystemPrompt(role, lang) {
+// Admin's taught entries -> the ones this role may be told: role "both" or the login's own role, newest first, trimmed and capped. Always returns a clean list (never throws on odd data).
+// The text is kept as Admin wrote it (a support number inside it is wanted, so digits are NOT scrubbed); control characters and the no-answer marker are removed.
+function pickTaught(rows, role) {
+  const clean = (v, n) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").split(NO_ANSWER_MARKER).join(" ").replace(/[ \t]+/g, " ").trim().slice(0, n);
+  const ms = (r) => (r && r.createdAt && typeof r.createdAt.toMillis === "function" ? r.createdAt.toMillis() : Number(r && r.createdAt) || 0);
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && typeof r === "object" && (r.role === "both" || r.role === role))
+    .map((r) => ({ q: clean(r.question, TAUGHT_MAX_Q_CHARS), a: clean(r.answer, TAUGHT_MAX_A_CHARS), t: Math.max(ms(r), Number(r.updatedAtMs) || 0) }))
+    .filter((r) => r.q.length >= 3 && r.a.length >= 3)
+    .sort((x, y) => y.t - x.t)
+    .slice(0, TAUGHT_MAX_ENTRIES)
+    .map(({ q, a }) => ({ q, a }));
+}
+
+function buildSystemPrompt(role, lang, taught) {
   const language = HELP_LANGS[lang] || HELP_LANGS.hi;
   const who = role === "driver" ? "a Partner (truck / vehicle driver or owner)" : "a Customer who books vehicles to move goods";
   return [
@@ -85,17 +103,20 @@ function buildSystemPrompt(role, lang) {
     `FACTS:`,
     KNOWLEDGE.common.trim(),
     (role === "driver" ? KNOWLEDGE.driver : KNOWLEDGE.customer).trim(),
+    ...(Array.isArray(taught) && taught.length
+      ? [`TAUGHT ANSWERS (written by the Apna Transport team for questions the FACTS above did not cover; they are CORRECT and take priority over the FACTS when they match the user's question; use the answer as given, translated into the reply language, without adding details of your own; the CONFIDENTIALITY and ROLE BOUNDARY rules still apply):\n${taught.map((t) => `Q: ${t.q}\nA: ${t.a}`).join("\n\n")}`]
+      : []),
   ].join("\n\n");
 }
 
 // The Messages API request. Haiku 5.5: thinking is off (a FAQ needs none; it is billed otherwise), low effort, the fixed FAQ text is cached.
-function buildRequestBody({ role, lang, question, history }) {
+function buildRequestBody({ role, lang, question, history, taught }) {
   return {
     model: HELP_MODEL,
     max_tokens: HELP_MAX_TOKENS,
     thinking: { type: "disabled" },
     output_config: { effort: "low" },
-    system: [{ type: "text", text: buildSystemPrompt(role, lang), cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: buildSystemPrompt(role, lang, taught), cache_control: { type: "ephemeral" } }],
     messages: [...history, { role: "user", content: question }],
   };
 }
@@ -158,5 +179,5 @@ function withinDailyLimit(countSoFar, limit = HELP_DAILY_LIMIT) { return (Number
 
 module.exports = {
   HELP_SPEECH_RATE, HELP_DAILY_AUDIO_LIMIT, HELP_TTS_VOICE, speechText, roleFromEmail, isConfidentialProbe, CONFIDENTIAL_REPLY, HELP_MODEL, HELP_DAILY_LIMIT, HELP_MAX_QUESTION_CHARS, HELP_MAX_HISTORY, HELP_MAX_TOKENS, NO_ANSWER_MARKER, HELP_LANGS,
-  scrubDigits, cleanHelpInput, buildSystemPrompt, buildRequestBody, parseHelperReply, istDayKey, withinDailyLimit,
+  scrubDigits, cleanHelpInput, pickTaught, TAUGHT_MAX_ENTRIES, TAUGHT_MAX_Q_CHARS, TAUGHT_MAX_A_CHARS, buildSystemPrompt, buildRequestBody, parseHelperReply, istDayKey, withinDailyLimit,
 };

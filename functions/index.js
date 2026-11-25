@@ -1410,6 +1410,20 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
 // removed, the role and the language. Every exchange is logged (anonymously) in `helperLog` for Admin: a question it could not answer shows what to add to the knowledge file.
 // Uses the same ANTHROPIC_API_KEY secret as resolveChangeLogEntry; without it the callable answers { ok: false, reason: "not_configured" } and the app offers the support buttons.
 const helpAgent = require("./helpAgent");
+// TEACH AI (owner 2026-11-25): the answers Admin taught (collection `helperTaught`, Admin-only in firestore.rules) are read here with the Admin SDK and handed to the model for the matching role.
+// Cached for one minute so a busy day does not read the collection on every question; a read failure keeps the last good copy (or none) -- the helper then answers exactly as before.
+let helperTaughtCache = { at: 0, rows: [] };
+async function loadHelperTaught() {
+  if (Date.now() - helperTaughtCache.at < 60000) return helperTaughtCache.rows;
+  try {
+    const snap = await db.collection("helperTaught").limit(300).get();
+    helperTaughtCache = { at: Date.now(), rows: snap.docs.map((d) => d.data()) };
+  } catch (e) {
+    console.error("[askHelper] could not read taught answers:", e.message);
+    helperTaughtCache = { at: Date.now(), rows: helperTaughtCache.rows };
+  }
+  return helperTaughtCache.rows;
+}
 exports.askHelper = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   // The role is the LOGIN's own (customer / driver e-mail), not what the app claims -- a customer cannot get partner answers or the reverse; Admin and unknown logins get nothing.
@@ -1448,7 +1462,7 @@ exports.askHelper = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY]
         method: "POST",
         signal: ctl.signal,
         headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify(helpAgent.buildRequestBody(input)),
+        body: JSON.stringify(helpAgent.buildRequestBody({ ...input, taught: helpAgent.pickTaught(await loadHelperTaught(), input.role) })),
       });
     } finally { clearTimeout(timer); }
     const data = await res.json().catch(() => ({}));

@@ -943,3 +943,8 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Finance: Wallet Recharge Requests dropdown with every request + Accept/Reject (owner 2026-11-25, temporary until payment gateway)
 - changed (6): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminMoneyRequests, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App
+
+## 2026-11-25 -- Teach AI: Admin teaches the helper answers (helperTaught), askHelper gives them to the model per role (owner 2026-11-25)
+- changed (12): fn:askHelper, file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:functions/helpAgent.js#buildSystemPrompt, code:functions/helpAgent.js#buildRequestBody, code:functions/helpAgent.js#exportsList, code:functions/index.js#fn:askHelper, code:scripts/serverTests/helper.cjs#makeQuery, code:scripts/serverTests/helper.cjs#other, code:scripts/verifyInvariants.mjs#checks
+- added (15): code:functions/helpAgent.js#TAUGHT_MAX_ENTRIES, code:functions/helpAgent.js#TAUGHT_MAX_Q_CHARS, code:functions/helpAgent.js#TAUGHT_MAX_A_CHARS, code:functions/helpAgent.js#pickTaught, code:functions/index.js#helperTaughtCache, code:functions/index.js#loadHelperTaught, code:src/AdminHelperLog.jsx#imports, code:src/AdminHelperLog.jsx#T, code:src/AdminHelperLog.jsx#pad, code:src/AdminHelperLog.jsx#atMs, code:src/AdminHelperLog.jsx#when, code:src/AdminHelperLog.jsx#TAUGHT_Q_MAX, code:src/AdminHelperLog.jsx#taughtMs, code:src/AdminHelperLog.jsx#AdminHelperLog, code:scripts/rulesTest/helperTaught.mjs
+- removed (1): code:src/AdminHelperLog.jsx

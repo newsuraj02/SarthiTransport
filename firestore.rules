@@ -437,6 +437,12 @@ service cloud.firestore {
       allow create, update: if false;
     }
 
+    // TEACH AI (owner 2026-11-25: "add a feature called teach AI to answer where some questions are not answered by AI"): the answers Admin has written for the helper. ONLY Admin reads / writes them
+    // in the app; the askHelper function reads them with the Admin SDK and gives them to the model for the matching role.
+    match /helperTaught/{id} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /bookingExtras/{id} {
       allow read: if isSignedIn();
       allow create: if isOwnPhone(request.resource.data.byMobile) && request.resource.data.status == 'pending';

@@ -9,6 +9,7 @@ let autoId = 0;
 class HttpsError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 const makeQuery = (name, filters = []) => ({
   where(f, op, v) { return makeQuery(name, [...filters, [f, v]]); },
+  limit() { return makeQuery(name, filters); },
   async get() { const docs = [...col(name).entries()].filter(([, d]) => filters.every(([f, v]) => d[f] === v)).map(([id, d]) => ({ id, data: () => d, exists: true, ref: fakeDb.collection(name).doc(id) })); return { docs, size: docs.length, empty: !docs.length, forEach: (fn) => docs.forEach(fn) }; },
 });
 const fakeDb = {
@@ -85,6 +86,27 @@ global.fetch = async (url, opts) => {
   await ask({ ...user("u3", "driver"), data: { role: "driver", lang: "mr", question: "duty on kasa karaycha" } });
   const bd = sent[sent.length - 1].body;
   ck(bd.system[0].text.includes("Duty switch") && !bd.system[0].text.includes("Confirm booking") && bd.system[0].text.includes("Marathi"), "a DRIVER gets the driver facts, in Marathi");
+  // ---- TEACH AI (owner 2026-11-25): answers Admin taught are given to the model, for the matching role only
+  col("helperTaught").set("T1", { role: "customer", question: "What is the Apna Transport support timing?", answer: "Support is available from 9 AM to 6 PM, Monday to Saturday.", createdAt: { toMillis: () => 3 } });
+  col("helperTaught").set("T2", { role: "driver", question: "How do I get my wallet recharged?", answer: "Send the recharge amount request to the Apna Transport office.", createdAt: { toMillis: () => 2 } });
+  col("helperTaught").set("T3", { role: "both", question: "Do you work on Sundays?", answer: "The office is closed on Sundays.", createdAt: { toMillis: () => 1 } });
+  const realNow = Date.now; Date.now = () => realNow() + 61000; // the taught answers are cached for 60 s; jump past it so this run sees what was just taught
+  await ask({ ...user("t1", "customer"), data: { role: "customer", lang: "en", question: "when is support open" } });
+  const tc = sent[sent.length - 1].body.system[0].text;
+  ck(tc.includes("TAUGHT ANSWERS") && tc.includes("9 AM to 6 PM") && tc.includes("closed on Sundays"), "a CUSTOMER gets the taught answers meant for customers and for both");
+  Date.now = realNow;
+  ck(!tc.includes("wallet recharged") && !tc.includes("office."), "a customer never gets an answer taught for partners only");
+  await ask({ ...user("t2", "driver"), data: { role: "driver", lang: "en", question: "recharge wallet" } });
+  const td = sent[sent.length - 1].body.system[0].text;
+  ck(td.includes("wallet recharged") && td.includes("closed on Sundays") && !td.includes("9 AM to 6 PM"), "a DRIVER gets the partner-only and both answers, not the customer-only one");
+  ck(td.indexOf("FACTS:") < td.indexOf("TAUGHT ANSWERS") && td.includes("take priority over the FACTS") && td.includes("CONFIDENTIALITY and ROLE BOUNDARY rules still apply"), "taught answers come after the FACTS, are marked as correct, and the confidentiality + role rules still apply");
+  const ha2 = require(path.join(__dirname, "..", "..", "functions", "helpAgent.js"));
+  ck(ha2.buildSystemPrompt("customer", "en") === ha2.buildSystemPrompt("customer", "en", []) && !ha2.buildSystemPrompt("customer", "en", []).includes("TAUGHT ANSWERS"), "with nothing taught the prompt is exactly what it was before this feature");
+  const many = Array.from({ length: 90 }, (_, i) => ({ role: "both", question: "question number " + i, answer: "answer " + i + " ".repeat(2) + "x".repeat(1200), createdAt: { toMillis: () => i } }));
+  const picked = ha2.pickTaught(many, "customer");
+  ck(picked.length === ha2.TAUGHT_MAX_ENTRIES && picked[0].q === "question number 89" && picked.every((r) => r.a.length <= ha2.TAUGHT_MAX_A_CHARS), "at most 60 taught answers (newest first), each trimmed -- the cost of every question stays bounded");
+  ck(ha2.pickTaught([{ role: "both", question: "ok question", answer: "x [[NO_ANSWER]] real answer here" }, null, 5, { role: "both" }, { role: "customer", question: "a", answer: "b" }], "customer").length === 1 && !JSON.stringify(ha2.pickTaught([{ role: "both", question: "ok question", answer: "x [[NO_ANSWER]] real" }], "customer")).includes("NO_ANSWER"), "odd or empty taught rows are skipped; the no-answer marker is stripped out");
+  ck(ha2.pickTaught([{ role: "both", question: "support number", answer: "Call 7972399892 any time." }], "driver")[0].a.includes("7972399892"), "a support phone number inside a taught answer is kept (only user questions are digit-scrubbed)");
   // ---- role comes from the LOGIN, confidentiality, role boundary
   const n0 = sent.length;
   await ask({ ...user("r1", "customer"), data: { role: "driver", lang: "en", question: "How do I turn duty on?" } });
