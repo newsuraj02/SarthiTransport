@@ -39,7 +39,7 @@ const fieldStyle = { background: C.bg, border: `1px solid ${C.line}`, color: C.i
 // One vehicle + its driver. Everything the owner types lands in the PRIVATE doc; only capacity / name / kyc / active are public.
 function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   const [v, setV] = useState({ driverName: "", driverMobile: "", vehicleNumber: "", vehicleChoice: "", categoryIndex: null });
-  const [files, setFiles] = useState({ driverPhoto: null, dl: null, vehicleSide: null });
+  const [files, setFiles] = useState({ driverPhoto: null, dl: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (k, val) => { setV((p) => ({ ...p, [k]: val })); setError(""); };
@@ -57,7 +57,6 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
   if (!picked) missing.push(T(lang, "vehicle (company + model, or weight category)", "गाड़ी (कंपनी + मॉडल, या वज़न वर्ग)", "गाडी (कंपनी + मॉडेल, किंवा वजन वर्ग)"));
   if (!files.driverPhoto) missing.push(T(lang, "driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो"));
   if (!files.dl) missing.push(T(lang, "driving licence photo", "ड्राइविंग लाइसेंस की फोटो", "ड्रायव्हिंग लायसन्स फोटो"));
-  if (!files.vehicleSide) missing.push(T(lang, "vehicle photo", "गाड़ी की फोटो", "गाडीचा फोटो")); // mandatory like every other item (owner 2026-11-15: "each and everything we fill in must be MANDATORY")
 
   const save = async () => {
     if (missing.length || saving) return;
@@ -71,11 +70,11 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
         if (!done || !done.url) throw new Error(`upload-failed:${key}:${reason || ""}`); // uploadPhoto returns { name, url }
         return done.url;
       };
-      const [driverPhotoUrl, dlPhotoUrl, vehicleSideUrl] = await Promise.all([up(files.driverPhoto, "driver"), up(files.dl, "dl"), up(files.vehicleSide, "vehicle")]);
+      const [driverPhotoUrl, dlPhotoUrl] = await Promise.all([up(files.driverPhoto, "driver"), up(files.dl, "dl")]);
       await createDoc("fleetVehicles", id, { ownerMobile, vehicleName, capacityKg, categoryIndex: pickedCategoryIndex, vehicleCompany: picked.company || null, vehicleModel: picked.model || null, kyc: "Pending", active: true });
       await createDoc("fleetVehiclePrivate", id, {
         ownerMobile, driverName: v.driverName.trim(), driverMobile: digits(v.driverMobile, 10), vehicleNumber: v.vehicleNumber.trim().toUpperCase(),
-        vehicleName, capacityKg, categoryIndex: pickedCategoryIndex, driverPhotoUrl, dlPhotoUrl, vehicleSideUrl,
+        vehicleName, capacityKg, categoryIndex: pickedCategoryIndex, driverPhotoUrl, dlPhotoUrl,
       });
       onSaved(id);
     } catch (e) {
@@ -102,7 +101,6 @@ function FleetVehicleForm({ ownerMobile, lang, onSaved, onCancel }) {
         <PhotoPick lang={lang} required label={T(lang, "Driver photo", "ड्राइवर की फोटो", "ड्रायव्हरचा फोटो")} file={files.driverPhoto} onFile={(f) => setFiles((p) => ({ ...p, driverPhoto: f }))} />
         <PhotoPick lang={lang} required label={T(lang, "Driving licence", "ड्राइविंग लाइसेंस", "ड्रायव्हिंग लायसन्स")} file={files.dl} onFile={(f) => setFiles((p) => ({ ...p, dl: f }))} />
       </div>
-      <PhotoPick lang={lang} required label={T(lang, "Vehicle photo", "गाड़ी की फोटो", "गाडीचा फोटो")} file={files.vehicleSide} onFile={(f) => setFiles((p) => ({ ...p, vehicleSide: f }))} />
       {missing.length > 0 && <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{T(lang, "Still needed: ", "अभी चाहिए: ", "अजून हवे: ")}{missing.join(", ")}</div>}
       {error && <div className="text-xs font-bold" style={{ color: C.safety }}>{error}</div>}
       <div className="flex gap-2">
@@ -302,7 +300,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
                         {p.driverMobile && <a href={`tel:+91${p.driverMobile}`} aria-label="Call driver" className="shrink-0 p-2 rounded-full" style={{ background: C.navy }}><Phone size={14} color="#FFFFFF" /></a>}
                       </div>
                       <div className="flex gap-2 mt-2 items-center">
-                        {[p.driverPhotoUrl, p.dlPhotoUrl, p.vehicleSideUrl].filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} /></a>)}
+                        {[p.driverPhotoUrl, p.dlPhotoUrl].filter(Boolean).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} /></a>)}
                         <div className="flex-1" />
                         <button onClick={() => setKyc(x.id, "Approved")} disabled={x.kyc === "Approved"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Approved" ? "#9AA3B0" : C.success }}>{T(lang, "Approve", "स्वीकृत", "मंजूर")}</button>
                         <button onClick={() => setKyc(x.id, "Rejected")} disabled={x.kyc === "Rejected"} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: x.kyc === "Rejected" ? "#9AA3B0" : C.safety }}>{T(lang, "Reject", "अस्वीकृत", "नाकार")}</button>

@@ -88,7 +88,7 @@ CUSTOMER: COMMON PROBLEMS
 const DRIVER = `
 PARTNER: SIGN-UP AND DOCUMENTS (KYC)
 - Sign-up: name, mobile number and the SMS OTP, then the documents form, then "Create Account". The account is created only when the whole form is complete.
-- Every item of the documents form is mandatory: driver photo, driving licence photo, the vehicle (chosen from the "Select vehicle" list), the vehicle registration number, a vehicle side photo, and the tick box accepting responsibility for the documents.
+- Every item of the documents form is mandatory: driver photo, driving licence photo, the vehicle (chosen from the "Select vehicle" list), the vehicle registration number, and the tick box accepting responsibility for the documents.
 - The vehicle registration number must be in the form AB12AB1234 (two letters, two digits, two letters, four digits). Only this form is accepted.
 - The vehicle is chosen from the "Select vehicle" drop-down, where each option reads "Company Model - N kg". The vehicle weight is set automatically from the choice. If the vehicle is not in the list, the driver should contact support so it can be added.
 - Photo boxes offer "Take Photo" (camera) or "Choose from Library" (gallery).
@@ -125,7 +125,7 @@ PARTNER: WALLET
 
 PARTNER: ADD NEW VEHICLE AND FLEET OWNERS
 - A partner who owns more than one vehicle can tap "Add new vehicle" in Profile (after Save Changes). After a confirmation, the partner becomes a vehicle owner and the existing vehicle becomes the first vehicle of "My Fleet". This is not possible while a trip is running.
-- For each additional vehicle the owner enters the vehicle (from the "Select vehicle" list), the registration number (AB12AB1234), a vehicle photo, and the driver's name, mobile number, photo and licence. Apna Transport approves each vehicle.
+- For each additional vehicle the owner enters the vehicle (from the "Select vehicle" list), the registration number (AB12AB1234), and the driver's name, mobile number, photo and licence. Apna Transport approves each vehicle.
 - Booking requests ring the owner's phone when any free approved vehicle of the fleet fits the category. On Accept the app asks "Which vehicle?"; the owner chooses the vehicle. The driver of that vehicle, who does not need the app, receives the pickup, drop, customer's number, owner's number and a private trip link on WhatsApp; on that page the driver enters the pickup OTP and marks "Delivered". The owner ends the trip in the app.
 
 PARTNER: OTHER

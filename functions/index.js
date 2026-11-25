@@ -7,6 +7,7 @@ const { isUnmatchedExpired } = require("./unmatchedExpiry");
 const { deleteBookingsCascade } = require("./rideDelete");
 const { evaluateNewLoadDriver, RING_EXTRA_CATEGORIES } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
+const { planVehiclePhotoCleanup } = require("./vehiclePhotoCleanup");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
 const { buildFleetDispatchText, newLinkToken, tokenMatches, cleanMobile: fleetCleanMobile } = require("./fleetDispatch");
 const { findStuckTrips, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
@@ -1060,7 +1061,7 @@ exports.mintLocationServiceToken = onCall({ region: "asia-south1" }, async (requ
 // the resized image the client already has in memory -- classification
 // happens BEFORE that file goes anywhere near Storage, so a rejected photo
 // never overwrites whatever good photo was there before at that driver's
-// fixed vehicleSide.jpg/dl.jpg path.
+// fixed dl.jpg path.
 //
 // Secret (set via `firebase functions:secrets:set GEMINI_API_KEY`, never
 // hardcoded or committed): a Gemini API key from Google AI Studio
@@ -1076,7 +1077,6 @@ const KYC_PHOTO_PROMPTS = {
   // borderline/ambiguous shots the benefit of the doubt and only reject
   // what's clearly, unambiguously wrong -- not to catch every imperfect
   // angle or blurry photo.
-  vehicleSide: 'You are reviewing a photo uploaded as the "side profile" photo of a commercial vehicle (truck/tempo/pickup/van) during a driver\'s KYC on an Indian goods-transport app -- taken by drivers on their own phones, so it will rarely be a perfectly straight, perfectly framed shot. Reply with ONLY strict JSON, no markdown: {"isMatch": true|false, "reason": "one short sentence in English"}. Be lenient: isMatch is true for anything that is mostly a side view of the vehicle, even if somewhat angled, off-center, slightly cropped, or not perfectly straight-on -- give borderline or ambiguous shots the benefit of the doubt. isMatch is false ONLY when it\'s clearly and unambiguously wrong: a straight-on front view, a straight-on rear view, an interior shot, or something that isn\'t a vehicle at all.',
   drivingLicense: 'You are reviewing a photo uploaded as an Indian driving license document during a commercial driver\'s KYC -- taken by drivers on their own phones, so expect imperfect lighting, glare, blur, or a slight crop. Reply with ONLY strict JSON, no markdown: {"isMatch": true|false, "reason": "one short sentence in English"}. Be lenient: isMatch is true for anything that plausibly could be a driving license card/document (front or back), even with poor photo quality, glare, blur, or an awkward angle -- give borderline or ambiguous shots the benefit of the doubt. isMatch is false ONLY when it\'s clearly and unambiguously wrong: a blank image, a random unrelated photo, just a person\'s face with no document at all, or a completely different kind of document (e.g. an Aadhaar card, a bill).',
 };
 
@@ -1085,7 +1085,7 @@ exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
   const { imageBase64, mimeType, docType } = request.data || {};
   const prompt = KYC_PHOTO_PROMPTS[docType];
-  if (!prompt) throw new HttpsError("invalid-argument", "docType must be vehicleSide or drivingLicense.");
+  if (!prompt) throw new HttpsError("invalid-argument", "docType must be drivingLicense.");
   if (!imageBase64) throw new HttpsError("invalid-argument", "imageBase64 is required.");
 
   const apiKey = GEMINI_API_KEY.value();
@@ -1878,6 +1878,38 @@ exports.repairSixteenWheelerCapacity = onCall({ region: "asia-south1" }, async (
     console.log(`[repairSixteenWheelerCapacity] fixed ${plan.drivers.length} driver(s) + ${plan.types.length} vehicle type(s) -> ${RIGHT_CAPACITY_KG} kg`);
   }
   return { ok: true, applied: apply, newCapacityKg: RIGHT_CAPACITY_KG, drivers: plan.drivers.slice(0, 100), driverCount: plan.drivers.length, types: plan.types, typeCount: plan.types.length };
+});
+
+// Remove the vehicle SIDE photo from the database and Storage (owner 2026-11-25; Admin -> Settings -> "Remove vehicle side photos"). What is stored is decided by
+// functions/vehiclePhotoCleanup.js. DRY RUN by default ({ apply: false } only COUNTS); { apply: true } deletes exactly the listed fields (FieldValue.delete on
+// vehicleSpec.photoSide / ownVehicleSpec.photoSide / fleetVehiclePrivate.vehicleSideUrl) and the listed Storage files, nothing else. Irreversible. Safe to run again.
+exports.removeVehicleSidePhotos = onCall({ region: "asia-south1", timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const apply = request.data?.apply === true;
+  const bucket = getStorage().bucket();
+  const [dSnap, fSnap, [fileObjs]] = await Promise.all([db.collection("drivers").get(), db.collection("fleetVehiclePrivate").get(), bucket.getFiles({ prefix: "drivers/" })]);
+  const plan = planVehiclePhotoCleanup({
+    drivers: dSnap.docs.map((x) => ({ id: x.id, ...x.data() })),
+    fleetPrivate: fSnap.docs.map((x) => ({ id: x.id, ...x.data() })),
+    storageNames: fileObjs.map((f) => f.name),
+  });
+  let filesDeleted = 0;
+  if (apply) {
+    const writes = [
+      ...plan.driverPatches.map((p) => ({ ref: db.collection("drivers").doc(p.mobile), data: Object.fromEntries(p.fields.map((f) => [f, FieldValue.delete()])) })),
+      ...plan.fleetIds.map((id) => ({ ref: db.collection("fleetVehiclePrivate").doc(id), data: { vehicleSideUrl: FieldValue.delete() } })),
+    ];
+    for (let i = 0; i < writes.length; i += 400) {
+      const batch = db.batch();
+      writes.slice(i, i + 400).forEach((w) => batch.update(w.ref, w.data));
+      await batch.commit();
+    }
+    for (let i = 0; i < plan.files.length; i += 20) {
+      await Promise.all(plan.files.slice(i, i + 20).map((n) => bucket.file(n).delete({ ignoreNotFound: true }).then(() => { filesDeleted += 1; })));
+    }
+    console.log(`[removeVehicleSidePhotos] removed the field from ${plan.driverPatches.length} driver(s) + ${plan.fleetIds.length} fleet vehicle(s), deleted ${filesDeleted} file(s)`);
+  }
+  return { ok: true, applied: apply, driverCount: plan.driverPatches.length, fleetCount: plan.fleetIds.length, fileCount: plan.files.length, filesDeleted };
 });
 
 // ---------------- Daily health check (live-backend half) ----------------

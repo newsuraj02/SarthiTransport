@@ -278,8 +278,8 @@ export async function convertToFleetOwner() {
 
 // Checks a KYC photo actually shows what its tile claims before it's
 // uploaded (see functions/index.js: classifyKycPhoto and DriverKyc's
-// startPhotoUpload) -- docType is "vehicleSide" (rejects front/diagonal
-// shots) or "drivingLicense" (rejects a blank/unrelated photo). imageBase64
+// startPhotoUpload) -- docType is "drivingLicense" (rejects a
+// blank/unrelated photo). imageBase64
 // is the already-resized photo (no data: prefix), mimeType e.g.
 // "image/jpeg". Always resolves (never throws) with { ok, isMatch?,
 // reason? } -- ok:false (not_configured/error) means the check couldn't
@@ -471,6 +471,21 @@ export async function repairSixteenWheelerCapacity(apply = false) {
     return result.data;
   } catch (e) {
     console.error("[repairSixteenWheelerCapacity] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
+// Admin only (functions/index.js removeVehicleSidePhotos): counts (apply = false, the default) or deletes (apply = true) every stored vehicle side photo -- the fields
+// on drivers / fleet vehicles and the Storage files. Irreversible. Always resolves with { ok, ... }.
+export async function removeVehicleSidePhotos(apply = false) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "removeVehicleSidePhotos");
+    const result = await call({ apply: apply === true });
+    return result.data;
+  } catch (e) {
+    console.error("[removeVehicleSidePhotos] callable failed", e);
     return { ok: false, reason: "error" };
   }
 }

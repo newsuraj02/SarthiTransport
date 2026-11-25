@@ -897,7 +897,7 @@ function fleetPseudoDrivers(owner, fleetVehicles) {
     .map((v) => ({
       id: v.id, mobile: v.id, name: owner.name, fleetVehicleId: v.id, fleetOwnerMobile: owner.mobile, isFleetVehicle: true,
       online: !!owner.online, kyc: owner.kyc, blacklisted: !!owner.blacklisted, lastKnownLocation: null,
-      vehicleSpec: { type: v.vehicleName || "fleet", capacityKg: Number(v.capacityKg), vehicleNumber: null, photoSide: null },
+      vehicleSpec: { type: v.vehicleName || "fleet", capacityKg: Number(v.capacityKg), vehicleNumber: null },
     }));
 }
 // Every owner's pseudo vehicles at once (the customer's vehicle list and the "does anyone qualify" check).
@@ -2824,7 +2824,6 @@ const DRIVER_KYC_FIELDS = [
   { key: "vehicleName", en: "Vehicle company & model", hi: "गाड़ी की कंपनी और मॉडल", mr: "गाडीची कंपनी आणि मॉडेल" },
   { key: "vehicleNumber", en: "Vehicle registered number", hi: "गाड़ी रजिस्टर्ड नंबर", mr: "गाडी रजिस्टर्ड नंबर" },
   { key: "capacityKg", en: "Vehicle weight (set from your model)", hi: "गाड़ी का वज़न (मॉडल से अपने आप)", mr: "गाडीचे वजन (मॉडेलवरून आपोआप)" },
-  { key: "vehicleSide", en: "Vehicle photo (side view)", hi: "गाड़ी की फोटो (साइड से)", mr: "गाडीचा फोटो (बाजूने)" },
 ];
 const kycHasPhoto = (p) => !!(p && (typeof p === "string" ? p.trim() : p.url));
 // Keys of the mandatory fields still empty in `v` (a plain bag of values --
@@ -2838,7 +2837,6 @@ function getKycMissingFromValues(v = {}) {
   if (!String(v.vehicleNumber ?? "").trim()) missing.push("vehicleNumber");
   // "0", "abc" and "-5" are non-empty strings but not a capacity.
   if (!(Number(String(v.capacityKg ?? "").trim()) > 0)) missing.push("capacityKg");
-  if (!kycHasPhoto(v.vehicleSide)) missing.push("vehicleSide");
   return missing;
 }
 export function getDriverKycMissing(driver) {
@@ -2849,7 +2847,6 @@ export function getDriverKycMissing(driver) {
   return getKycMissingFromValues({
     photo: driver.docs?.photo || driver.photo, dl: driver.docs?.dl,
     vehicleName: spec.type, vehicleNumber: spec.vehicleNumber, capacityKg: spec.capacityKg,
-    vehicleSide: spec.photoSide,
   });
 }
 export const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
@@ -2860,11 +2857,11 @@ const kycFieldLabel = (key, lang) => {
 };
 // NO ACCOUNT WITHOUT THE COMPLETED FORM (owner 2026-11-15: "until the new driver has filled all the entries it won't open Create Account or create an account indirectly"): the Create Account
 // button is disabled until the form is complete, AND createAccountAndSubmit asks this before it touches Firebase, so no other way of calling it can create an account either.
-// `values` is exactly what DriverKyc (deferred) hands over: the three photos (File + preview, held in memory), the picked vehicle, the vehicle number in the AB12AB1234 shape and the ticked clause.
+// `values` is exactly what DriverKyc (deferred) hands over: the two photos (File + preview, held in memory), the picked vehicle, the vehicle number in the AB12AB1234 shape and the ticked clause.
 function driverSignupFormIncomplete(values) {
   const v = values || {};
-  if (getKycMissingFromValues({ photo: v.photo, dl: v.dl, vehicleName: v.vehicleTypeName, vehicleNumber: v.vehicleNumber, capacityKg: v.capacityKg, vehicleSide: v.vehiclePhotoSide }).length > 0) return true;
-  if (!(v.photo && v.photo.file && v.dl && v.dl.file && v.vehiclePhotoSide && v.vehiclePhotoSide.file)) return true;
+  if (getKycMissingFromValues({ photo: v.photo, dl: v.dl, vehicleName: v.vehicleTypeName, vehicleNumber: v.vehicleNumber, capacityKg: v.capacityKg }).length > 0) return true;
+  if (!(v.photo && v.photo.file && v.dl && v.dl.file)) return true;
   if (!isValidVehicleNumber(v.vehicleNumber)) return true;
   return v.acceptedTerms !== true;
 }
@@ -5332,10 +5329,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
 // Driver sign-up, owner rule 2026-10-28: the Firebase account is created ONLY
 // when the driver taps "Create Account" at the END of the documents form (so a
 // driver can never end up with an account and no KYC). Photo uploads need a
-// signed-in account, so until then the three photos only exist as Files in
+// signed-in account, so until then the two photos only exist as Files in
 // memory; once the account exists this uploads them and writes the whole profile
 // in ONE patch. Pure (everything it touches is injected) so verifyInvariants can
-// run the real thing. A DL / side photo the AI check says is the wrong kind is
+// run the real thing. A DL photo the AI check says is the wrong kind is
 // left out (not saved) -- the driver then lands on the normal "Incomplete form"
 // screen listing exactly that item -- never silently accepted.
 async function runDriverSignupFinalize(pending, driver, deps) {
@@ -5353,7 +5350,6 @@ async function runDriverSignupFinalize(pending, driver, deps) {
   };
   const photo = await keep(pending.photo.file, "photo", null);
   const dl = await keep(pending.dl.file, "dl", "drivingLicense");
-  const side = await keep(pending.vehiclePhotoSide.file, "vehicleSide", "vehicleSide");
   const typeName = String(pending.vehicleTypeName || "").trim();
   const match = (vehicleTypes || []).find((v) => (v.label || "").toLowerCase() === typeName.toLowerCase() || (v.labelEn || "").toLowerCase() === typeName.toLowerCase());
   let typeKey = match?.key;
@@ -5364,7 +5360,7 @@ async function runDriverSignupFinalize(pending, driver, deps) {
   save({
     ...driver, name: pending.name, referredBy: ref && ref !== mob ? ref : null, referralCredited: false,
     kyc: "Pending", photo, docs: { dl, photo },
-    vehicleSpec: { type: typeKey, photo: null, photoFront: null, photoSide: side, capacityKg: Number(pending.capacityKg) || null, vehicleNumber: String(pending.vehicleNumber || "").trim().toUpperCase(), vehicleCompany: pending.vehicleCompany || null, vehicleModel: pending.vehicleModel || null },
+    vehicleSpec: { type: typeKey, photo: null, photoFront: null, capacityKg: Number(pending.capacityKg) || null, vehicleNumber: String(pending.vehicleNumber || "").trim().toUpperCase(), vehicleCompany: pending.vehicleCompany || null, vehicleModel: pending.vehicleModel || null },
   });
 }
 // END driver sign-up finalize
@@ -6149,11 +6145,6 @@ function uploadErrorInfo(reason, lang) {
     },
     // AI-checked at upload time (see classifyKycPhoto) — this photo decoded
     // and uploaded fine, it just doesn't show what this tile needs.
-    not_side_view: {
-      en: "This doesn't look like a side view of the vehicle. Take a photo from directly beside it, showing its full length.",
-      hi: "यह गाड़ी की साइड वाली फोटो नहीं लग रही। गाड़ी के ठीक बगल से खड़े होकर, पूरी लंबाई दिखाते हुए फोटो लें।",
-      mr: "हा गाडीचा साइड फोटो वाटत नाही. गाडीच्या अगदी बाजूला उभे राहून, संपूर्ण लांबी दाखवत फोटो घ्या.",
-    },
     not_license: {
       en: "This doesn't look like a driving license. Take a clear photo of the license card itself.",
       hi: "यह ड्राइविंग लाइसेंस नहीं लग रहा। लाइसेंस कार्ड की साफ फोटो लें।",
@@ -10728,27 +10719,26 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const pickedVehicle = resolveVehicleChoice(vehicleChoice, { categoryOptions, categoryIndex: vehicleCategory, saved: savedVehicle });
   const vehicleTypeName = pickedVehicle ? pickedVehicle.name : "";
   const capacityKg = pickedVehicle ? String(pickedVehicle.kg) : "";
+  useEffect(() => { try { localStorage.removeItem("sarthi_driverKyc_photoSide"); sessionStorage.removeItem("sarthi_driverKyc_photoSide"); } catch { /* storage blocked: nothing to forget */ } }, []); // the side-photo draft is gone (owner 2026-11-25)
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null, !deferred);
-  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null, !deferred);
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "", !deferred);
 
   const resolveVehicleTypeKey = () => vehicleTypeKeyForName(vehicleTypeName, capacityKg, VEHICLES, addVehicleType);
 
-  // Shared by all three KYC photo tiles (driver photo, DL, vehicle side) —
+  // Shared by the KYC photo tiles (driver photo, DL) —
   // onDoc/onVehiclePhoto used to be separate, identical copies of this same
   // logic. Also used by retryUpload below, which re-invokes this with the
   // same File instead of a fresh one from the picker.
-  // vehicleSide/dl only — spot-checking submitted KYC turned up drivers
-  // uploading a front or diagonal shot for the vehicle "Side" tile, so
-  // those two get an AI check (see classifyKycPhoto) before ever reaching
+  // dl only — spot-checking submitted KYC turned up drivers uploading
+  // a wrong photo for the licence tile, so it gets an AI check (see classifyKycPhoto) before ever reaching
   // Storage: a rejection here stops before uploadPhoto runs, so a bad
   // photo never overwrites whatever good one was already saved at that
-  // driver's fixed vehicleSide.jpg/dl.jpg path. Fails open, not closed —
+  // driver's fixed dl.jpg path. Fails open, not closed —
   // classifyKycPhoto/fileToClassifyPayload returning nothing usable (no
   // Gemini key configured yet, a network hiccup, a decode issue) just
   // falls through to the normal upload below rather than blocking KYC
   // over an unrelated problem.
-  const KYC_CLASSIFY_DOCTYPE = { vehicleSide: "vehicleSide", dl: "drivingLicense" };
+  const KYC_CLASSIFY_DOCTYPE = { dl: "drivingLicense" };
   const startPhotoUpload = (setVal, key) => async (f) => {
     if (!f) return;
     if (deferred) {
@@ -10770,7 +10760,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         const verdict = await withTimeout(classifyKycPhoto(payload.base64, payload.mimeType, docType), 8000, { ok: false, reason: "timeout" });
         if (verdict.ok && verdict.isMatch === false) {
           markUploading(key, false);
-          markUploadError(key, key === "vehicleSide" ? "not_side_view" : "not_license");
+          markUploadError(key, "not_license");
           return;
         }
       }
@@ -10800,18 +10790,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // dimensions. Same list (getKycMissingFromValues) the sign-up checklist,
   // the Incomplete screen and the admin KYC badge use, so Submit can never
   // accept less than what the app later treats as "complete".
-  const draftMissing = getKycMissingFromValues({ photo, dl, vehicleName: vehicleTypeName, vehicleNumber, capacityKg: capacityKgStr, vehicleSide: vehiclePhotoSide });
+  const draftMissing = getKycMissingFromValues({ photo, dl, vehicleName: vehicleTypeName, vehicleNumber, capacityKg: capacityKgStr });
   // Vehicle number must be the full AB12AB1234 pattern (owner 2026-11-15) -- a half-typed or other-shaped number is "still needed" too.
   if (!draftMissing.includes("vehicleNumber") && !isValidVehicleNumber(vehicleNumber)) draftMissing.push("vehicleNumber");
   const termsMissing = needsTerms && !acceptedTerms;
   const canSubmit = draftMissing.length === 0 && !termsMissing && !anyUploading && !submitting;
-  // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
-  // Front isn't required here — see the photo tile below, same reasoning as
-  // DriverProfileEdit's document list already applied: the side profile is
-  // the only vehicle photo that matters to a customer browsing bids, so
-  // dropping Front halves the photo-upload burden on signup without losing
-  // anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid && !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  // Guided-step highlighting for the KYC fields — see GuidedStep. No vehicle photo is asked any more (owner 2026-11-25: the side photo showed nowhere in the app).
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid && !!vehicleTypeName.trim()];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // A first-time submission within this driver's own 30-day trial used to
   // skip the admin approval wait entirely (straight to "Approved") --
@@ -10823,7 +10808,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const submit = () => {
     if (!canSubmit) return;
     if (deferred) {
-      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim(), vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null, acceptedTerms: !termsMissing });
+      onDeferredSubmit?.({ photo, dl, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim(), vehicleCompany: pickedVehicle?.company || null, vehicleModel: pickedVehicle?.model || null, acceptedTerms: !termsMissing });
       return;
     }
     setDriver({
@@ -10832,7 +10817,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       // submitted/resubmitted, rather than letting the two drift apart.
       ...driver, kyc: driver.kyc === "Approved" ? "Approved" : "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
-        type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
+        type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront,
         // canSubmit already guarantees Number(capacityKg) > 0 by this point
         // — || null here is just defense in depth, and null (an explicit
         // "not set") is the correct fallback shape, not undefined (which
@@ -10845,7 +10830,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     });
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
-    setDl(null); setPhoto(null); setVehicleChoice(""); setVehicleCategory(null); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
+    setDl(null); setPhoto(null); setVehicleChoice(""); setVehicleCategory(null); setVehiclePhotoFront(null);
     setVehicleNumber(""); setAcceptedTerms(false);
     if (isFirstSubmission) onFirstSubmit?.();
   };
@@ -10865,7 +10850,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
       {/* Owner 2026-10-31: very first line of the KYC note. */}
       <p className="text-xs font-bold mb-1" style={{ color: C.safety }}>{lang === "en" ? "Without these documents you won't be able to get loads." : lang === "mr" ? "या कागदपत्रांशिवाय तुम्हाला लोड मिळू शकणार नाहीत." : "इन दस्तावेज़ों के बिना आपको लोड नहीं मिल पाएँगे।"}</p>
-      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, choose your vehicle's company and model, and enter its number." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीची कंपनी व मॉडेल निवडा, आणि नंबर टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी की कंपनी व मॉडल चुनें, और नंबर डालें।"}</p>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo and driving license, choose your vehicle's company and model, and enter its number." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो आणि ड्रायव्हिंग लायसन्स अपलोड करा, आणि गाडीची कंपनी व मॉडेल निवडा, आणि नंबर टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और गाड़ी की कंपनी व मॉडल चुनें, और नंबर डालें।"}</p>
 
       {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved
           driver whose saved KYC lacks a mandatory field isn't verified yet.
@@ -10941,66 +10926,6 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             categoryOptions={categoryOptions} saved={savedVehicle} resolved={pickedVehicle} inputCls={inputCls} inputStyle={inputStyle}
             labelColor={C.inkSoft} requiredColor={C.safety} okColor={C.success} />
         </GuidedStep>
-
-        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"} <span style={{ color: C.safety }}>*</span></label>
-        {/* Front used to be required here too — dropped (see kycStepCompleted
-            above) since the side profile is the only vehicle photo a
-            customer ever sees on a bid card, same reasoning already applied
-            to DriverProfileEdit's own document list. Halves the photo-upload
-            burden a new driver faces during signup. */}
-        <div className="max-w-[180px] mb-2">
-          <GuidedStep {...kycStepProps(4)} lang={lang}>
-            <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={startPhotoUpload(setVehiclePhotoSide, "vehicleSide")}>
-              <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
-                {uploadingKeys.vehicleSide ? (
-                  <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress.vehicleSide ? ` ${uploadProgress.vehicleSide}%` : "..."}</div>
-                ) : (
-                  <SafeImage
-                    src={vehiclePhotoSide?.url}
-                    alt={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}
-                    className="w-full h-24 rounded-lg object-cover photo-zoom-in"
-                    fallback={
-                      <>
-                        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={46} color="#FFFFFF" /></div>
-                        <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}</div>
-                      </>
-                    }
-                  />
-                )}
-              </div>
-              {uploadErrorKeys.vehicleSide ? (
-                <div className="mt-0.5 px-1 text-center">
-                  <span className="block text-[9px] font-semibold leading-tight" style={{ color: C.safety }}>{uploadErrorInfo(uploadErrorKeys.vehicleSide, lang)}</span>
-                  {uploadErrorKeys.vehicleSide === "upload" ? (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVehiclePhotoSide, "vehicleSide")(); }} className="text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
-                      {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
-                    </button>
-                  ) : (
-                    <span className="block text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
-                      {lang === "en" ? "Tap to take again" : lang === "mr" ? "पुन्हा घेण्यासाठी टॅप करा" : "फिर से लेने के लिए टैप करें"}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div key={vehiclePhotoSide ? "done" : "todo"} className={`text-[9px] mt-0.5 text-center ${vehiclePhotoSide ? "pop-in" : ""}`} style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
-                  {vehiclePhotoSide ? doneTxt : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
-                </div>
-              )}
-            </PhotoPicker>
-          </GuidedStep>
-        </div>
-        <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : lang === "mr" ? "चांगल्या फोटोसाठी:" : "अच्छी फोटो के लिए:"}</div>
-          <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
-            {lang === "en" ? (
-              <>• Take it in daylight, at a clean spot<br />• The full vehicle should be in frame<br />• The number plate should be clearly visible<br />• Don't upload blurry, dark, or cropped photos</>
-            ) : lang === "mr" ? (
-              <>• दिवसाच्या उजेडात, स्वच्छ जागी फोटो घ्या<br />• संपूर्ण गाडी फ्रेममध्ये यायला हवी<br />• गाडी नंबर प्लेट स्पष्ट दिसायला हवी<br />• धूसर, अंधारी किंवा कापलेली फोटो टाकू नका</>
-            ) : (
-              <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* The clause goes LAST, right above the final button (owner 2026-10-28). */}
@@ -11085,9 +11010,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
             review screen uses), and a single Change button that jumps to
             the existing KYC & Vehicle form to re-upload/edit any of them
             (including the driver photo above), instead of duplicating that
-            upload flow here. Vehicle - Front isn't shown — the side profile
-            is the only vehicle photo that matters to a customer browsing
-            bids. */}
+            upload flow here. No vehicle photo is asked or shown any more. */}
         <div className="pt-1">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</h3>
@@ -11098,7 +11021,6 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
           <div className="grid grid-cols-2 gap-2">
             {[
               { key: "dl", label: lang === "en" ? "Driving License" : lang === "mr" ? "ड्रायव्हिंग लायसन्स" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
-              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url || driver?.ownVehicleSpec?.photoSide?.url },
             ].map((d) => (
               <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
             ))}

@@ -883,3 +883,14 @@ Every change to a rule, condition, function or config file the app depends on, n
 - changed (16): file:firestore.rules, file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:functions/whatsappStatus.js, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers, code:src/App.jsx#imports, code:src/App.jsx#ActiveRide, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverApp, code:src/waTicks.jsx
 - added (2): code:src/App.jsx#CallButton, code:src/firebaseClient.js#sendBulkDriverSms
 - removed (4): code:functions/bulkWhatsApp.js, code:src/App.jsx#MaskedCallButton, code:src/firebaseClient.js#initiateMaskedCall, code:src/firebaseClient.js#sendBulkDriverWhatsApp
+
+## 2026-11-25 -- Vehicle side photo removed everywhere (owner 2026-11-25): no KYC field / form tile / AI-check prompt / Admin thumbnail / fleet-form photo / fleet private field; new Admin-only removeVehicleSidePhotos (Check counts, Delete removes the stored fields and files); helper knowledge no longer asks for a vehicle photo
+- changed (27): app:DRIVER_KYC_FIELDS, app:getKycMissingFromValues, app:getDriverKycMissing, fn:classifyKycPhoto, file:src/firebaseClient.js, code:functions/fleetConvert.js, code:functions/helpKnowledge.js#other, code:functions/index.js#other, code:functions/index.js#KYC_PHOTO_PROMPTS, code:functions/index.js#fn:classifyKycPhoto, code:scripts/verifyInvariants.mjs#fullDriver, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminSettings, code:src/App.jsx#fleetPseudoDrivers, code:src/App.jsx#DRIVER_KYC_FIELDS, code:src/App.jsx#getKycMissingFromValues, code:src/App.jsx#getDriverKycMissing, code:src/App.jsx#driverSignupFormIncomplete, code:src/App.jsx#runDriverSignupFinalize, code:src/App.jsx#uploadErrorInfo, code:src/App.jsx#DriverKyc, code:src/App.jsx#DriverProfileEdit, code:src/FleetOwner.jsx#FleetVehicleForm, code:src/FleetOwner.jsx#AdminFleetVehicles
+- added (4): fn:removeVehicleSidePhotos, code:functions/index.js#fn:removeVehicleSidePhotos, code:src/firebaseClient.js#removeVehicleSidePhotos, code:functions/vehiclePhotoCleanup.js
+
+## 2026-11-25 -- docs + invariant: vehicle side photo removal contract N59, real cleanup test wired in
+- changed (2): code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
+- added (1): code:scripts/serverTests/removeVehicleSidePhotos.cjs
+
+## 2026-11-25 -- CLAUDE.md: vehicle side photo removal paragraph + notes on the old KYC / sign-up paragraphs
+- changed (1): code:CLAUDE.md

@@ -3,7 +3,7 @@
 // makes: placeholder vehicleSpec with no capacity, so the account itself is never listed as a vehicle) and his real vehicle is kept as `ownVehicleSpec`.
 // Pure decision function -- functions/index.js (convertDriverToFleetOwner) does the writes.
 function fleetPlaceholderSpec() {
-  return { type: "fleet", photo: null, photoFront: null, photoSide: null, capacityKg: null, vehicleNumber: null, fleet: true };
+  return { type: "fleet", photo: null, photoFront: null, capacityKg: null, vehicleNumber: null, fleet: true };
 }
 function ownVehicleId(mobile) { return `${mobile}_own`; }
 function humanVehicleName(spec) {
@@ -28,7 +28,6 @@ function buildFleetConversion(driver, mobile) {
       ownerMobile: mobile, driverName: String(driver.name || mobile), driverMobile: mobile, vehicleNumber, vehicleName, capacityKg,
       driverPhotoUrl: (driver.photo && driver.photo.url) || (driver.docs && driver.docs.photo && driver.docs.photo.url) || null,
       dlPhotoUrl: (driver.docs && driver.docs.dl && driver.docs.dl.url) || null,
-      vehicleSideUrl: (spec.photoSide && spec.photoSide.url) || null,
     },
     ownerPatch: { fleetOwner: true, fleetSetupDone: true, fleetVehicleCount: 1, ownVehicleSpec: spec, vehicleSpec: fleetPlaceholderSpec() },
   };

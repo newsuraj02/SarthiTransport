@@ -59,7 +59,7 @@ function loadSignupFinalizeFn() {
 const photo = (n) => ({ name: `${n}.jpg`, url: `https://example.test/${n}.jpg` });
 const fullDriver = () => ({
   name: "Ramesh", mobile: "9999999999", kyc: "Approved", photo: photo("p"), docs: { dl: photo("dl"), photo: photo("p") },
-  vehicleSpec: { type: "tata-109", vehicleNumber: "MH14XX1234", capacityKg: 2500, photoSide: photo("side") },
+  vehicleSpec: { type: "tata-109", vehicleNumber: "MH14XX1234", capacityKg: 2500 },
 });
 
 const VM_ALL_LABELS = (vm) => vm.VEHICLE_MODEL_CATALOG.flatMap((c) => c.models.map((m) => `${c.company} ${m.name}`));
@@ -137,9 +137,9 @@ const checks = [
   ["Inter + Noto Sans Devanagari font is loaded and applied app-wide", () => css.includes('"Inter", "Noto Sans Devanagari"') && read("index.html").includes("family=Inter") && !css.includes("font-family: \"Arial Black\"")],
 
   // ---- Driver KYC is mandatory (owner rule 2026-10-27) ----
-  ["KYC mandatory fields are exactly: photo, license, vehicle name/number/capacity, side photo -- no dimensions", () => {
+  ["KYC mandatory fields are exactly: photo, license, vehicle name/number/capacity -- no vehicle photo, no dimensions (owner 2026-11-25: the side photo was removed)", () => {
     const k = loadKycFns();
-    return JSON.stringify(k.DRIVER_KYC_FIELDS.map((f) => f.key)) === JSON.stringify(["photo", "dl", "vehicleName", "vehicleNumber", "capacityKg", "vehicleSide"])
+    return JSON.stringify(k.DRIVER_KYC_FIELDS.map((f) => f.key)) === JSON.stringify(["photo", "dl", "vehicleName", "vehicleNumber", "capacityKg"])
       && !k.DRIVER_KYC_FIELDS.some((f) => /length|width|height|dimension/i.test(f.key + f.en));
   }],
   ["a fully filled driver is complete; missing ANY single mandatory field makes them incomplete", () => {
@@ -148,19 +148,19 @@ const checks = [
     const breakers = [
       (d) => { d.photo = null; d.docs.photo = null; }, (d) => { d.docs.dl = null; },
       (d) => { d.vehicleSpec.type = ""; }, (d) => { d.vehicleSpec.vehicleNumber = "  "; },
-      (d) => { d.vehicleSpec.capacityKg = null; }, (d) => { d.vehicleSpec.photoSide = null; },
+      (d) => { d.vehicleSpec.capacityKg = null; },
     ];
     return breakers.every((brk, i) => { const d = fullDriver(); brk(d); return !k.isDriverKycComplete(d) && k.getDriverKycMissing(d).length === 1 && k.getDriverKycMissing(d)[0] === k.DRIVER_KYC_FIELDS[i].key; });
   }],
   ["capacity must be a real positive number ('0', 'abc', '-5' don't count)", () => {
     const k = loadKycFns();
-    const miss = (c) => k.getKycMissingFromValues({ photo: photo("p"), dl: photo("d"), vehicleName: "x", vehicleNumber: "y", capacityKg: c, vehicleSide: photo("s") }).length;
+    const miss = (c) => k.getKycMissingFromValues({ photo: photo("p"), dl: photo("d"), vehicleName: "x", vehicleNumber: "y", capacityKg: c }).length;
     return miss("750") === 0 && miss(750) === 0 && miss("0") === 1 && miss("abc") === 1 && miss("-5") === 1 && miss("") === 1 && miss(null) === 1;
   }],
   ["no saved KYC at all (or no driver) is incomplete with every field outstanding; vehicle front photo is NOT required", () => {
     const k = loadKycFns();
     const d = fullDriver(); d.vehicleSpec.photoFront = null; d.vehicleSpec.photo = null;
-    return k.getDriverKycMissing({ name: "A", mobile: "1", vehicleSpec: null, docs: null }).length === 6 && k.getDriverKycMissing(null).length === 6 && k.isDriverKycComplete(d);
+    return k.getDriverKycMissing({ name: "A", mobile: "1", vehicleSpec: null, docs: null }).length === 5 && k.getDriverKycMissing(null).length === 5 && k.isDriverKycComplete(d);
   }],
   ["legacy driver whose only profile photo is driver.photo still counts as having a photo", () => {
     const k = loadKycFns();
@@ -288,7 +288,7 @@ const checks = [
   ["INCOMPLETE-KYC ROW (owner 2026-11-15: 'if any of the document or entry is incomplete, a row appears with Incomplete KYC. Kindly fill first to accept loads with a fill button on the right end, on top of the main screen of the driver just below the hamburger menu row, evidently visible'): REPLACES the old dismissible orange reminder; it is a red row with a warning icon, the sentence and a big white Fill button at the right end (pulsing ring), rendered right after the fixed hamburger row on the idle home screen while the saved KYC is incomplete, NO Later / dismiss, Fill opens the KYC form; nothing is locked behind it", () => !app.includes("KycReminderBanner") && !app.includes("kycReminderDismissed") && app.includes("function KycIncompleteBar(") && app.includes("Incomplete KYC. Kindly fill first to accept loads.") && app.includes("KYC अधूरी है। लोड स्वीकार करने के लिए पहले भरें।") && app.includes("data-kyc-incomplete-fill") && app.includes("ring-pulse-yellow") && app.includes('{realHamburgerVisible && !isDriverKycComplete(driver) && <KycIncompleteBar lang={lang} onFill={() => setSettingsView("kyc")} />}') && app.indexOf("<KycIncompleteBar lang={lang}") > app.indexOf("data-kyc-incomplete-bar") - 1 && !/function KycIncompleteBar[\s\S]{0,1600}onDismiss/.test(app) && /\{realHamburgerVisible && \(\s*<div className="relative z-20 shrink-0 flex items-center justify-between[\s\S]{0,2400}<KycIncompleteBar lang=\{lang\}[\s\S]{0,200}<div className=\{`flex-1 overflow-y-auto relative/.test(app)],
   ["NO DRIVER WITHOUT THE FORM -- SERVER RULES + ADMIN (owner 2026-11-15, screenshots of Admin -> New Registrations: drivers registered in the last days with NO documents, vehicle number or size, one labelled 'Form complete -- pending'): ROOT CAUSE = the old sign-up 'I own several vehicles' choice made an account at once (Pending, a vehicle record with nothing in it, fleetOwner true, no documents) and Admin's badge called any vehicle record 'Form completed'; ALSO an empty profile / the no-login KYC-portal link could set kyc Approved, fleetOwner or the wallet. NOW firestore.rules: a driver's own session and the portal link share driverProtectedFieldsUnchanged and can never change fleetOwner (only Admin / the server callable), a driver profile cannot be CREATED with fleetOwner true; Admin shows 'Documents missing' for ANY driver whose KYC is incomplete (never 'Form completed') and the Approve button is disabled with a red note; the same single completeness definition as the driver app. The rules were run in the Firestore emulator (scripts/rulesTest/driverSignup.mjs: 8 cases FAIL on the old rules, all 18 ok on the new)", () => { const rl = read('firestore.rules'); const blk = rl.slice(rl.indexOf('match /drivers/{mobile} {'), rl.indexOf('match /fleetVehicles/{id}')); const ruleOk = /allow update: if isAdmin\(\)\s*\|\|\s*\(\(resource\.data\.vehicleSpec == null \|\| isOwnPhone\(mobile\)\)\s*&& driverProtectedFieldsUnchanged\(\)\s*&& request\.resource\.data\.get\('fleetOwner', false\) == resource\.data\.get\('fleetOwner', false\)\);/.test(blk) && blk.includes("request.resource.data.get('fleetOwner', false) != true") && !/allow update: if isAdmin\(\)\s*\|\|\s*resource\.data\.vehicleSpec == null/.test(blk); const adm = stripComments(read('src/AdminPanel.jsx'), 'AdminPanel.jsx'); const badge = adm.includes('if (!isDriverKycComplete(d)) return { text: lang === "en" ? "Documents missing"') && adm.indexOf('"Documents missing"') < adm.indexOf('"Form completed — Pending"') && adm.includes('data-admin-approve onClick={() => updateDriverKyc(dr.mobile, "Approved")} disabled={!isDriverKycComplete(dr)}') && adm.includes('data-admin-cannot-approve'); const test = read('scripts/rulesTest/driverSignup.mjs').includes('old app\'s fleet sign-up'); return ruleOk && badge && test; }],
   ["INCOMPLETE KYC CANNOT ACCEPT A LOAD (owner 2026-11-15: 'block accepting loads until KYC is complete'): driverRespondBooking -- the ONE function every Accept goes through (the in-app card, the native ring screen's Accept, a parked ring tap) -- refuses an Accept while !isDriverKycComplete(driver) with 'Incomplete KYC. Please complete your KYC first to accept loads.' (hi / mr too), AFTER the decline branch (a Reject / decline stays open) and BEFORE the fleet branch and the claim, so nothing is claimed; a parked ring tap shows that refusal instead of failing silently; the red Incomplete-KYC row is the way out. Reaching the claim with a complete KYC is unchanged", () => { const a = stripComments(app, 'App.jsx'); const f = a.indexOf('const driverRespondBooking = async (bookingId, accept, opts = null) => {'); const body = a.slice(f, a.indexOf('const driverRespondBookingRef = useRef(', f)); const decline = body.indexOf('addDeclinedBy("bookings", bookingId, driver.name)'); const block = body.indexOf('if (!isDriverKycComplete(driver)) return lang === "en" ? "Incomplete KYC. Please complete your KYC first to accept loads."'); const fleet = body.indexOf('if (driver.fleetOwner && !opts?.fleetVehicle)'); const claim = body.indexOf('claimBooking(bookingId'); return f > 0 && decline > 0 && block > decline && fleet > block && claim > fleet && body.includes('KYC अधूरी है। लोड स्वीकार करने के लिए पहले अपनी KYC पूरी करें।') && body.includes('KYC अपूर्ण आहे. लोड स्वीकारण्यासाठी आधी तुमचे KYC पूर्ण करा.') && a.includes('driverRespondBookingRef.current(pending.bookingId, pending.accept).then((err) => { if (err && !isDriverKycComplete(driverLatestRef.current)) window.alert(err);'); }],
-  ["NO ACCOUNT BEFORE THE FORM IS COMPLETE, EVEN INDIRECTLY (owner 2026-11-15: 'until the new driver has filled all the entries it wont open Create Account or create an account indirectly'): driverSignupFormIncomplete is run for real -- any missing photo (the File itself), licence, vehicle, weight, a number that is not AB12AB1234, or an unticked clause means incomplete; only the full set is complete -- and createAccountAndSubmit asks it before createUserWithEmailAndPassword (so even a call that skips the disabled button creates nothing), and the form hands over the clause", async () => { const { isValidVehicleNumber } = await import(pathToFileURL(join(root, 'src', 'inputRules.js')).href); const start = app.indexOf('const DRIVER_KYC_FIELDS'), end = app.indexOf('// END driver KYC completeness helpers'); const f = new Function('isValidVehicleNumber', app.slice(start, end).replace(/\bexport /g, '') + '; return driverSignupFormIncomplete;')(isValidVehicleNumber); const ph = (n) => ({ name: n, url: 'blob:' + n, file: { name: n } }); const ok = { photo: ph('p'), dl: ph('d'), vehiclePhotoSide: ph('s'), vehicleTypeName: 'Tata Motors Ace Gold', capacityKg: '700', vehicleNumber: 'MH12AB1234', acceptedTerms: true }; const bad = (o) => f({ ...ok, ...o }) === true; const logic = f(ok) === false && f(null) === true && f({}) === true && bad({ photo: null }) && bad({ dl: null }) && bad({ vehiclePhotoSide: null }) && bad({ photo: { name: 'p', url: 'blob:p' } }) && bad({ vehicleTypeName: '' }) && bad({ capacityKg: '' }) && bad({ capacityKg: '0' }) && bad({ vehicleNumber: '' }) && bad({ vehicleNumber: 'MH12AB123' }) && bad({ vehicleNumber: 'MH-14-XX-XXXX' }) && bad({ acceptedTerms: false }) && bad({ acceptedTerms: undefined }); const body = app.slice(app.indexOf('function DriverOnboarding('), app.indexOf('function DriverKycPortal(')); const guard = /const createAccountAndSubmit = async \(values\) => \{[\s\S]{0,900}driverSignupFormIncomplete\(values\)[\s\S]{0,1800}signInAfterOtp\(authInstance, "driver", "signup"\)/.test(body) && app.includes('acceptedTerms: !termsMissing }'); return logic && guard; }],
+  ["NO ACCOUNT BEFORE THE FORM IS COMPLETE, EVEN INDIRECTLY (owner 2026-11-15: 'until the new driver has filled all the entries it wont open Create Account or create an account indirectly'): driverSignupFormIncomplete is run for real -- any missing photo (the File itself), licence, vehicle, weight, a number that is not AB12AB1234, or an unticked clause means incomplete; only the full set is complete -- and createAccountAndSubmit asks it before createUserWithEmailAndPassword (so even a call that skips the disabled button creates nothing), and the form hands over the clause", async () => { const { isValidVehicleNumber } = await import(pathToFileURL(join(root, 'src', 'inputRules.js')).href); const start = app.indexOf('const DRIVER_KYC_FIELDS'), end = app.indexOf('// END driver KYC completeness helpers'); const f = new Function('isValidVehicleNumber', app.slice(start, end).replace(/\bexport /g, '') + '; return driverSignupFormIncomplete;')(isValidVehicleNumber); const ph = (n) => ({ name: n, url: 'blob:' + n, file: { name: n } }); const ok = { photo: ph('p'), dl: ph('d'), vehicleTypeName: 'Tata Motors Ace Gold', capacityKg: '700', vehicleNumber: 'MH12AB1234', acceptedTerms: true }; const bad = (o) => f({ ...ok, ...o }) === true; const logic = f(ok) === false && f(null) === true && f({}) === true && bad({ photo: null }) && bad({ dl: null }) && bad({ photo: { name: 'p', url: 'blob:p' } }) && bad({ vehicleTypeName: '' }) && bad({ capacityKg: '' }) && bad({ capacityKg: '0' }) && bad({ vehicleNumber: '' }) && bad({ vehicleNumber: 'MH12AB123' }) && bad({ vehicleNumber: 'MH-14-XX-XXXX' }) && bad({ acceptedTerms: false }) && bad({ acceptedTerms: undefined }); const body = app.slice(app.indexOf('function DriverOnboarding('), app.indexOf('function DriverKycPortal(')); const guard = /const createAccountAndSubmit = async \(values\) => \{[\s\S]{0,900}driverSignupFormIncomplete\(values\)[\s\S]{0,1800}signInAfterOtp\(authInstance, "driver", "signup"\)/.test(body) && app.includes('acceptedTerms: !termsMissing }'); return logic && guard; }],
   ["Uninstalled list: any recent sign of life (app open, live GPS, push-token save) keeps a driver OUT of it; only 14+ days of total silence puts them in", () => {
     const f = loadUninstallFn(); const D = 86400000; const ago = (d) => Date.now() - d * D; const ts = (d) => ({ toMillis: () => ago(d) });
     return f({ createdAt: ts(60), lastActiveAt: ts(20) }) === true                       // silent 20 days
@@ -488,30 +488,30 @@ const checks = [
     return i > 0 && j > i && l > j && m > l && count(app, "<DocsTermsCheckbox lang={lang}") === 1;
   }],
   ["sign-up forms never remember typed values and Back wipes them (owner 2026-10-28)", () => !app.includes("sarthi_customerReg_name") && !app.includes("sarthi_customerReg_firmName") && !app.includes("sarthi_customerReg_photo") && !app.includes("sarthi_driverReg_name\"") && count(app, "const resetForm = () => {") === 2 && count(app, "resetForm(); setMode(null);") === 4 && app.includes('<button onClick={resetForm} className="flex items-center gap-1 mb-1 p-3')],
-  ["Photos picked before the account exists are held in memory only (never persisted) and uploaded after it", () => count(app, ", !deferred);") === 8 && app.includes("setVal({ name: f.name, url: URL.createObjectURL(f), file: f });") && app.includes("await runDriverSignupFinalize(pendingSignupRef.current, driver, {")],
-  ["runDriverSignupFinalize (real code): uploads first, then ONE complete profile patch (Pending, name, docs, vehicle, side photo) -- the doc a driver ends up with is KYC-complete", async () => {
+  ["Photos picked before the account exists are held in memory only (never persisted) and uploaded after it", () => count(app, ", !deferred);") === 7 && app.includes("setVal({ name: f.name, url: URL.createObjectURL(f), file: f });") && app.includes("await runDriverSignupFinalize(pendingSignupRef.current, driver, {")],
+  ["runDriverSignupFinalize (real code): uploads first, then ONE complete profile patch (Pending, name, docs, vehicle) -- the doc a driver ends up with is KYC-complete", async () => {
     const run = loadSignupFinalizeFn(), k = loadKycFns();
     const calls = []; const saved = [];
     const f = (n) => ({ file: { name: n }, url: "blob:" + n, name: n });
-    const pending = { name: "Suresh Jadhav", photo: f("me"), dl: f("dl"), vehiclePhotoSide: f("side"), vehicleTypeName: "Tata 109", capacityKg: "2500", vehicleNumber: " mh14ab1234 " };
+    const pending = { name: "Suresh Jadhav", photo: f("me"), dl: f("dl"), vehicleTypeName: "Tata 109", capacityKg: "2500", vehicleNumber: " mh14ab1234 " };
     const types = [];
     await run(pending, { mobile: "9123456780", name: "9123456780", kyc: null }, {
       uploadPhoto: async (file, path) => { calls.push(path); return { name: file.name, url: "https://x/" + path }; },
       classifyPhoto: async () => ({ ok: true, isMatch: true }), setDriver: (d) => saved.push(d), addVehicleType: (t) => types.push(t), vehicleTypes: [], slugify: (x) => x.toLowerCase().replace(/\s+/g, "-"), ref: "9000000000",
     });
     const d = saved[0];
-    return saved.length === 1 && JSON.stringify(calls) === JSON.stringify(["drivers/9123456780/photo.jpg", "drivers/9123456780/dl.jpg", "drivers/9123456780/vehicleSide.jpg"])
+    return saved.length === 1 && JSON.stringify(calls) === JSON.stringify(["drivers/9123456780/photo.jpg", "drivers/9123456780/dl.jpg"])
       && d.kyc === "Pending" && d.name === "Suresh Jadhav" && d.referredBy === "9000000000" && d.vehicleSpec.vehicleNumber === "MH14AB1234" && d.vehicleSpec.capacityKg === 2500 && d.vehicleSpec.type === "tata-109"
       && types.length === 1 && types[0].key === "tata-109" && k.isDriverKycComplete(d);
   }],
-  ["runDriverSignupFinalize: a wrong-kind DL/side photo (AI check) is NOT saved and not uploaded -- the driver lands on Incomplete form listing exactly that item; an upload failure saves nothing", async () => {
+  ["runDriverSignupFinalize: a wrong-kind DL photo (AI check) is NOT saved and not uploaded -- the driver lands on Incomplete form listing exactly that item; an upload failure saves nothing", async () => {
     const run = loadSignupFinalizeFn(), k = loadKycFns();
     const f = (n) => ({ file: { name: n }, url: "blob:" + n, name: n });
-    const pending = { name: "S J", photo: f("me"), dl: f("dl"), vehiclePhotoSide: f("side"), vehicleTypeName: "Tata", capacityKg: "900", vehicleNumber: "MH12" };
+    const pending = { name: "S J", photo: f("me"), dl: f("dl"), vehicleTypeName: "Tata", capacityKg: "900", vehicleNumber: "MH12" };
     const uploads = []; const saved = [];
     await run(pending, { mobile: "9123456780" }, {
       uploadPhoto: async (file, path) => { uploads.push(path); return { name: file.name, url: "u" }; },
-      classifyPhoto: async (file, type) => (type === "vehicleSide" ? { ok: true, isMatch: false } : { ok: true, isMatch: true }),
+      classifyPhoto: async (file, type) => (type === "drivingLicense" ? { ok: true, isMatch: false } : { ok: true, isMatch: true }),
       setDriver: (d) => saved.push(d), addVehicleType: () => {}, vehicleTypes: [{ key: "tata", label: "Tata" }], slugify: (x) => x, ref: null,
     });
     const missing = k.getDriverKycMissing(saved[0]);
@@ -519,7 +519,33 @@ const checks = [
     try {
       await run(pending, { mobile: "9123456780" }, { uploadPhoto: async () => null, classifyPhoto: async () => null, setDriver: (d) => saved2.push(d), addVehicleType: () => {}, vehicleTypes: [], slugify: (x) => x, ref: null });
     } catch { threw = true; }
-    return !uploads.some((u) => u.includes("vehicleSide")) && saved[0].vehicleSpec && saved[0].vehicleSpec.photoSide === null && JSON.stringify(missing) === '["vehicleSide"]' && threw && saved2.length === 0;
+    return !uploads.some((u) => u.includes("/dl.jpg")) && saved[0].docs && saved[0].docs.dl === null && JSON.stringify(missing) === '["dl"]' && threw && saved2.length === 0;
+  }],
+  ["VEHICLE SIDE PHOTO IS GONE EVERYWHERE (owner 2026-11-25: 'the vehicle side photo is irrelevant ... delete it from the Driver sign-up and the Add extra vehicle form, and all its associates from the database and the frontend'): no KYC field, form tile, upload, AI check, Admin thumbnail, fleet field or helper sentence for it remains; a driver is complete without it; the Admin-only cleanup lists / deletes ONLY the side-photo fields and files, and only on apply === true", async () => {
+    const strip = (t) => t.replace(/\/\/.*$/gm, "").split('"sarthi_driverKyc_photoSide"').join(""); // the one allowed mention: the line that forgets the old on-phone draft
+    const cleanupStart = fns.indexOf("exports.removeVehicleSidePhotos"), cleanupEnd = fns.indexOf("// ---------------- Daily health check (live-backend half)");
+    const fnsNoCleanup = fns.slice(0, cleanupStart) + fns.slice(cleanupEnd);
+    const sources = [app, admin, read("src/FleetOwner.jsx"), read("src/firebaseClient.js"), read("functions/fleetConvert.js"), fnsNoCleanup];
+    const gone = sources.every((t) => !/photoSide|vehicleSide|vehiclePhotoSide|vehicleSideUrl|not_side_view/.test(strip(t)));
+    const k = loadKycFns(); const d = fullDriver();
+    const complete = !("photoSide" in d.vehicleSpec) && k.isDriverKycComplete(d) && !k.DRIVER_KYC_FIELDS.some((f) => /side|vehiclePhoto/i.test(f.key));
+    const help = read("functions/helpKnowledge.js"); const helpOk = !/side photo|a vehicle photo/i.test(help);
+    const { planVehiclePhotoCleanup } = createRequire(import.meta.url)(join(root, "functions", "vehiclePhotoCleanup.js"));
+    const plan = planVehiclePhotoCleanup({
+      drivers: [{ id: "9000000001", vehicleSpec: { type: "a", photoSide: { url: "u" } }, photo: { url: "me" }, docs: { dl: { url: "d" } } }, { id: "9000000002", vehicleSpec: { type: "b", photoSide: null }, ownVehicleSpec: { photoSide: { url: "o" }, type: "c" } }, { id: "9000000003", vehicleSpec: { type: "c" } }],
+      fleetPrivate: [{ id: "f1", vehicleSideUrl: "x", driverPhotoUrl: "y" }, { id: "f2", driverPhotoUrl: "y" }],
+      storageNames: ["drivers/9000000001/vehicleSide.jpg", "drivers/9000000001/dl.jpg", "drivers/9000000001/photo.jpg", "drivers/9000000009/fleet_9000000009_own_vehicle.jpg", "drivers/9000000009/fleet_ab12_driver.jpg", "drivers/9000000009/fleet_ab12_dl.jpg", "bookings/b1/bill.jpg", "drivers/9000000001/vehicleSide.jpg.bak"],
+    });
+    const planOk = JSON.stringify(plan.driverPatches) === JSON.stringify([{ mobile: "9000000001", fields: ["vehicleSpec.photoSide"] }, { mobile: "9000000002", fields: ["vehicleSpec.photoSide", "ownVehicleSpec.photoSide"] }])
+      && JSON.stringify(plan.fleetIds) === '["f1"]' && JSON.stringify(plan.files) === JSON.stringify(["drivers/9000000001/vehicleSide.jpg", "drivers/9000000009/fleet_9000000009_own_vehicle.jpg"]);
+    const planEmpty = JSON.stringify(planVehiclePhotoCleanup({})) === '{"driverPatches":[],"fleetIds":[],"files":[]}';
+    const cb = fns.slice(cleanupStart, cleanupEnd);
+    const guarded = cb.includes('request.auth?.token?.admin !== true') && cb.includes('request.data?.apply === true') && cb.includes("FieldValue.delete()") && !/\.set\(|\.add\(|\.create\(/.test(cb) && cb.indexOf("if (apply)") > 0 && cb.indexOf("batch.update") > cb.indexOf("if (apply)");
+    const ui = admin.includes("data-side-photo-check") && admin.includes("data-side-photo-delete") && admin.includes("removeVehicleSidePhotos(apply)");
+    const kycForm = !app.includes("Vehicle Photo (Side)") && !app.includes("For a good photo:");
+    const forgetsDraft = count(app, 'removeItem("sarthi_driverKyc_photoSide")') === 2;
+    let real = false; try { execFileSync(process.execPath, [join(root, "scripts", "serverTests", "removeVehicleSidePhotos.cjs")], { stdio: "pipe" }); real = true; } catch (e) { console.error("   real removeVehicleSidePhotos run failed:\n" + String(e.stdout || "").split("\n").filter((l) => l.startsWith("BUG")).join("\n")); }
+    return real && forgetsDraft && gone && complete && helpOk && planOk && planEmpty && guarded && ui && kycForm;
   }],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }}>KYC · {km.label}</span>') && !/background: [^}]*isDriverKycComplete[^}]*KYC · \{km\.label\}/.test(admin)], // the driver-list KYC badge itself stays plain; the New Registrations badge / Approve button DO read completeness (owner 2026-11-15, contract N34)
 
@@ -738,10 +764,10 @@ const checks = [
     const dsStart = app.indexOf("function driverInstallStatus(driver) {"); const dsCode = app.slice(dsStart, app.indexOf("\n}\n", dsStart) + 3);
     const fns = new Function("DAY_MS", "MAX_BOOKING_WEIGHT_KG", "looksLikeVehicleName", kycCode + "\n" + unCode + "\n" + dsCode + "\n" + app.slice(start, end).replace(/\bexport /g, "") + "; return { partitionDriversByInstallAndKyc, driverKycDetailsProblem, kycProblemText };")(86400000, 35000, (await import(pathToFileURL(join(root, "src", "vehicleModels.js")).href)).looksLikeVehicleName);
     const now = Date.now(); const photo = { url: "u" };
-    const good = (o = {}) => ({ mobile: "m" + Math.random(), name: "x", kyc: "Approved", photo, docs: { dl: photo, photo }, vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1500, photoSide: photo }, lastActiveAt: now, ...o });
+    const good = (o = {}) => ({ mobile: "m" + Math.random(), name: "x", kyc: "Approved", photo, docs: { dl: photo, photo }, vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1500 }, lastActiveAt: now, ...o });
     const D = {
       done: good(), pending: good({ kyc: "Pending" }), never: { mobile: "n", name: "x", lastActiveAt: now }, rejected: good({ kyc: "Rejected" }),
-      noDl: good({ docs: { photo } }), tons: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1.7, photoSide: photo } }), huge: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 250000, photoSide: photo } }),
+      noDl: good({ docs: { photo } }), tons: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 1.7 } }), huge: good({ vehicleSpec: { type: "t", vehicleNumber: "MH12", capacityKg: 250000 } }),
       old: good({ lastActiveAt: now - 40 * 86400000 }), blocked: good({ blacklisted: true }), fleetOk: { mobile: "f", name: "f", kyc: "Approved", fleetOwner: true, fleetSetupDone: true, fleetVehicleCount: 2, vehicleSpec: { type: "fleet", capacityKg: null }, lastActiveAt: now },
       fleetNew: { mobile: "g", name: "g", kyc: "Approved", fleetOwner: true, fleetSetupDone: false, fleetVehicleCount: 0, vehicleSpec: { type: "fleet", capacityKg: null }, lastActiveAt: now },
     };
@@ -870,7 +896,7 @@ const checks = [
     const form = kyc.includes("cleanVehicleNumberInput(e.target.value)") && kyc.includes("!isValidVehicleNumber(vehicleNumber)") && kyc.includes('placeholder="MH12AB1234"') && kyc.includes("vehicleNumberHint(lang)");
     const noKind = !onb.includes("accountKind") && !onb.includes("data-account-kind") && !onb.includes("fleet: true") && !onb.includes(".fleet)") && onb.includes("<DriverKyc deferred");
     const onlyCreate = (onb.match(/signInAfterOtp\(authInstance, "driver", "signup"\)/g) || []).length === 1 && !onb.includes("createUserWithEmailAndPassword(") && /const createAccountAndSubmit = async[\s\S]{0,2200}signInAfterOtp\(authInstance, "driver", "signup"\)/.test(onb) && !onb.includes("goToDocsStage");
-    const fleetForm = fleet.includes("cleanVehicleNumberInput(e.target.value)") && fleet.includes("isValidVehicleNumber(v.vehicleNumber)") && fleet.includes("if (!files.vehicleSide) missing.push(") && !fleet.includes("(optional)") && fleet.includes("required label={T(lang, \"Vehicle photo\"");
+    const fleetForm = fleet.includes("cleanVehicleNumberInput(e.target.value)") && fleet.includes("isValidVehicleNumber(v.vehicleNumber)") && !fleet.includes("vehicleSide") && !fleet.includes("Vehicle photo") && !fleet.includes("(optional)");
     const picker = !pk.includes("data-vehicle-search") && !pk.includes("setQuery");
     return rule && form && noKind && onlyCreate && fleetForm && picker; }],
   ["ADMIN BOOKINGS: THE FOUR LIVE GROUPS ARE DROPDOWNS, ONE OPEN AT A TIME (owner 2026-11-23: 'I want the Bookings sections (Current, Current return, Advance, Advance return) to be in a dropdown, the list needs to be in the dropdown and only one of them is open at a time'): in Admin -> Bookings each of the four live groups is a header button (title, count, chevron) that opens its list; closed by default; opening one closes the one that was open (a single openLiveGroup state, not one flag per group), tapping the open one closes it; Booked today / Cancelled today / Total advance bookings stay plain lists; the list inside keeps its search bar when it holds more than 20 entries", () => {

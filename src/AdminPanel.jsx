@@ -28,7 +28,7 @@ import { needsListSearch, filterByQuery, matchesQuery, personSearchText, booking
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import AdminHelperLog from "./AdminHelperLog.jsx";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverSms, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverSms, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity, removeVehicleSidePhotos } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -1120,12 +1120,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                                 return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${dr.name}-${key}.jpg`} />;
                               })}
                             </div>
-                            {(dr.vehicleSpec?.photo || dr.vehicleSpec?.photoSide) && (
+                            {dr.vehicleSpec?.photo && (
                               <>
                                 <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
                                 <div className="grid grid-cols-2 gap-2 mb-2">
                                   {dr.vehicleSpec?.photo && <KycDocThumb url={dr.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${dr.name}-vehicle-front.jpg`} />}
-                                  {dr.vehicleSpec?.photoSide && <KycDocThumb url={dr.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${dr.name}-vehicle-side.jpg`} />}
                                 </div>
                               </>
                             )}
@@ -3399,12 +3398,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
               })}
             </div>
-            {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+            {d.vehicleSpec?.photo && (
               <>
                 <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
-                  {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
                 </div>
               </>
             )}
@@ -4016,6 +4014,17 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
     setRepairBusy(false);
     setRepairResult(res || { ok: false });
   };
+  // Vehicle side photo removal (owner 2026-11-25): "Check" only COUNTS what is stored, "Delete" removes it for good; see functions/vehiclePhotoCleanup.js.
+  const [sideBusy, setSideBusy] = useState(false);
+  const [sideResult, setSideResult] = useState(null);
+  const runSideCleanup = async (apply) => {
+    if (sideBusy) return;
+    if (apply && !window.confirm(lang === "en" ? "Delete every stored vehicle side photo (database fields and files)? This cannot be undone." : lang === "mr" ? "साठवलेले सर्व गाडीचे बाजूचे फोटो (डेटाबेस व फाइल) कायमचे हटवायचे? हे परत आणता येणार नाही." : "सभी सेव किए हुए गाड़ी के साइड फोटो (डेटाबेस और फाइलें) हमेशा के लिए हटाएँ? यह वापस नहीं हो सकता।")) return;
+    setSideBusy(true);
+    const res = await removeVehicleSidePhotos(apply);
+    setSideBusy(false);
+    setSideResult(res || { ok: false });
+  };
   const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
   const downloadMetaUsers = async () => {
     if (metaPreparing) return;
@@ -4113,6 +4122,37 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
               {lang === "en" ? "In Meta choose Customer list → \"Copy and paste your customer list\", then paste these numbers (long-press → Select all → Copy if the button above didn't copy):" : lang === "mr" ? "Meta मध्ये Customer list → \"Copy and paste your customer list\" निवडा आणि हे नंबर पेस्ट करा (वरचे बटण कॉपी न करल्यास: दाबून धरा → Select all → Copy):" : "Meta में Customer list → \"Copy and paste your customer list\" चुनें और ये नंबर पेस्ट करें (ऊपर का बटन कॉपी न करे तो: दबाकर रखें → Select all → Copy):"}
             </div>
             <textarea readOnly value={metaNumbersText} onFocus={(e) => e.target.select()} rows={6} className="w-full rounded-lg p-2 text-xs" style={{ border: `1.5px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+          </div>
+        )}
+      </div>
+
+      <div data-side-photo-cleanup className="rounded-lg p-3 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Remove vehicle side photos" : lang === "mr" ? "गाडीचे बाजूचे फोटो हटवा" : "गाड़ी के साइड फोटो हटाएँ"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "The app no longer asks for a vehicle side photo. \"Check\" only counts what is still stored; \"Delete\" removes those photos from drivers, transporter vehicles and file storage for good. Nothing else is touched."
+            : lang === "mr" ? "अ‍ॅप आता गाडीचा बाजूचा फोटो मागत नाही. \"तपासा\" फक्त किती साठवले आहेत ते मोजते; \"हटवा\" ते फोटो ड्रायव्हर, ट्रान्सपोर्टर गाड्या आणि फाइल स्टोरेजमधून कायमचे काढते. इतर काहीही बदलत नाही."
+            : "ऐप अब गाड़ी का साइड फोटो नहीं माँगता। \"जाँचें\" सिर्फ़ गिनती बताता है; \"हटाएँ\" ड्राइवर, ट्रांसपोर्टर गाड़ियों और फाइल स्टोरेज से वे फोटो हमेशा के लिए हटा देता है। और कुछ नहीं बदलता।"}
+        </div>
+        <button data-side-photo-check onClick={() => runSideCleanup(false)} disabled={sideBusy} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: "#FFFFFF", color: C.ink, border: `1.5px solid ${C.line}` }}>
+          {sideBusy ? (lang === "en" ? "Working..." : lang === "mr" ? "काम सुरू आहे..." : "काम हो रहा है...") : (lang === "en" ? "Check (nothing is deleted)" : lang === "mr" ? "तपासा (काहीही हटत नाही)" : "जाँचें (कुछ नहीं हटता)")}
+        </button>
+        {sideResult && !sideResult.ok && (
+          <div className="mt-2 text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Could not run (needs the latest functions deploy and an Admin login)." : lang === "mr" ? "चालवता आले नाही (नवीनतम functions डिप्लॉय आणि Admin लॉगिन हवे)." : "चल नहीं सका (नया functions डिप्लॉय और Admin लॉगिन चाहिए)।"}</div>
+        )}
+        {sideResult && sideResult.ok && (
+          <div className="mt-2">
+            <div data-side-photo-result className="text-xs font-extrabold" style={{ color: sideResult.applied || sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount === 0 ? C.success : C.safety }}>
+              {sideResult.applied
+                ? (lang === "en" ? `Deleted: ${sideResult.driverCount} driver record(s), ${sideResult.fleetCount} transporter vehicle(s), ${sideResult.filesDeleted} file(s).` : lang === "mr" ? `हटवले: ${sideResult.driverCount} ड्रायव्हर नोंदी, ${sideResult.fleetCount} ट्रान्सपोर्टर गाड्या, ${sideResult.filesDeleted} फाइल.` : `हटाया: ${sideResult.driverCount} ड्राइवर रिकॉर्ड, ${sideResult.fleetCount} ट्रांसपोर्टर गाड़ियाँ, ${sideResult.filesDeleted} फाइलें।`)
+                : (sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount === 0
+                  ? (lang === "en" ? "Nothing stored. All clean." : lang === "mr" ? "काहीही साठवलेले नाही. सर्व स्वच्छ." : "कुछ सेव नहीं है। सब साफ़ है।")
+                  : (lang === "en" ? `Found: ${sideResult.driverCount} driver record(s), ${sideResult.fleetCount} transporter vehicle(s), ${sideResult.fileCount} file(s).` : lang === "mr" ? `सापडले: ${sideResult.driverCount} ड्रायव्हर नोंदी, ${sideResult.fleetCount} ट्रान्सपोर्टर गाड्या, ${sideResult.fileCount} फाइल.` : `मिले: ${sideResult.driverCount} ड्राइवर रिकॉर्ड, ${sideResult.fleetCount} ट्रांसपोर्टर गाड़ियाँ, ${sideResult.fileCount} फाइलें।`))}
+            </div>
+            {!sideResult.applied && sideResult.driverCount + sideResult.fleetCount + sideResult.fileCount > 0 && (
+              <button data-side-photo-delete onClick={() => runSideCleanup(true)} disabled={sideBusy} className="w-full rounded-lg py-3 font-bold text-sm mt-2 text-white" style={{ background: C.safety }}>
+                {lang === "en" ? "Delete them for good" : lang === "mr" ? "कायमचे हटवा" : "हमेशा के लिए हटाएँ"}
+              </button>
+            )}
           </div>
         )}
       </div>
