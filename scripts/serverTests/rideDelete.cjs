@@ -6,7 +6,7 @@ const store = {};
 const col = (n) => (store[n] ||= new Map());
 const STAMP = { __ts: true };
 const files = new Set();
-const mkRef = (name, id) => ({ __col: name, id, path: `${name}/${id}`, async get() { const d = col(name).get(id); return { exists: !!d, id, data: () => d }; } });
+const mkRef = (name, id) => ({ __col: name, id, path: `${name}/${id}`, async get() { const d = col(name).get(id); return { exists: !!d, id, data: () => d }; }, async set(d) { col(name).set(id, d); }, async delete() { col(name).delete(id); } });
 const mkQuery = (name, filters = []) => ({
   where(f, op, v) { return mkQuery(name, [...filters, [f, v]]); },
   async get() { const docs = [...col(name).entries()].filter(([, d]) => filters.every(([f, v]) => d[f] === v)).map(([id, d]) => ({ id, data: () => d, ref: mkRef(name, id) })); return { docs, size: docs.length, empty: !docs.length, forEach: (fn) => docs.forEach(fn) }; },
@@ -24,6 +24,7 @@ Module._load = function (req) {
   if (req === "firebase-functions/params") return { defineSecret: () => ({ value: () => "x" }) };
   if (req === "firebase-admin/app") return { initializeApp: () => ({}) };
   if (req === "firebase-admin/firestore") return { getFirestore: () => fakeDb, FieldValue: { serverTimestamp: () => STAMP, increment: (n) => n, arrayUnion: (...a) => a, delete: () => null }, Timestamp: { fromMillis: (m) => ({ toMillis: () => m }) } };
+  if (req === "firebase-admin/auth") return { getAuth: () => { const nf = async () => { const x = new Error("nf"); x.code = "auth/user-not-found"; throw x; }; return { getUserByEmail: nf, getUserByPhoneNumber: nf, revokeRefreshTokens: async () => {}, deleteUser: async () => {} }; } };
   if (req === "firebase-admin/storage") return { getStorage: () => ({ bucket: () => fakeBucket }) };
   if (req.startsWith("firebase-") || req.startsWith("@google-cloud")) return new Proxy(function () {}, { get: (t, k) => (k === "then" ? undefined : () => ({})), apply: () => ({}) });
   return real.apply(this, arguments);
@@ -65,5 +66,21 @@ const call = (data, admin = true) => fns.adminDeleteBookings({ auth: { token: ad
   ok("a non-Admin is refused and nothing is deleted", threw && col("bookings").size === 5);
   seed(); threw = false; try { await call({ mode: "bogus" }); } catch (e) { threw = e.code === "invalid-argument"; }
   ok("a bad mode is refused", threw && col("bookings").size === 5);
+  // BRUTAL (owner 2026-11-25): any ride of any status can be deleted by id -- today's, Advance, open, running
+  seed(); col("bookings").set("adv", { status: "Ongoing", scheduledFor: "2026-11-28 08:00", driverName: "Ravi", customerMobile: "9777000001" }); col("bookingOtps").set("adv", { otp: "2" });
+  r = await deleteBookingsCascade({ db: fakeDb, bucket: fakeBucket, mode: "ids", ids: ["run", "open", "adv", "ghost"] });
+  ok("ids mode: a running trip, an open request and an accepted Advance ride are deleted (any status), an unknown id is ignored, the rest stay", !col("bookings").has("run") && !col("bookings").has("open") && !col("bookings").has("adv") && col("bookings").has("done") && col("bookings").has("cancel") && r.deleted === 3);
+  ok("ids mode: their OTP / extras / receipts / bills go too", !col("bookingOtps").has("adv") && !col("bookingOtps").has("run") && !col("bookingExtras").has("x2") && !col("ringDeliveries").has("open_9") && !files.has("bookings/run/documents/eway.pdf") && col("bookingExtras").has("x1"));
+  seed(); threw = false; try { await call({ mode: "ids", ids: [] }); } catch (e) { threw = e.code === "invalid-argument"; }
+  ok("ids mode needs a non-empty list", threw && col("bookings").size === 5);
+  seed(); res = await call({ mode: "ids", ids: ["run", "open"] });
+  ok("the callable deletes the listed rides of any status", res.ok === true && res.deleted === 2 && !col("bookings").has("run") && col("bookings").has("done"));
+  // FORCE: deleting a person with unfinished rides
+  const seedPerson = () => { seed(); col("customers").set("9888000001", { name: "Fraud Petrol Pump" }); col("bookings").set("f1", { status: "AwaitingDriver", customerMobile: "9888000001" }); col("bookings").set("f2", { status: "Ongoing", customerMobile: "9888000001", driverName: "Ravi", driverMobile: "9111" }); col("bookings").set("f3", { status: "Completed", customerMobile: "9888000001" }); col("bookingOtps").set("f2", { otp: "3" }); };
+  seedPerson(); res = await fns.adminDeleteAccount({ auth: { token: { admin: true } }, data: { mobile: "9888000001", role: "customer" } });
+  ok("without force a person with an unfinished ride is still refused (nothing deleted)", res.ok === false && res.reason === "trip-running" && col("bookings").has("f1") && col("customers").has("9888000001"));
+  seedPerson(); res = await fns.adminDeleteAccount({ auth: { token: { admin: true } }, data: { mobile: "9888000001", role: "customer", force: true } });
+  ok("with force: every ride of that person (open, running, finished) is deleted with its OTP, then the account goes", res.ok === true && res.ridesDeleted === 3 && !col("bookings").has("f1") && !col("bookings").has("f2") && !col("bookings").has("f3") && !col("bookingOtps").has("f2") && !col("customers").has("9888000001"));
+  ok("with force: nobody else's rides are touched", col("bookings").has("done") && col("bookings").has("run") && col("bookings").has("open"));
   process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -1661,7 +1661,50 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // top-level tab. Same isToday/isFutureAdvance-based derivations and the
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
-function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct }) {
+// DELETE RIDES RIGHT FROM THE BOOKINGS LISTS (owner 2026-11-25: "cant even delete the todays ride or advance ride at all ... be brutal"): a ride of ANY status -- today's, Advance, open, running --
+// can be deleted from where it is listed. `ids` = the one ride (per-row Delete) or every ride of the list ("Delete all N"); two taps (a confirm step), then the server removes each ride together
+// with what hangs off it (functions/rideDelete.js, mode "ids"); a failure shows its real reason.
+function DeleteRideControls({ ids, onDelete, lang, all = false }) {
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (!onDelete || !ids.length) return null;
+  const n = ids.length;
+  const go = async () => {
+    setBusy(true); setErr("");
+    try { await onDelete(ids); setStep(0); }
+    catch (e) { console.error("[deleteRides]", e); setErr(String((e && e.message) || e).slice(0, 160)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div data-delete-ride-controls={all ? "all" : "one"} className={all ? "mb-2" : "mt-1.5"}>
+      {step === 0 ? (
+        <button type="button" data-delete-ride-start onClick={() => setStep(1)} className={`${all ? "w-full py-2 text-xs" : "px-2.5 py-1 text-[11px]"} rounded-lg font-bold`} style={{ color: C.safety, border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
+          {all
+            ? (lang === "en" ? `Delete all ${n} in this list` : lang === "mr" ? `या यादीतील सर्व ${n} डिलीट करा` : `इस सूची की सभी ${n} डिलीट करें`)
+            : (lang === "en" ? "Delete this ride" : lang === "mr" ? "ही राइड डिलीट करा" : "यह राइड डिलीट करें")}
+        </button>
+      ) : (
+        <div className="rounded-lg p-2" style={{ border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
+          <p className="text-[11px] font-bold mb-1.5" style={{ color: C.safety }}>
+            {lang === "en" ? `Permanently delete ${n === 1 ? "this ride" : `${n} rides`} from everywhere (customer, driver, Admin, earnings)? It cannot be undone.`
+              : lang === "mr" ? `${n === 1 ? "ही राइड" : `${n} राइड`} सगळीकडून (ग्राहक, ड्रायव्हर, अ‍ॅडमिन, कमाई) कायमची डिलीट करायची? परत येणार नाही.`
+              : `${n === 1 ? "यह राइड" : `${n} राइड`} हर जगह से (ग्राहक, ड्राइवर, एडमिन, कमाई) हमेशा के लिए डिलीट करें? वापस नहीं आएगी।`}
+          </p>
+          {err && <p data-delete-ride-error className="text-[11px] font-bold mb-1.5" style={{ color: C.safety }}>{err}</p>}
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => { setStep(0); setErr(""); }} className="flex-1 rounded-lg py-1.5 text-xs font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>{lang === "en" ? "No" : "नहीं"}</button>
+            <button type="button" data-delete-ride-confirm disabled={busy} onClick={go} className="flex-1 rounded-lg py-1.5 text-xs font-bold text-white" style={{ background: C.safety }}>
+              {busy ? (lang === "en" ? "Deleting…" : "डिलीट हो रहा है…") : (lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, डिलीट करा" : "हाँ, डिलीट करें")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bookings, tripLog, lang, drivers, fleetVehicles, fleetPrivate, fareTiers, adminRouteFares, dieselPricePerLitre, returnPct, deleteRideIds }) {
   const [bookForCustomer, setBookForCustomer] = useState(null); // the prefill (from Customer activity) of the open "Book for this customer" sheet, or null
   const [customerActivityOpen, setCustomerActivityOpen] = useState(false);
   const [openLiveGroup, setOpenLiveGroup] = useState(null); // the ONE live group (Current / Current Return / Advance / Advance Return) whose list is open (owner 2026-11-23); null = all closed
@@ -1791,7 +1834,10 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
               {s.items.length === 0 ? (
                 <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
               ) : (
-                <SearchableList items={s.items} renderItem={s.renderItem} textOf={bookingSearchText} lang={lang} />
+                <>
+                  <DeleteRideControls ids={s.items.map((it) => it.id).filter(Boolean)} onDelete={deleteRideIds} lang={lang} all />
+                  <SearchableList items={s.items} renderItem={(it) => (<div key={it.id}>{s.renderItem(it)}<DeleteRideControls ids={[it.id]} onDelete={deleteRideIds} lang={lang} /></div>)} textOf={bookingSearchText} lang={lang} />
+                </>
               )}
             </div>
           )}
@@ -4304,7 +4350,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
   const runDeleteEvery = async () => {
     setEveryBusy(true); setEveryError("");
     try { await deleteEveryRide(); setEveryDone(everyTotal); setEveryOpen(false); setEveryText(""); }
-    catch (e) { console.error("[deleteEveryRide]", e); setEveryError(lang === "en" ? "Couldn't delete everything — please try again." : lang === "mr" ? "सर्व डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सब डिलीट नहीं हो सका — फिर कोशिश करें."); }
+    catch (e) { console.error("[deleteEveryRide]", e); setEveryError((lang === "en" ? "Couldn't delete everything — please try again." : lang === "mr" ? "सर्व डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सब डिलीट नहीं हो सका — फिर कोशिश करें.") + " " + String((e && e.message) || "").slice(0, 160)); }
     finally { setEveryBusy(false); }
   };
   const runDelete = async () => {
@@ -4317,7 +4363,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       setConfirmText("");
     } catch (e) {
       console.error("[deleteAllRideHistory]", e);
-      setDeleteError(lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।");
+      setDeleteError((lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।") + " " + String((e && e.message) || "").slice(0, 160));
     } finally {
       setDeleting(false);
     }
@@ -4837,7 +4883,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ deleteEveryRide, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
@@ -4865,7 +4911,7 @@ export function AdminPanel({ deleteEveryRide, toggleCustomerBlock, waStatus, flo
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />}
+      {tab === "bookings" && <AdminBookings flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} customers={customers} bookings={bookings} tripLog={tripLog} lang={lang} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} deleteRideIds={deleteRideIds} />}
       {tab === "drivers" && (showTransporters
         ? (<div data-transporters-screen className="p-4">
             <button onClick={() => setShowTransporters(false)} aria-label={lang === "en" ? "Back" : lang === "mr" ? "मागे" : "वापस"} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>

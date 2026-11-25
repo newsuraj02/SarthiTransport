@@ -255,12 +255,12 @@ export async function adminSwitchRole(mobile, to) {
 
 // ADMIN DELETE ACCOUNT (owner 2026-11-22: "once deleted, delete it from the system (even in firebase backend)"; functions/index.js: adminDeleteAccount): removes the login, the
 // profile and the activity of a customer / driver for real. Never throws: { ok, removed?, reason? } -- reason "trip-running" / "not-found" / "not-admin" or a short error code.
-export async function adminDeleteAccount(mobile, role) {
+export async function adminDeleteAccount(mobile, role, force = false) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
     const call = httpsCallable(functions, "adminDeleteAccount");
-    const result = await call({ mobile, role });
+    const result = await call({ mobile, role, ...(force ? { force: true } : {}) });
     return result.data;
   } catch (e) {
     console.error("[adminDeleteAccount] callable failed", e);

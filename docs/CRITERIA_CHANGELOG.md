@@ -816,3 +816,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- ride delete: fall back also when the functions client is not configured
 - changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#App
+
+## 2026-11-25 -- Brutal ride deletion (owner 2026-11-25): per-ride and per-list Delete in Admin Bookings for ANY status, ids mode, forced account delete removes the person's rides, client fallback on any server failure, real error text
+- changed (13): fn:adminDeleteAccount, fn:adminDeleteBookings, file:src/firebaseClient.js, code:functions/index.js#fn:adminDeleteAccount, code:functions/index.js#fn:adminDeleteBookings, code:functions/rideDelete.js, code:scripts/serverTests/rideDelete.cjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings, code:src/AdminPanel.jsx#AdminFinance, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#App, code:src/firebaseClient.js#adminDeleteAccount
+- added (1): code:src/AdminPanel.jsx#DeleteRideControls
+
+## 2026-11-25 -- docs for the brutal ride deletion
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md

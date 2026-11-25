@@ -12849,9 +12849,13 @@ export default function App() {
   const deleteRidesEverywhere = async (mode, ids, fallbackIds) => {
     const res = await adminDeleteBookings({ mode, ...(ids ? { ids } : {}) });
     if (res && res.ok) return;
-    if (res && /not.?found|unimplemented|unavailable|not_configured/i.test(`${res.code || ""} ${res.reason || ""} ${res.message || ""}`)) { await bulkDeleteDocs("bookings", fallbackIds); return; }
-    throw new Error((res && (res.message || res.reason)) || "delete failed");
+    // BRUTAL (owner 2026-11-25: "it didn't work ... be brutal about deletion"): whatever stopped the server (not deployed yet, a timeout, anything), the ride documents themselves are
+    // still deleted from here, so a ride can never refuse to go; the leftovers it would have cleaned (OTP, extras, receipts, bills) are orphans nothing reads. Only when this fails too
+    // is the real reason thrown, so the screen can show it.
+    try { await bulkDeleteDocs("bookings", fallbackIds); }
+    catch (e) { throw new Error(`${(res && (res.message || res.reason)) || "server"} / ${(e && e.message) || "delete failed"}`); }
   };
+  const deleteRideIds = (ids) => deleteRidesEverywhere("ids", ids, ids);
   const deleteEveryRide = () => deleteRidesEverywhere("all", null, bookings.map((b) => b.id));
   const deleteAllRideHistory = () => {
     const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
@@ -13263,12 +13267,17 @@ export default function App() {
   // callable removes the login, the profile and the activity (functions/index.js adminDeleteAccount); deleting only the profile document let the person's still-valid login
   // re-create a blank profile on the next open. A running trip refuses the delete.
   const deleteAccountFor = async (mobile, role) => {
-    const res = await adminDeleteAccount(mobile, role);
+    let res = await adminDeleteAccount(mobile, role, true); // force: Admin already confirmed, so the person's unfinished rides are deleted too (owner 2026-11-25)
+    if (res?.reason === "trip-running") {
+      // a server that does not know "force" yet (functions not redeployed): delete this person's rides from here, then ask again
+      const mine = bookings.filter((b) => b.customerMobile === mobile || b.driverMobile === mobile).map((b) => b.id);
+      try { await bulkDeleteDocs("bookings", mine); res = await adminDeleteAccount(mobile, role, true); } catch (e) { console.error("[deleteAccountFor] rides", e); }
+    }
     // loaded on demand: only Admin ever reaches this, and the customer / driver bundle must not carry Admin code
     const { showSwitchToast } = await import("./AdminSwitchRole.jsx");
     const who = role === "driver" ? { en: "Driver", hi: "ड्राइवर", mr: "ड्रायव्हर" } : { en: "Customer", hi: "कस्टमर", mr: "कस्टमर" };
     if (res?.ok) {
-      showSwitchToast(lang === "en" ? `${who.en} ${mobile} deleted everywhere (login + profile).` : lang === "mr" ? `${who.mr} ${mobile} पूर्णपणे हटवला (लॉगिन + प्रोफाइल).` : `${who.hi} ${mobile} पूरी तरह हटा दिया गया (लॉगिन + प्रोफ़ाइल)।`, true);
+      showSwitchToast(lang === "en" ? `${who.en} ${mobile} deleted everywhere (login + profile${res.ridesDeleted ? ` + ${res.ridesDeleted} ride(s)` : ""}).` : lang === "mr" ? `${who.mr} ${mobile} पूर्णपणे हटवला (लॉगिन + प्रोफाइल).` : `${who.hi} ${mobile} पूरी तरह हटा दिया गया (लॉगिन + प्रोफ़ाइल)।`, true);
     } else if (res?.reason === "trip-running") {
       showSwitchToast(lang === "en" ? `Not deleted: ${mobile} has a trip running. Finish or cancel it first.` : lang === "mr" ? `हटवले नाही: ${mobile} ची ट्रिप सुरू आहे. आधी ती पूर्ण किंवा रद्द करा.` : `हटाया नहीं गया: ${mobile} की ट्रिप चल रही है। पहले उसे पूरा या रद्द करें।`, false);
     } else if (res?.reason === "not-found") {
@@ -13605,7 +13614,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel waStatus={waStatus} deleteEveryRide={deleteEveryRide} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
+              <AdminPanel waStatus={waStatus} deleteEveryRide={deleteEveryRide} deleteRideIds={deleteRideIds} flowSessions={flowSessions} deleteCustomerFlowSessions={deleteCustomerFlowSessions} drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}

@@ -12,6 +12,7 @@
  * Children go first and the booking document LAST, so a failed run leaves the booking visible and the Admin can simply run it again.
  *
  * modes:  "all"       every booking of every status (open requests and running trips included)
+ *         "ids"       exactly the given bookings, ANY status (today's rides, Advance rides, open requests, running trips) -- the per-ride Delete and "delete everything of this person"
  *         "finished"  only Completed / Cancelled -- the given ids if any (re-checked against the stored status), otherwise every finished booking
  * Admin SDK based (db = Firestore, bucket = Storage bucket), so it also reaches bookings the Admin app's own list cannot show (no createdAt).
  */
@@ -19,11 +20,16 @@ const FINISHED = ["Completed", "Cancelled"];
 const CHUNK = 400;
 
 async function deleteBookingsCascade({ db, bucket, mode, ids }) {
-  if (mode !== "all" && mode !== "finished") throw new Error("mode must be 'all' or 'finished'");
+  if (mode !== "all" && mode !== "finished" && mode !== "ids") throw new Error("mode must be 'all', 'finished' or 'ids'");
   // 1. which bookings
   let targets = [];
   if (mode === "all") {
     targets = (await db.collection("bookings").get()).docs.map((d) => d.id);
+  } else if (mode === "ids") {
+    for (const id of [...new Set((Array.isArray(ids) ? ids : []).map(String))].slice(0, 5000)) {
+      const s = await db.collection("bookings").doc(id).get();
+      if (s.exists) targets.push(id);
+    }
   } else if (Array.isArray(ids)) { // an explicit list (even an empty one means "nothing"), never "everything"
     for (const id of [...new Set(ids.map(String))].slice(0, 5000)) {
       const s = await db.collection("bookings").doc(id).get();

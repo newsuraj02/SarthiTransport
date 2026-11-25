@@ -1936,9 +1936,9 @@ exports.adminSwitchRole = onCall({ region: "asia-south1" }, async (request) => {
 // activity, and leaves a small tombstone (`deletedAccounts/{mobile}`: the time only, no personal data) so a phone that is still signed in for up to an hour on an old token can
 // no longer re-create the profile (firestore.rules `notStaleSession`). They can only come back by signing up again. Bookings stay (the other side's history).
 // Refused while the person has an unfinished trip / booking (cancel or finish it first).
-exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) => {
+exports.adminDeleteAccount = onCall({ region: "asia-south1", timeoutSeconds: 300, memory: "512MiB" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
-  const { mobile, role } = request.data || {};
+  const { mobile, role, force } = request.data || {};
   if (typeof mobile !== "string" || !/^\d{10}$/.test(mobile) || (role !== "customer" && role !== "driver")) throw new HttpsError("invalid-argument", "A 10-digit mobile and a role are required.");
   const col = role === "driver" ? "drivers" : "customers";
   const other = role === "driver" ? "customer" : "driver";
@@ -1946,7 +1946,14 @@ exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) =
     const profileRef = db.collection(col).doc(mobile);
     const profile = await profileRef.get();
     const bookings = await db.collection("bookings").where(role === "driver" ? "driverMobile" : "customerMobile", "==", mobile).get();
-    if (bookings.docs.some((x) => !["Completed", "Cancelled"].includes(String(x.data().status || "")))) return { ok: false, reason: "trip-running" };
+    let ridesDeleted = 0;
+    if (bookings.docs.some((x) => !["Completed", "Cancelled"].includes(String(x.data().status || "")))) {
+      if (force !== true) return { ok: false, reason: "trip-running" };
+      // FORCE (owner 2026-11-25, fraud accounts: "be brutal"): Admin confirmed, so every ride of this person -- running, open, Advance, finished -- is deleted WITH what hangs off it
+      // (functions/rideDelete.js) before the account goes.
+      const r = await deleteBookingsCascade({ db, bucket: getStorage().bucket(), mode: "ids", ids: bookings.docs.map((x) => x.id) });
+      ridesDeleted = r.deleted;
+    }
     let loginUser = null;
     try { loginUser = await getAuth().getUserByEmail(pinAuthEmail(mobile, role)); } catch (e) { if (e.code !== "auth/user-not-found") throw e; }
     if (!profile.exists && !loginUser) return { ok: false, reason: "not-found" };
@@ -1974,7 +1981,7 @@ exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) =
       fv.docs.forEach((x) => { gone.push(x.ref); gone.push(db.collection("fleetVehiclePrivate").doc(x.id)); });
     }
     for (const ref of gone) { try { await ref.delete(); } catch (e) { console.error("[adminDeleteAccount] cleanup:", e.message); } }
-    return { ok: true, role, hadLogin: !!loginUser, removed: gone.length };
+    return { ok: true, role, hadLogin: !!loginUser, removed: gone.length, ridesDeleted };
   } catch (e) {
     console.error("[adminDeleteAccount] failed:", e.message);
     return { ok: false, reason: "error", message: String(e.message || "").slice(0, 200) };
@@ -1986,7 +1993,8 @@ exports.adminDeleteAccount = onCall({ region: "asia-south1" }, async (request) =
 exports.adminDeleteBookings = onCall({ region: "asia-south1", timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const { mode, ids } = request.data || {};
-  if (mode !== "all" && mode !== "finished") throw new HttpsError("invalid-argument", "mode must be 'all' or 'finished'.");
+  if (mode !== "all" && mode !== "finished" && mode !== "ids") throw new HttpsError("invalid-argument", "mode must be 'all', 'finished' or 'ids'.");
+  if (mode === "ids" && (!Array.isArray(ids) || !ids.length)) throw new HttpsError("invalid-argument", "mode 'ids' needs a list of booking ids.");
   if (ids != null && (!Array.isArray(ids) || ids.length > 5000 || ids.some((x) => typeof x !== "string" || !x || x.length > 200))) throw new HttpsError("invalid-argument", "ids must be a list of booking ids.");
   try {
     const result = await deleteBookingsCascade({ db, bucket: getStorage().bucket(), mode, ids: ids || null });
