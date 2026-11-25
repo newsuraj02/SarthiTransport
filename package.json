@@ -26,6 +26,7 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
     "@capacitor/push-notifications": "^8.1.2",
+    "@capawesome/capacitor-badge": "^8.0.4",
     "@react-google-maps/api": "^2.20.8",
     "firebase": "^12.16.0",
     "lucide-react": "^0.462.0",

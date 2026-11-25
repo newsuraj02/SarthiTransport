@@ -48,6 +48,7 @@ import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
 import { useNativeSpeech, startNativeListening, stopNativeListening } from "./nativeSpeech.js";
+import { useAppBadge, badgeTotal } from "./appBadge.js";
 
 // Custom native plugin (android/app + android-admin/app:
 // FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
@@ -8688,6 +8689,8 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = findBookingDriver(drivers, activeBooking)?.vehicleSpec;
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer", lang);
+  // Launcher-icon number (owner 2026-11-25): unread notices + the current ride / request + every advance ride. Needs the native badge plugin (next native build); a no-op until then.
+  useAppBadge(badgeTotal({ announcements: announcementAlerts.unreadCount, rides: (activeBooking ? 1 : 0) + advanceBookings.length }));
   // Lifted up here (rather than owned inside CustomerBooking) so the same
   // permission state/banner carries across from the booking-entry screen
   // into the Ongoing-trip GPS sharing below, instead of resetting the
@@ -11571,6 +11574,21 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver", lang);
+  // Launcher-icon number (owner 2026-11-25): unread notices, open loads this driver can accept, KYC incomplete (1), the current trip + advance rides, trips completed since Earnings was
+  // last opened, and a wallet below the minimum (1). Read-only: it only READS what the screens already hold (the load filter is the same one DriverHome uses). Needs the native badge plugin.
+  const [earningsSeenAt, setEarningsSeenAt] = usePersistedState(`sarthi_earningsSeen_${driver.mobile}`, 0);
+  useEffect(() => { if (tab === "history" || !earningsSeenAt) setEarningsSeenAt(Date.now()); }, [tab, earningsSeenAt]); // first run = baseline, so old trips never count
+  const badgeNewLoads = bookings.filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && (driver.fleetOwner
+    ? fleetPseudoDrivers(driver, fleetVehicles).some((pv) => isDriverBroadcastEligible(pv, b, vehicleTypes, bookings, fareTiers, lang))
+    : isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang))).length;
+  useAppBadge(badgeTotal({
+    announcements: announcementAlerts.unreadCount,
+    newLoads: driver.online && driver.kyc === "Approved" && !myTrip ? badgeNewLoads : 0,
+    kycIncomplete: isDriverKycComplete(driver) ? 0 : 1,
+    rides: (myTrip ? 1 : 0) + advanceBookings.length,
+    earnings: earningsSeenAt ? (tripLog || []).filter((b) => b.status === "Completed" && isDriverRecord(b, driver) && Number(b.completedAt) > earningsSeenAt).length : 0,
+    wallet: !isInTrial(driver.createdAt) && Number(driver.wallet) < Number(minWallet) ? 1 : 0,
+  }));
   const appOpenForLoads = tab === "home" && rideView === "current";
   useEffect(() => {
     if (!firestoreReady || !driver?.mobile || !appOpenForLoads) return undefined;

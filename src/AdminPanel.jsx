@@ -6,6 +6,7 @@
 // eslint-scope) that every free identifier referenced below is covered by
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
+import { useAppBadge, badgeTotal } from "./appBadge.js";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
@@ -4913,6 +4914,12 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock, waStatus, flowSessions, deleteCustomerFlowSessions, drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, deleteSelectedRides, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   useBackHandler(tab !== "fleet", () => setTab("fleet"), 0); // Android Back from any Admin tab = the Live Dashboard
+  // Launcher-icon number (owner 2026-11-25): alerts not yet replied to + pending withdrawal / recharge requests + drivers waiting for KYC approval + live bookings. Needs the native badge plugin.
+  useAppBadge(badgeTotal({
+    alerts: (alerts || []).filter((a) => !a.adminReply).length + (withdrawals || []).filter((w) => w.status === "Pending").length + (rechargeRequests || []).filter((r) => r.status === "Pending").length,
+    kycIncomplete: (drivers || []).filter((d) => d.kyc === "Pending").length,
+    bookings: (bookings || []).filter((b) => b.status && b.status !== "Completed" && b.status !== "Cancelled").length,
+  }));
   const [showTransporters, setShowTransporters] = useState(false); // the "All Transporters" screen beside "All Drivers" (owner 2026-11-11)
   useBackHandler(showTransporters, () => setShowTransporters(false), 10);
   // "kyc" is deliberately not in this list -- KYC review lives inside the
