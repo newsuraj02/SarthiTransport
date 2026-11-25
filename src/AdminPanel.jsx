@@ -1541,9 +1541,9 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 // same RouteLine-based row rendering as before, just given a permanent
 // home instead of a tap-to-drill-down page.
 // DELETE RIDES RIGHT FROM THE BOOKINGS LISTS (owner 2026-11-25: "cant even delete the todays ride or advance ride at all ... be brutal"): a ride of ANY status -- today's, Advance, open, running --
-// can be deleted from where it is listed. `ids` = the one ride (per-row Delete) or every ride of the list ("Delete all N"); two taps (a confirm step), then the server removes each ride together
+// can be deleted from where it is listed. ONE ride at a time (owner 2026-11-25: "just keep the delete individual button only" -- the per-list "Delete all N" buttons were removed); two taps (a confirm step), then the server removes the ride together
 // with what hangs off it (functions/rideDelete.js, mode "ids"); a failure shows its real reason.
-function DeleteRideControls({ ids, onDelete, lang, all = false }) {
+function DeleteRideControls({ ids, onDelete, lang }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -1556,12 +1556,10 @@ function DeleteRideControls({ ids, onDelete, lang, all = false }) {
     finally { setBusy(false); }
   };
   return (
-    <div data-delete-ride-controls={all ? "all" : "one"} className={all ? "mb-2" : "mt-1.5"}>
+    <div data-delete-ride-controls="one" className="mt-1.5">
       {step === 0 ? (
-        <button type="button" data-delete-ride-start onClick={() => setStep(1)} className={`${all ? "w-full py-2 text-xs" : "px-2.5 py-1 text-[11px]"} rounded-lg font-bold`} style={{ color: C.safety, border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
-          {all
-            ? (lang === "en" ? `Delete all ${n} in this list` : lang === "mr" ? `या यादीतील सर्व ${n} डिलीट करा` : `इस सूची की सभी ${n} डिलीट करें`)
-            : (lang === "en" ? "Delete this ride" : lang === "mr" ? "ही राइड डिलीट करा" : "यह राइड डिलीट करें")}
+        <button type="button" data-delete-ride-start onClick={() => setStep(1)} className="px-2.5 py-1 text-[11px] rounded-lg font-bold" style={{ color: C.safety, border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
+          {(lang === "en" ? "Delete this ride" : lang === "mr" ? "ही राइड डिलीट करा" : "यह राइड डिलीट करें")}
         </button>
       ) : (
         <div className="rounded-lg p-2" style={{ border: `1.5px solid ${C.safety}`, background: "#FFF1F1" }}>
@@ -1649,8 +1647,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
     title: lang === "en" ? "All rides · every status" : lang === "mr" ? "सर्व राइड · प्रत्येक स्थिती" : "सभी राइड · हर स्थिति",
     emptyMsg: lang === "en" ? "No rides." : lang === "mr" ? "कोणतीही राइड नाही." : "कोई राइड नहीं।",
     count: allRides.length,
-    allIds: allRides.map((b) => b.id),
-    note: allRides.length > ALL_RIDES_SHOWN ? (lang === "en" ? `Showing the newest ${ALL_RIDES_SHOWN} of ${allRides.length}. "Delete all ${allRides.length}" removes every ride, including the ones not shown.` : lang === "mr" ? `${allRides.length} पैकी नवीन ${ALL_RIDES_SHOWN} दाखवत आहे. "सर्व ${allRides.length} डिलीट करा" न दिसणाऱ्या राइडसह सर्व काढते.` : `${allRides.length} में से नई ${ALL_RIDES_SHOWN} दिखा रहे हैं। "सभी ${allRides.length} डिलीट करें" न दिखने वाली राइड समेत हर राइड हटा देता है।`) : null,
+    note: allRides.length > ALL_RIDES_SHOWN ? (lang === "en" ? `Showing the newest ${ALL_RIDES_SHOWN} of ${allRides.length} rides.` : lang === "mr" ? `${allRides.length} पैकी नवीन ${ALL_RIDES_SHOWN} राइड दाखवत आहे.` : `${allRides.length} में से नई ${ALL_RIDES_SHOWN} राइड दिखा रहे हैं।`) : null,
     items: allRides.slice(0, ALL_RIDES_SHOWN),
     renderItem: (b) => (
       <div key={b.id} data-all-ride={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -1741,7 +1738,6 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
               ) : (
                 <>
                   {s.note && <p data-ride-list-note className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{s.note}</p>}
-                  <DeleteRideControls ids={(s.allIds || s.items.map((it) => it.id)).filter(Boolean)} onDelete={deleteRideIds} lang={lang} all />
                   <SearchableList items={s.items} renderItem={(it) => (<div key={it.id}>{s.renderItem(it)}<DeleteRideControls ids={[it.id]} onDelete={deleteRideIds} lang={lang} /></div>)} textOf={bookingSearchText} lang={lang} />
                 </>
               )}

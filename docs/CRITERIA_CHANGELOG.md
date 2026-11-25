@@ -917,3 +917,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 - changed (12): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminNotify, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#EN_LABELS, code:src/App.jsx#MR_LABELS, code:src/App.jsx#SosScreen, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverApp, code:src/App.jsx#App
 - added (1): code:src/AdminPanel.jsx#AdminMoneyRequests
 - removed (1): code:src/AdminPanel.jsx#AdminAlerts
+
+## 2026-11-25 -- Admin Bookings: per-list Delete all removed, individual Delete this ride only (N64)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#DeleteRideControls, code:src/AdminPanel.jsx#AdminBookings
