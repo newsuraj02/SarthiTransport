@@ -28,7 +28,7 @@ import { needsListSearch, filterByQuery, matchesQuery, personSearchText, booking
 import AdminCustomerFlow from "./AdminCustomerFlow.jsx";
 import AdminHelperLog from "./AdminHelperLog.jsx";
 import AdminSwitchRole from "./AdminSwitchRole.jsx";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverSms, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -161,7 +161,7 @@ function AdminTripRouteLine({ booking, driver, selected, onSelect, mapsOk }) {
     </>
   );
 }
-// Why a bulk WhatsApp send failed, as one short line shown under the red message (owner 2026-11-08: it used to say only "Couldn't send").
+// Why a bulk SMS send failed, as one short line shown under the red message (owner 2026-11-08: it used to say only "Couldn't send").
 function whatsappFailDetail(r) { return r && !r.ok && (r.reason || r.detail) ? [r.reason, r.detail].filter(Boolean).join(": ").slice(0, 240) : ""; }
 // Fleet owners (owner 2026-11-08): the owner's own record has no vehicle number, so lists show the fleet instead.
 function fleetTag(b) { return b && b.fleetBooking && b.fleetVehicleNumber ? ` · 🚛 ${b.fleetVehicleNumber}` : ""; }
@@ -794,67 +794,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   });
   const uninstalledCallCooldownActive = (mobile) => !!uninstalledCalledMap[mobile];
 
-  // "Already messaged today" tracking for approved drivers who still have
-  // the app and just haven't toggled online -- distinct from the above
-  // since this is a different ask (go online, not come back at all).
-  const [offDutyWhatsappSentMap, setOffDutyWhatsappSentMap] = usePersistedState("sarthi_offDutyWhatsappSent", {});
-  const markOffDutyWhatsappSent = (mobile) => setOffDutyWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
-  const sentOffDutyToday = (mobile) => offDutyWhatsappSentMap[mobile] === todayStrUninstalled();
-  const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
-  // Uninstalled drivers: one bulk "come back / reinstall" WhatsApp (template driver_reinstall_offer), once per driver per day
-  // (owner 2026-11-03, handwritten note: message option for uninstalled drivers).
-  const [reinstallSentMap, setReinstallSentMap] = usePersistedState("sarthi_reinstallWhatsappSent", {});
-  const markReinstallSent = (mobile) => setReinstallSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
-  const reinstallUnsent = uninstalledDrivers.filter((d) => d.mobile && reinstallSentMap[d.mobile] !== todayStrUninstalled());
-
-  // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
-  // one MSG91 API call reaching every not-yet-messaged-today driver at
-  // once. Only one bulk send can run at a time from this screen
-  // (bulkSendingKind), which is fine -- these are rare, deliberate admin
-  // actions, not something fired off in parallel. markSent is whichever
-  // per-kind "already sent today" setter applies (e.g.
-  // markOffDutyWhatsappSent) so a successful bulk send updates the same
-  // persisted map the per-row individual button below also uses -- either
-  // path correctly marks a driver as reminded for the day.
-  const [bulkSendingKind, setBulkSendingKind] = useState(null);
-  const [bulkSendResult, setBulkSendResult] = useState(null);
-  const sendBulkWhatsAppNow = async (kind, targets, markSent) => {
-    if (bulkSendingKind) return;
-    setBulkSendingKind(kind);
-    setBulkSendResult(null);
-    const mobiles = targets.map((d) => d.mobile).filter(Boolean);
-    const result = await sendBulkDriverWhatsApp(kind, mobiles);
-    if (result.ok) targets.forEach((d) => markSent(d.mobile));
-    setBulkSendResult({ kind, ...result });
-    setBulkSendingKind(null);
-  };
-
-  // Per-row "message just this one driver" -- same MSG91 template as the
-  // bulk button above (a bulk send of one), not the old wa.me plain-text
-  // link this replaces. That old link was never actually removed when the
-  // bulk button was added, so it kept firing an unreviewed, outdated
-  // message (still pointing at the Firebase hosting URL instead of the
-  // Play Store listing) whenever admin messaged a single driver instead of
-  // everyone -- a real bug caught by the admin testing it on themselves.
-  const [singleSendingMobile, setSingleSendingMobile] = useState(null);
-  // Surfaced next to the row's own button (see renderItem below) -- the
-  // old wa.me link at least visibly opened WhatsApp, so a failed send was
-  // obvious. This one sends silently in the background, so without some
-  // visible result an admin has no way to tell a failure from a success;
-  // that silence is very likely what was actually behind the repeated
-  // "still shows the old message" reports -- the call may have simply
-  // been failing every time, with no new message ever sent at all.
-  const [singleSendResult, setSingleSendResult] = useState(null);
-  const sendSingleWhatsAppNow = async (kind, d, markSent) => {
-    if (bulkSendingKind || singleSendingMobile) return;
-    setSingleSendingMobile(d.mobile);
-    setSingleSendResult(null);
-    const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
-    if (result.ok) markSent(d.mobile);
-    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason, detail: result.detail });
-    setSingleSendingMobile(null);
-  };
-
   // Which side of the merged New Registrations screen is showing — see
   // detailView === "newRegistrations" below. Defaults to Driver since KYC
   // approval (the thing that actually needs admin action) lives there;
@@ -906,51 +845,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       title: lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी",
       emptyMsg: lang === "en" ? "No approved driver is currently off duty." : lang === "mr" ? "सध्या कोणताही अप्रूव्ह्ड ड्रायव्हर ऑफ ड्युटीवर नाही." : "फिलहाल कोई अप्रूव्ड ड्राइवर ऑफ ड्यूटी पर नहीं है।",
       items: offDutyDrivers,
-      headerExtra: offDutyDrivers.length > 0 && (
-        <>
-          {offDutyUnsent.length > 0 ? (
-            <button onClick={() => sendBulkWhatsAppNow("offDuty", offDutyUnsent, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind}
-              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "offDuty" ? 0.6 : 1 }}>
-              <MessageCircle size={14} />
-              {bulkSendingKind === "offDuty"
-                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                : (lang === "en" ? `Bulk WhatsApp to all ${offDutyUnsent.length} off-duty drivers at once` : lang === "mr" ? `सर्व ${offDutyUnsent.length} ऑफ ड्युटी ड्रायव्हर्सना एका साथ बल्क WhatsApp पाठवा` : `सभी ${offDutyUnsent.length} ऑफ ड्यूटी ड्राइवरों को एक साथ बल्क WhatsApp भेजें`)}
-            </button>
-          ) : (
-            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
-              <CheckCircle2 size={14} />
-              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
-            </div>
-          )}
-          <WaSummary mobiles={offDutyDrivers.map((x) => x.mobile)} kind="offDuty" lang={lang} />
-          {bulkSendResult?.kind === "offDuty" && (
-            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
-              {bulkSendResult.ok
-                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
-                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
-              {whatsappFailDetail(bulkSendResult) && <div data-whatsapp-fail-detail className="mt-1 text-[10px] font-normal break-words opacity-90">{whatsappFailDetail(bulkSendResult)}</div>}
-            </div>
-          )}
-        </>
-      ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
             <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: C.ink }}>{d.name}<WaTicks mobile={d.mobile} lang={lang} compact /></div>
             <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driverPlateText(d, lang)}</div>
-          </div>
-          <div className="shrink-0 flex flex-col items-end gap-0.5">
-            <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-              className="p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E5EAF2" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-              <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-            </button>
-            {singleSendResult?.mobile === d.mobile && (
-              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : whatsappFailDetail(singleSendResult)}>
-                {singleSendResult.ok
-                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
-                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
-              </span>
-            )}
           </div>
         </div>
       ),
@@ -984,29 +883,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
             {lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}
             <span className="font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? " — no app open, live GPS or push activity" : lang === "mr" ? " — अ‍ॅप उघडणे, लाइव्ह GPS किंवा पुश अ‍ॅक्टिव्हिटी नाही" : " — ऐप खुला नहीं, लाइव GPS या पुश गतिविधि नहीं"}</span>
           </p>
-          {uninstalledDrivers.length > 0 && (reinstallUnsent.length > 0 ? (
-            <button data-uninstalled-message onClick={() => sendBulkWhatsAppNow("reinstall", reinstallUnsent, markReinstallSent)} disabled={!!bulkSendingKind}
-              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success }}>
-              <MessageCircle size={14} />
-              {bulkSendingKind === "reinstall"
-                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                : (lang === "en" ? `Message all ${reinstallUnsent.length} uninstalled drivers on WhatsApp` : lang === "mr" ? `सर्व ${reinstallUnsent.length} अनइन्स्टॉल्ड ड्रायव्हर्सना WhatsApp मेसेज पाठवा` : `सभी ${reinstallUnsent.length} अनइंस्टॉल्ड ड्राइवरों को WhatsApp मैसेज भेजें`)}
-            </button>
-          ) : (
-            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
-              <CheckCircle2 size={14} />
-              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
-            </div>
-          ))}
-          <WaSummary mobiles={uninstalledDrivers.map((x) => x.mobile)} kind="reinstall" lang={lang} />
-          {bulkSendResult?.kind === "reinstall" && (
-            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
-              {bulkSendResult.ok
-                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
-                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
-              {whatsappFailDetail(bulkSendResult) && <div data-whatsapp-fail-detail className="mt-1 text-[10px] font-normal break-words opacity-90">{whatsappFailDetail(bulkSendResult)}</div>}
-            </div>
-          )}
         </>
       ),
       // An entry still on its call cooldown sinks to the bottom so admin can
@@ -3362,11 +3238,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const [boxPick, setBoxPick] = useState({ gps: "on", kyc: "incomplete", status: "on" });
   const [openBox, setOpenBox] = useState(null); // null = the boxes screen | gps | kyc | status | wallet | all
   useBackHandler(!!openBox, () => setOpenBox(null), 10);
-  // MESSAGE ALL (owner 2026-11-03, handwritten note: "in Admin -> Drivers add a message option for off duty, KYC incomplete and
-  // uninstalled"): the KYC "Incomplete" and Status "Off Duty" sides get one bulk WhatsApp button (the approved MSG91 templates
-  // driver_kyc_incomplete / driver_off_duty, see sendBulkDriverWhatsApp). Drivers already messaged TODAY are skipped; the count is shown first.
+  // MESSAGE ALL (owner 2026-11-03, handwritten note; since 2026-11-25 a DLT SMS, MSG91 was removed): the KYC "Incomplete" side gets one bulk SMS button (the approved template
+  // DRIVER_KYC_REMINDER_V2, see sendBulkDriverSms). Drivers already messaged TODAY are skipped; the count is shown first. (The Off Duty / Uninstalled / GPS-off buttons were
+  // removed: they have no approved template.)
   const [kycMsgSentMap, setKycMsgSentMap] = usePersistedState("sarthi_driverListKycMsgSent", {});
-  const [offDutyMsgSentMap, setOffDutyMsgSentMap] = usePersistedState("sarthi_driverListOffDutyMsgSent", {});
   const [msgSending, setMsgSending] = useState(false);
   const [msgResult, setMsgResult] = useState(null);
   // "Called this round" tracking for every driver card's Call button (see
@@ -3602,17 +3477,17 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const openOpt = openDef?.opts?.find((o) => o.v === boxPick[openBox]);
   const shownList = openBox === "all" ? bySection(totalInstalled) : openDef ? (openOpt ? openOpt.list : openDef.list) : [];
   const shownTitle = openBox === "all" ? L3("All Drivers", "सर्व ड्रायव्हर", "सभी ड्राइवर") : openDef?.title;
-  const msgKind = openBox === "kyc" && boxPick.kyc === "incomplete" ? "kycIncomplete" : openBox === "status" && boxPick.status === "off" ? "offDuty" : null;
-  const msgSentMap = msgKind === "kycIncomplete" ? kycMsgSentMap : offDutyMsgSentMap;
+  const msgKind = openBox === "kyc" && boxPick.kyc === "incomplete" ? "kycIncomplete" : null;
+  const msgSentMap = kycMsgSentMap;
   const msgToday = localDateKey();
   const msgTargets = msgKind ? shownList.filter((d) => d.mobile && msgSentMap[d.mobile] !== msgToday) : [];
   const sendDriverListMessage = async () => {
     if (msgSending || !msgKind || msgTargets.length === 0) return;
     setMsgSending(true); setMsgResult(null);
-    const result = await sendBulkDriverWhatsApp(msgKind, msgTargets.map((d) => d.mobile));
+    const result = await sendBulkDriverSms(msgKind, msgTargets.map((d) => d.mobile));
     if (result.ok) {
       const stamp = Object.fromEntries(msgTargets.map((d) => [d.mobile, msgToday]));
-      (msgKind === "kycIncomplete" ? setKycMsgSentMap : setOffDutyMsgSentMap)((prev) => ({ ...prev, ...stamp }));
+      setKycMsgSentMap((prev) => ({ ...prev, ...stamp }));
     }
     setMsgResult({ kind: msgKind, ...result });
     setMsgSending(false);
@@ -3646,7 +3521,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 <MessageCircle size={14} />
                 {msgSending
                   ? L3("Sending…", "पाठवत आहे…", "भेजा जा रहा है…")
-                  : L3(`Message all ${msgTargets.length} drivers on WhatsApp`, `सर्व ${msgTargets.length} ड्रायव्हर्सना WhatsApp मेसेज पाठवा`, `सभी ${msgTargets.length} ड्राइवरों को WhatsApp मैसेज भेजें`)}
+                  : L3(`SMS all ${msgTargets.length} drivers`, `सर्व ${msgTargets.length} ड्रायव्हर्सना SMS पाठवा`, `सभी ${msgTargets.length} ड्राइवरों को SMS भेजें`)}
               </button>
             ) : (
               <div className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
@@ -3900,18 +3775,9 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer, toggleCusto
                       </>
                     ) : (
                       <>
-                        {/* Owner request (2026-10-24): calling down this list
-                            turned up a lot of people who are really Drivers,
-                            just signed up as a Customer by mistake. No MSG91
-                            WhatsApp template exists/is approved for this yet
-                            (every other bulk WhatsApp send in this app goes
-                            through one, see sendBulkDriverWhatsApp), so this
-                            is a plain wa.me deep link instead -- opens
-                            WhatsApp with the message pre-filled, admin just
-                            taps Send. The link carries ?open=driver, which
-                            the app's own root component already reads to
-                            jump straight to the Driver app, skipping the
-                            role-selection screen entirely. */}
+                        {/* Owner request (2026-10-24): calling down this list turned up a lot of people who are really Drivers, just signed up as a Customer by mistake.
+                            A plain wa.me deep link: opens WhatsApp with the message pre-filled, admin just taps Send. The link carries ?open=driver, which the app's own
+                            root component already reads to jump straight to the Driver app, skipping the role-selection screen entirely. */}
                         <a
                           href={`https://wa.me/91${c.mobile}?text=${encodeURIComponent(
                             lang === "en"

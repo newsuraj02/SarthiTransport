@@ -300,8 +300,8 @@ service cloud.firestore {
     }
 
     // (The `leads` / `leadClicks` collections were REMOVED 2026-11-23 with Admin -> Leads; old documents just sit unread in Firestore, and with no rule nobody can read them.)
-    // WHATSAPP DELIVERY TICKS (owner 2026-11-14): one doc per driver number (+ "_webhook" = the last report MSG91 posted), written ONLY by the Cloud Functions (Admin SDK);
-    // Admin reads them for the Sent / Delivered / Read ticks. Nobody can write them from an app.
+    // MESSAGE TICKS (owner 2026-11-14, now the DLT SMS result): one doc per driver number, written ONLY by the Cloud Functions (Admin SDK); Admin reads them for the
+    // one tick / red ! in the driver rows. Nobody can write them from an app.
     match /whatsappStatus/{mobile} {
       allow read: if isAdmin();
       allow write: if false;
@@ -322,14 +322,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Masked-call audit trail (see functions/index.js: initiateMaskedCall)
-    // — written only by that Cloud Function via the Admin SDK, which
-    // bypasses these rules entirely, so no client write path is needed or
-    // allowed here. Admin-only read, for looking into a customer/driver
-    // dispute.
-    match /callLogs/{id} {
-      allow read: if isAdmin();
-    }
+    // (The `callLogs` collection -- the masked-call audit trail -- was REMOVED 2026-11-25 with MSG91 masked calling; old documents just sit unread in Firestore and, with no rule, nobody can read them.)
 
     // Per-driver "did the phone ring?" receipts for each load (see
     // functions/index.js: onDirectRequestBroadcast / ringAck). Holds the

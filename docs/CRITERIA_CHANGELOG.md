@@ -878,3 +878,8 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- re-point activation-file check
 - changed (1): code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-25 -- Clean-up after MSG91: plain tel: Call buttons, dead Admin message buttons removed, dead code deleted, memory paragraphs marked
+- changed (16): file:firestore.rules, file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:functions/whatsappStatus.js, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers, code:src/App.jsx#imports, code:src/App.jsx#ActiveRide, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverApp, code:src/waTicks.jsx
+- added (2): code:src/App.jsx#CallButton, code:src/firebaseClient.js#sendBulkDriverSms
+- removed (4): code:functions/bulkWhatsApp.js, code:src/App.jsx#MaskedCallButton, code:src/firebaseClient.js#initiateMaskedCall, code:src/firebaseClient.js#sendBulkDriverWhatsApp

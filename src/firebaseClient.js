@@ -130,7 +130,7 @@ export function getActiveStorage() {
 // carries over when the call goes through the same app instance the user
 // actually signed into.
 const functionsByRole = {
-  // Must match the region initiateMaskedCall is actually deployed to (see
+  // Must match the region the functions are actually deployed to (see
   // functions/index.js) -- getFunctions() defaults to us-central1 otherwise,
   // and the client would silently call a region with nothing deployed there.
   customer: customerApp ? getFunctions(customerApp, "asia-south1") : null,
@@ -162,25 +162,6 @@ export const geoSearchPlaces = (payload) => callGeo("searchPlaces", payload);
 export const geoGetPlace = (payload) => callGeo("getPlace", payload);
 export const geoGetAddress = (payload) => callGeo("getAddress", payload);
 
-// Bridges a call between this booking's customer and driver through
-// MSG91 (see functions/index.js) so neither side sees the other's real
-// number. Always resolves (never throws) with { ok, reason? } — reason
-// "not_configured" means MSG91's secrets haven't been set on the backend
-// yet, which callers should treat as "fall back to a plain tel: link",
-// not as an error to surface to the user.
-export async function initiateMaskedCall(bookingId) {
-  const functions = functionsByRole[activeRole];
-  if (!functions) return { ok: false, reason: "not_configured" };
-  try {
-    const call = httpsCallable(functions, "initiateMaskedCall");
-    const result = await call({ bookingId });
-    return result.data;
-  } catch (e) {
-    console.error("[maskedCall] callable failed", e);
-    return { ok: false, reason: "error" };
-  }
-}
-
 // Logs an in-app announcement (see functions/index.js: sendAdminNotification)
 // for one driver/customer (target = their mobile/doc id), a specific list
 // of them (target = an array of mobiles, e.g. Admin's KYC desk "Send to
@@ -204,21 +185,18 @@ export async function sendAdminNotification(target, message, audience = "driver"
   }
 }
 
-// One real MSG91 API call reaching every driver in `mobiles` at once (see
-// functions/index.js: sendBulkDriverWhatsApp) -- kind is one of "reinstall"
-// (Uninstalled/Blocked), "kycIncomplete", "gpsOff", or "offDuty", matching
-// that function's own template map. Always resolves (never throws) with
-// { ok, sent?, requested?, reason? }.
-export async function sendBulkDriverWhatsApp(kind, mobiles) {
+// Sends the DLT SMS to every driver in `mobiles` (functions/smsFunctions.js: sendBulkDriverSms). Only kind "kycIncomplete" has an approved template.
+// Always resolves (never throws) with { ok, sent?, requested?, reason?, detail? }.
+export async function sendBulkDriverSms(kind, mobiles) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "sendBulkDriverSms"); // DLT SMS (owner 2026-11-25: MSG91 / WhatsApp bulk was removed); the name of this wrapper is unchanged so the Admin buttons are too
+    const call = httpsCallable(functions, "sendBulkDriverSms"); // DLT SMS (owner 2026-11-25: MSG91 / WhatsApp bulk was removed)
     const result = await call({ kind, mobiles });
     return result.data;
   } catch (e) {
-    console.error("[bulkWhatsApp] callable failed", e);
-    // The real reason (permission, MSG91 not configured, network ...) travels to Admin's screen instead of a bare "error".
+    console.error("[bulkSms] callable failed", e);
+    // The real reason (permission, SMS not set up, network ...) travels to Admin's screen instead of a bare "error".
     return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), detail: String(e?.message || "").slice(0, 220) };
   }
 }
@@ -404,8 +382,8 @@ export async function rateHelperCall(logId, helpful) {
   try { await httpsCallable(functions, "rateHelperAnswer")({ logId, helpful }); } catch (e) { console.warn("[helper] rating failed", e?.code || e); }
 }
 
-// Fleet owner accepted a booking and picked a vehicle (owner 2026-11-08): the server makes the driver's trip link, sends the WhatsApp message automatically when
-// MSG91 is set up for it, and returns { link, sent }. Never throws -- { link: null, sent: false } on any failure (the owner's app still offers the one-tap WhatsApp button).
+// Fleet owner accepted a booking and picked a vehicle (owner 2026-11-08): the server makes the driver's trip link and returns { link, sent } (sent is always false since
+// MSG91 was removed 2026-11-25, so the owner's app shows the one-tap WhatsApp button). Never throws -- { link: null, sent: false } on any failure (the owner's app still offers the one-tap WhatsApp button).
 export async function dispatchFleetTrip(bookingId) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { link: null, sent: false };

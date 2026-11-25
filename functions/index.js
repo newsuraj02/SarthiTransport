@@ -38,7 +38,7 @@ function pinAuthEmail(mobile, role) {
 // automatically. A PIN-based session doesn't -- its identity is the
 // synthetic email instead, so this parses the mobile number back out of it
 // to get the same "+91XXXXXXXXXX" shape every other server-side check
-// (initiateMaskedCall, isCustomer/isDriver comparisons) already expects.
+// (isCustomer/isDriver comparisons) already expects.
 // Returns null for anything that matches neither shape.
 function callerPhoneFromAuth(token) {
   if (token?.phone_number) return token.phone_number;
@@ -903,9 +903,8 @@ exports.verifyPickupOtp = onCall({ region: "asia-south1" }, async (request) => {
 
 // =====================================================================================================================================================================
 // FLEET OWNERS (owner 2026-11-08): a transporter's vehicles are driven by people with NO app. When the owner accepts a booking and picks a vehicle (src/App.jsx
-// fleetClaimWithVehicle) this callable (1) makes the driver's private trip link, (2) sends the same message by WhatsApp through MSG91 when an approved template is
-// set in settings/main.fleetDispatchTemplate (a template name; its 5 body variables are, in order: pickup, drop, customer mobile, owner mobile, trip link), and
-// (3) returns { link, sent } so the owner's app can offer the one-tap WhatsApp button when nothing was sent. The link opens public/trip.html, which talks to
+// fleetClaimWithVehicle) this callable (1) makes the driver's private trip link and (2) returns { link, sent } so the owner's app can offer the one-tap WhatsApp button (nothing is sent
+// automatically since MSG91 was removed 2026-11-25, so `sent` is always false). The link opens public/trip.html, which talks to
 // fleetTripAction below (driver enters the customer's pickup OTP, later taps "delivered"; the OWNER's app still ends the trip and does the money).
 const FLEET_TRIP_PAGE = "https://sarthi-transport-74865.web.app/trip.html";
 async function fleetLinkFor(bookingId) {
@@ -1286,7 +1285,7 @@ const RESOLVE_ACTIONS = {
 
 // Anthropic API key (set via `firebase functions:secrets:set ANTHROPIC_API_KEY`,
 // never hardcoded or committed) — same not_configured fallback pattern as
-// GEMINI_API_KEY/MSG91_* above: until it's set, this returns reason:
+// the other secrets above: until it's set, this returns reason:
 // "not_configured" instead of throwing.
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 

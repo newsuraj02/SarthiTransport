@@ -43,7 +43,7 @@ import { VEHICLE_CHOICE_SAVED, resolveVehicleChoice, isSaneCapacityKg, looksLike
 import { signOut } from "firebase/auth";
 import { sendPhoneOtp, confirmPhoneOtp, signInAfterOtp, endOtpSession, otpMessage, OTP_RESEND_SECONDS } from "./phoneOtp.js";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress, adminDeleteBookings } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, dispatchFleetTrip, convertToFleetOwner, adminDeleteAccount, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress, adminDeleteBookings } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { useBackHandler, runBackHandlers } from "./backButton.js";
@@ -4522,41 +4522,14 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
 // on its own the moment any driver's lastKnownLocation changes, no
 // polling of its own needed here.
 
-// Calls the other party in a booking through MSG91's number-masking
-// bridge (see initiateMaskedCall in firebaseClient.js / functions/index.js)
-// instead of a plain tel: link that would show either side's real number
-// to the other -- neither party's number is displayed here either, since
-// printing it on screen would defeat the point even if the actual call is
-// masked. Falls back to a normal tel: link to fallbackMobile if masking
-// isn't configured yet or the bridge request fails for any reason --
-// calling must never break, masking is a privacy layer on top of it, not
-// a replacement for it working at all.
-function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, style }) {
-  const [calling, setCalling] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const handleClick = async () => {
-    if (calling) return;
-    setCalling(true);
-    const result = await initiateMaskedCall(bookingId);
-    setCalling(false);
-    if (result.ok) {
-      setConnected(true);
-      setTimeout(() => setConnected(false), 6000);
-    } else if (fallbackMobile) {
-      window.location.href = `tel:${fallbackMobile}`;
-    }
-  };
+// Call button (owner 2026-11-25: MSG91 and its masked calling were removed). A plain tel: link, so tapping opens the phone's dialer AT ONCE (it used to ask the deleted
+// masked-call function first and only then fall back to the dialer). The other person's number shows in the dialer -- there is no masking any more.
+function CallButton({ mobile, label, className, style }) {
+  const num = String(mobile || "").replace(/[^\d+]/g, "");
   return (
-    <div>
-      <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
-        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : lang === "mr" ? "जोडत आहोत..." : "जोड़ रहे हैं...") : label}
-      </button>
-      {connected && (
-        <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
-          {lang === "en" ? "You'll receive a call shortly to connect you." : lang === "mr" ? "तुम्हाला लवकरच कॉल येईल जो तुम्हाला जोडेल." : "आपको जल्द ही कॉल आएगी जो आपको जोड़ देगी।"}
-        </div>
-      )}
-    </div>
+    <a data-call-button href={`tel:${num}`} className={className} style={{ ...style, textDecoration: "none" }}>
+      <Phone size={16} color={style?.color || "#000000"} /> {label}
+    </a>
   );
 }
 
@@ -8253,7 +8226,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
       </div>
 
       {b.driverMobile && (
-        <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+        <CallButton mobile={b.driverMobile}
           label={lang === "en" ? "Call Driver" : lang === "mr" ? "कॉल ड्रायव्हर" : "कॉल ड्राइवर"}
           className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
           style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
@@ -9963,7 +9936,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                 screen only had a "Call Customer" button and no name at all,
                 so at the pickup gate the driver had nothing to ask for.
                 Mobile is shown as last 4 digits only: calls still go
-                through MaskedCallButton below. */}
+                through CallButton below. */}
             <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center gap-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}><UserCircle2 size={22} color="#fff" /></div>
               <div className="min-w-0 flex-1">
@@ -9979,7 +9952,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               </div>
             </div>
             {myTrip.customerMobile && (
-              <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+              <CallButton mobile={myTrip.customerMobile}
                 label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
                 className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
                 style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
@@ -11857,7 +11830,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                   )}
                   <div className="mt-2">
                     {ab.customerMobile ? (
-                      <MaskedCallButton bookingId={ab.id} fallbackMobile={ab.customerMobile} lang={lang}
+                      <CallButton mobile={ab.customerMobile}
                         label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
                         className="w-full flex items-center justify-center gap-2 rounded-lg py-3 font-extrabold text-base" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
                     ) : (

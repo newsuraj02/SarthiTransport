@@ -1,6 +1,6 @@
 // The message a fleet driver (no app) gets on WhatsApp / SMS when the owner assigns a vehicle to a trip (owner 2026-11-08):
 // pickup, drop, the customer's mobile, the owner's mobile -- plus the trip link (OTP / delivered, no app needed) and map links.
-// MIRRORED by functions/fleetDispatch.js (the server sends the same text through MSG91); an invariant compares the two.
+// MIRRORED by functions/fleetDispatch.js (the server builds the same text for the owner's one-tap WhatsApp button); an invariant compares the two.
 const cleanMobile = (m) => String(m || "").replace(/\D/g, "").slice(-10);
 
 export function mapsLink(lat, lng) {

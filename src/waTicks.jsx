@@ -1,11 +1,8 @@
-// WHATSAPP DELIVERY TICKS in Admin (owner 2026-11-14: "the WhatsApp bulk message must have a sent and read mark just like WhatsApp does on every single entry ... double tick send,
-// double blue tick read"). The state per driver is written by the Cloud Functions (functions/whatsappStatus.js) into `whatsappStatus/{mobile}`; AdminPanel provides it through
-// WaStatusContext and every driver row shows its ticks:
-//   clock          = MSG91 accepted it, WhatsApp has not confirmed yet
-//   one grey tick  = sent to WhatsApp
-//   two grey ticks = delivered to the phone
-//   two BLUE ticks = read
-//   red !          = failed (the reason is the tooltip)
+// MESSAGE TICKS in Admin's driver rows (owner 2026-11-14, kept 2026-11-25 when the messages became DLT SMS). The state per driver is written by the Cloud Functions
+// (functions/smsFunctions.js sendBulkDriverSms) into `whatsappStatus/{mobile}` (the collection keeps its old name); AdminPanel provides it through WaStatusContext:
+//   one grey tick  = the SMS gateway accepted the message (there are no delivery receipts)
+//   red !          = failed (tap or hover to see the reason)
+// (The clock / two grey ticks / two BLUE ticks below belong to the old WhatsApp receipts; nothing writes those states any more.)
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { C } from "./App.jsx";
 
@@ -13,8 +10,7 @@ export const WaStatusContext = createContext({});
 export const useWaStatus = () => useContext(WaStatusContext);
 
 const KIND_TEXT = {
-  reinstall: ["Reinstall offer", "रीइंस्टॉल ऑफ़र", "रीइन्स्टॉल ऑफर"], kycIncomplete: ["KYC incomplete", "KYC अधूरा", "KYC अपूर्ण"],
-  gpsOff: ["GPS off", "GPS बंद", "GPS बंद"], offDuty: ["Off duty", "ऑफ ड्यूटी", "ऑफ ड्युटी"],
+  kycIncomplete: ["KYC incomplete", "KYC अधूरा", "KYC अपूर्ण"],
 };
 const STATUS_TEXT = {
   submitted: ["Sending...", "भेज रहे हैं...", "पाठवत आहे..."], sent: ["Sent", "भेजा गया", "पाठवले"], delivered: ["Delivered", "पहुँच गया", "पोहोचले"],
