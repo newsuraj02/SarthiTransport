@@ -852,3 +852,11 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- docs: contract N57 DLT SMS
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- SMS code matched to the registered APTRNS templates (numeric / alphanumeric slots, 10-minute OTP, name / vehicle values)
+- changed (8): code:functions/smsEvents.js, code:functions/smsFunctions.js#exportsList, code:functions/smsOtp.js, code:scripts/serverTests/smsGateway.cjs, code:scripts/serverTests/smsOtp.cjs#lastCode, code:scripts/serverTests/smsOtp.cjs#smsConfig, code:scripts/verifyInvariants.mjs#checks, code:src/AdminSmsSettings.jsx
+- added (16): code:functions/smsGateway.js#KINDS, code:functions/smsGateway.js#DEFAULT_TEXT, code:functions/smsGateway.js#DEFAULT_TYPE, code:functions/smsGateway.js#DEFAULT_API_URL, code:functions/smsGateway.js#VAR_RE, code:functions/smsGateway.js#countVars, code:functions/smsGateway.js#cleanVar, code:functions/smsGateway.js#renderTemplate, code:functions/smsGateway.js#cleanMobile, code:functions/smsGateway.js#isIndianMobile, code:functions/smsGateway.js#normalizeConfig, code:functions/smsGateway.js#templateFor, code:functions/smsGateway.js#buildRequest, code:functions/smsGateway.js#judgeGatewayReply, code:functions/smsGateway.js#sendDltSms, code:functions/smsGateway.js#exportsList
+- removed (1): code:functions/smsGateway.js
+
+## 2026-11-25 -- docs: registered templates
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md

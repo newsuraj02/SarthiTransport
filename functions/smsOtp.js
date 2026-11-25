@@ -3,11 +3,11 @@
 //
 // Why this is careful: an unauthenticated "send an SMS to this number" function is what SMS-pumping fraud abuses, so (1) a number is only texted when the sign-in could actually
 // go on (login = the number HAS an account, sign-up = it does NOT -- checked by the caller BEFORE sending), (2) per-number limits (30 s between texts, 5 / hour, 10 / day), (3) per-
-// device-address limit, (4) a global daily cap, (5) the code is stored only as a salted hash, lives 5 minutes, allows 5 wrong guesses, and works once.
+// device-address limit, (4) a global daily cap, (5) the code is stored only as a salted hash, lives 10 minutes (the registered text says so), allows 5 wrong guesses, and works once.
 // After the right code the server hands back a one-time PROOF (kept in the same document, valid 3 h so a driver can fill in the long documents form, then is used up by `otpSignIn`).
 const crypto = require("crypto");
 
-const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_TTL_MS = 10 * 60 * 1000; // the registered OTP text says "Valid for 10 minutes"
 const RESEND_GAP_MS = 30 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
 const MAX_SENDS_PER_DAY = 10;

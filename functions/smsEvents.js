@@ -21,18 +21,22 @@ function newLoadTargets(after) {
   for (const m of rung) { const mob = cleanMobile(m); if (isIndianMobile(mob) && !done.has(mob) && !seen.has(mob)) { seen.add(mob); targets.push(mob); } }
   return { targets };
 }
-const newLoadVars = (b) => [shortText(b && b.pickup), shortText(b && b.drop)];
+// An {#alphanumeric#} slot only takes Latin letters / digits, so a Devanagari address is replaced (the app opens with the real address): "your pickup" / "your drop".
+const hasLatin = (v) => /[A-Za-z0-9]/.test(String(v == null ? "" : v));
+const latinOr = (v, fallback) => (hasLatin(v) ? String(v) : fallback);
+const newLoadVars = (b) => [shortText(latinOr(b && b.pickup, "the pickup point")), shortText(latinOr(b && b.drop, "the drop point"))];
 
-// "Booking confirmed": to the CUSTOMER when the pickup OTP is made (= a driver accepted). `driver` = the driver document (or null for a fleet vehicle).
+// "Booking confirmed": to the CUSTOMER when the pickup OTP is made (= a driver accepted). The registered text has the driver and the vehicle only (no OTP in the SMS).
+// `driver` = the driver document (or null for a fleet vehicle).
 function bookingConfirmedSms(booking, otpDoc, driver) {
   const to = cleanMobile((otpDoc && otpDoc.customerMobile) || (booking && booking.customerMobile));
   if (!isIndianMobile(to) || !otpDoc || !otpDoc.otp) return null;
-  const name = (booking && (booking.fleetDriverName || booking.driverName)) || (driver && driver.name) || "Driver";
-  const plate = (booking && booking.fleetVehicleNumber) || (driver && driver.vehicleSpec && driver.vehicleSpec.vehicleNumber) || "-";
-  return { to, vars: [shortText(name, 20), shortText(plate, 15), String(otpDoc.otp)] };
+  const name = latinOr((booking && (booking.fleetDriverName || booking.driverName)) || (driver && driver.name), "your driver");
+  const plate = latinOr((booking && booking.fleetVehicleNumber) || (driver && driver.vehicleSpec && driver.vehicleSpec.vehicleNumber), "assigned");
+  return { to, vars: [shortText(name, 20), shortText(plate, 15)] };
 }
 
-// "KYC reminder": Admin's bulk button. The link is the driver's own KYC page.
-const kycLink = (mobile) => `https://sarthi-transport-74865.web.app/?driverKyc=1&mobile=${cleanMobile(mobile)}`;
+// "KYC reminder": Admin's bulk button. "Dear <name>, ...": the driver's own name (Devanagari names cannot go in an alphanumeric slot, so they become "Driver").
+const kycVars = (driver) => [shortText(latinOr(driver && driver.name, "Driver"), 20)];
 
-module.exports = { VAR_MAX, shortText, newLoadTargets, newLoadVars, bookingConfirmedSms, kycLink };
+module.exports = { VAR_MAX, shortText, latinOr, newLoadTargets, newLoadVars, bookingConfirmedSms, kycVars };

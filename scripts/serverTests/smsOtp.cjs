@@ -39,7 +39,7 @@ global.fetch = async (url, init) => { const body = JSON.parse(init.body); gwCall
 const fns = require(path.join(__dirname, "../../functions/index.js"));
 let bad = 0; const ok = (n, c) => { if (!c) bad++; console.log(`${c ? "ok  " : "FAIL"}  ${n}`); };
 const req = (data, extra = {}) => ({ data, rawRequest: { headers: { "x-forwarded-for": extra.ip || "1.1.1.1" } }, ...extra });
-const lastCode = () => { const m = /^(\d{6}) is your/.exec(gwCalls[gwCalls.length - 1].message); return m && m[1]; };
+const lastCode = () => { const m = /^(\d{6}) is your OTP/.exec(gwCalls[gwCalls.length - 1].message); return m && m[1]; };
 const smsConfig = (over = {}) => col("smsConfig").set("main", { entityId: "1101", header: "APNATR", otpEnabled: true, otpTestedAt: 5, templates: { otp: { id: "T1" }, bookingConfirmed: { id: "T2" }, newLoad: { id: "T3" }, kycReminder: { id: "T4" } }, ...over });
 (async () => {
   for (const n of ["requestSmsOtp", "verifySmsOtp", "sendBulkDriverSms", "sendTestSms", "smsBookingConfirmed", "smsNewLoad", "otpSignIn"]) ok(`${n} is exported`, typeof fns[n] === "function");
@@ -113,8 +113,8 @@ const smsConfig = (over = {}) => col("smsConfig").set("main", { entityId: "1101"
   let e1; try { await fns.sendBulkDriverSms(req({ kind: "kycIncomplete", mobiles: ["9555555555"] })); } catch (e) { e1 = e.code; } ok("bulk SMS needs Admin", e1 === "permission-denied");
   const admin = { auth: { token: { admin: true } } };
   r = await fns.sendBulkDriverSms({ ...req({ kind: "reinstall", mobiles: ["9555555555"] }), ...admin }); ok("buttons without a DLT template say so", r.ok === false && r.reason === "no_template");
-  const nb = gwCalls.length; r = await fns.sendBulkDriverSms({ ...req({ kind: "kycIncomplete", mobiles: ["9555555555", "9555555556", "bad", "9555555555"] }), ...admin });
-  ok("KYC reminder goes to each valid number once, with the driver's own KYC link", r.ok === true && r.sent === 2 && gwCalls.length - nb === 2 && /driverKyc=1&mobile=9555555555/.test(gwCalls[nb].message) && gwCalls[nb].dltTemplateId === "T4");
+  col("drivers").set("9555555555", { name: "Pooja Shah" }); const nb = gwCalls.length; r = await fns.sendBulkDriverSms({ ...req({ kind: "kycIncomplete", mobiles: ["9555555555", "9555555556", "bad", "9555555555"] }), ...admin });
+  ok("KYC reminder goes to each valid number once, greeting the driver by name", r.ok === true && r.sent === 2 && gwCalls.length - nb === 2 && gwCalls.slice(nb).every((c) => /^Dear (Pooja Shah|Driver), your Apna Transport KYC is incomplete\./.test(c.message)) && gwCalls[nb].dltTemplateId === "T4" && gwCalls[nb].messageType === "SERVICE_IMPLICIT");
   ok("the sent state is recorded for the Admin ticks", col("whatsappStatus").get("9555555555").byKind.kycIncomplete.status === "sent" && col("whatsappStatus").get("9555555555").lastKind === "kycIncomplete");
   gwReply = { status: 200, body: '{"status":"FAILED","message":"Template mismatch"}' }; r = await fns.sendBulkDriverSms({ ...req({ kind: "kycIncomplete", mobiles: ["9555555557"] }), ...admin });
   ok("a refused KYC reminder reports why and records the failure (red !)", r.ok === false && r.sent === 0 && /Template mismatch/.test(r.detail) && col("whatsappStatus").get("9555555557").byKind.kycIncomplete.status === "failed" && /Template mismatch/.test(col("whatsappStatus").get("9555555557").byKind.kycIncomplete.reason)); gwReply = { status: 200, body: '{"status":"SUCCESS"}' };
@@ -126,11 +126,11 @@ const smsConfig = (over = {}) => col("smsConfig").set("main", { entityId: "1101"
   // triggers
   smsConfig(); col("bookings").set("b1", { customerMobile: "9123456789", driverName: "Ravi", driverMobile: "9666666666", status: "Ongoing" }); col("drivers").set("9666666666", { name: "Ravi", vehicleSpec: { vehicleNumber: "MH12AB1234" } });
   const n0 = gwCalls.length; await fns.smsBookingConfirmed({ params: { bookingId: "b1" }, data: { data: () => ({ otp: "4821", customerMobile: "9123456789" }) } });
-  ok("booking confirmed: the customer is texted with driver, plate and pickup OTP", gwCalls.length - n0 === 1 && gwCalls[n0].message === "Apna Transport: Booking confirmed. Driver Ravi (MH12AB1234) will reach you soon. Pickup OTP: 4821" && gwCalls[n0].destinationAddress[0] === "919123456789" && gwCalls[n0].dltTemplateId === "T2");
+  ok("booking confirmed: the customer is texted with the driver and the vehicle", gwCalls.length - n0 === 1 && gwCalls[n0].message === "Your Apna Transport booking is confirmed. Driver Ravi and vehicle MH12AB1234. Open the app to track your trip." && gwCalls[n0].destinationAddress[0] === "919123456789" && gwCalls[n0].dltTemplateId === "T2");
   col("bookings").set("b2", { status: "AwaitingDriver", pickup: "Hinjewadi Phase 1, Pune, Maharashtra", drop: "Mumbai", ringTargets: ["9700000001", "9700000002"] });
   const ev = (id) => ({ params: { bookingId: id }, data: { after: { data: () => JSON.parse(JSON.stringify(col("bookings").get(id))) } } });
   const n1 = gwCalls.length; await fns.smsNewLoad(ev("b2"));
-  ok("new load: every ring target is texted once", gwCalls.length - n1 === 2 && gwCalls[n1].dltTemplateId === "T3" && /New load request from Hinjewadi Phase 1.*to Mumbai/.test(gwCalls[n1].message) && col("bookings").get("b2").smsSentTo.length === 2);
+  ok("new load: every ring target is texted once", gwCalls.length - n1 === 2 && gwCalls[n1].dltTemplateId === "T3" && /New load on Apna Transport: pickup Hinjewadi Phase 1 Pune, drop Mumbai\./.test(gwCalls[n1].message) && col("bookings").get("b2").smsSentTo.length === 2);
   await fns.smsNewLoad(ev("b2")); ok("a second update texts nobody again", gwCalls.length - n1 === 2);
   col("bookings").get("b2").ringTargets.push("9700000003"); await fns.smsNewLoad(ev("b2")); ok("a driver added by a later escalation round is texted (only him)", gwCalls.length - n1 === 3 && gwCalls[gwCalls.length - 1].destinationAddress[0] === "919700000003");
   ok("the ring fields are never written by the SMS code", JSON.stringify(col("bookings").get("b2")).includes('"ringTargets":["9700000001","9700000002","9700000003"]') && !("alertedDriverMobiles" in col("bookings").get("b2")));

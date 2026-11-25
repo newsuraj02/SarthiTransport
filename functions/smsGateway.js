@@ -12,26 +12,41 @@
 const KINDS = ["otp", "bookingConfirmed", "newLoad", "kycReminder"];
 
 // The wording suggested for registration on the DLT portal (owner may have registered different words -- paste the REAL registered text in Admin; this is only the default).
+// These are the REGISTERED templates (APTRNS, owner 2026-11-25): OTP_LOGIN_V3 (Transactional), BOOKING_CONFIRMED_V2, DRIVER_NEW_LOAD_V2, DRIVER_KYC_REMINDER_V2 (Service Implicit).
 const DEFAULT_TEXT = {
-  otp: "{#var#} is your Apna Transport OTP. Do not share it with anyone.",
-  bookingConfirmed: "Apna Transport: Booking confirmed. Driver {#var#} ({#var#}) will reach you soon. Pickup OTP: {#var#}",
-  newLoad: "Apna Transport: New load request from {#var#} to {#var#}. Open the app to accept.",
-  kycReminder: "Apna Transport: Your KYC is incomplete. Complete it to receive loads: {#var#}",
+  otp: "{#numeric#} is your OTP for Apna Transport. Do not share it with anyone. Valid for 10 minutes.",
+  bookingConfirmed: "Your Apna Transport booking is confirmed. Driver {#alphanumeric#} and vehicle {#alphanumeric#}. Open the app to track your trip.",
+  newLoad: "New load on Apna Transport: pickup {#alphanumeric#}, drop {#alphanumeric#}. Open the app to accept.",
+  kycReminder: "Dear {#alphanumeric#}, your Apna Transport KYC is incomplete. Complete it in the app to start getting loads.",
 };
+// DLT message type per kind (what the gateway calls it); a saved per-message value in Admin wins.
+const DEFAULT_TYPE = { otp: "TRANSACTIONAL", bookingConfirmed: "SERVICE_IMPLICIT", newLoad: "SERVICE_IMPLICIT", kycReminder: "SERVICE_IMPLICIT" };
 
 const DEFAULT_API_URL = "https://iqsms.airtel.in/api/v1/send-prepaid-sms";
-const DEFAULT_MESSAGE_TYPE = "SERVICE_IMPLICIT";
 
-const VAR_RE = /\{#var#\}/gi;
+// A DLT template's variable slots: {#numeric#}, {#alphanumeric#}, {#var#} (anything), {#url#}, {#email#}...
+const VAR_RE = /\{#([a-z0-9_]+)#\}/gi;
 const countVars = (text) => (String(text || "").match(VAR_RE) || []).length;
 
-// Fills the {#var#} slots in order. Throws when the number of values is wrong -- sending a half-filled template would be rejected (or worse, delivered with "{#var#}" in it).
+// A value must look like what its slot allows, or the operator's scrubbing rejects the whole message: {#numeric#} = digits only; {#alphanumeric#} = letters, digits and single spaces
+// (anything else, e.g. commas / brackets / Devanagari, is dropped), at most 30 characters; any other slot takes the text as it is.
+function cleanVar(value, kind) {
+  const s = String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+  const k = String(kind || "").toLowerCase();
+  if (k === "numeric") return s.replace(/\D/g, "").slice(0, 30);
+  if (k === "alphanumeric") return s.replace(/[^A-Za-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().slice(0, 30).trim();
+  return s;
+}
+
+// Fills the slots in order. Throws when the number of values is wrong or a value is empty after cleaning -- a half-filled template would be rejected (or delivered with "{#...#}" in it).
 function renderTemplate(text, vars) {
-  const list = Array.isArray(vars) ? vars.map((v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim()) : [];
+  const list = Array.isArray(vars) ? vars : [];
   const n = countVars(text);
   if (n !== list.length) throw new Error(`template needs ${n} value(s), got ${list.length}`);
-  let i = 0;
-  return String(text).replace(VAR_RE, () => list[i++]);
+  let i = 0; let empty = false;
+  const out = String(text).replace(VAR_RE, (_m, kind) => { const v = cleanVar(list[i++], kind); if (!v) empty = true; return v; });
+  if (empty) throw new Error("a value is empty (or has no letters / digits the template slot accepts)");
+  return out;
 }
 
 const cleanMobile = (v) => String(v == null ? "" : v).replace(/\D/g, "").slice(-10);
@@ -43,11 +58,11 @@ function normalizeConfig(doc) {
   const templates = {};
   for (const k of KINDS) {
     const t = (d.templates && d.templates[k]) || {};
-    templates[k] = { id: String(t.id || "").trim(), text: String(t.text || "").trim() || DEFAULT_TEXT[k], enabled: t.enabled !== false };
+    templates[k] = { id: String(t.id || "").trim(), text: String(t.text || "").trim() || DEFAULT_TEXT[k], enabled: t.enabled !== false, type: String(t.type || "").trim() || DEFAULT_TYPE[k] };
   }
   return {
     entityId: String(d.entityId || "").trim(), header: String(d.header || "").trim(), customerId: String(d.customerId || "").trim(),
-    apiUrl: String(d.apiUrl || "").trim() || DEFAULT_API_URL, messageType: String(d.messageType || "").trim() || DEFAULT_MESSAGE_TYPE,
+    apiUrl: String(d.apiUrl || "").trim() || DEFAULT_API_URL,
     otpEnabled: d.otpEnabled === true, otpTestedAt: Number(d.otpTestedAt) || 0, dailyOtpCap: Math.max(Number(d.dailyOtpCap) || 3000, 1), templates,
   };
 }
@@ -64,14 +79,14 @@ function templateFor(cfg, kind) {
 }
 
 // The HTTP request for the gateway. ONE place to adapt if the gateway wants other field names.
-function buildRequest(cfg, creds, { to, message, templateId }) {
+function buildRequest(cfg, creds, { to, message, templateId, messageType }) {
   const auth = Buffer.from(`${creds.user}:${creds.password}`).toString("base64");
   const body = {
     ...(cfg.customerId ? { customerId: cfg.customerId } : {}),
     destinationAddress: [`91${to}`],
     message,
     sourceAddress: cfg.header,
-    messageType: cfg.messageType,
+    messageType,
     dltTemplateId: templateId,
     entityId: cfg.entityId,
   };
@@ -99,7 +114,7 @@ async function sendDltSms({ cfg, creds, kind, to, vars, fetchImpl }) {
   if (!creds || !creds.user || !creds.password) return { ok: false, reason: "no_credentials", detail: `The SMS gateway login is not set (missing: ${[!creds?.user && "SMS_API_USER", !creds?.password && "SMS_API_PASSWORD"].filter(Boolean).join(", ")}).` };
   let message;
   try { message = renderTemplate(t.template.text, vars); } catch (e) { return { ok: false, reason: "bad_template", detail: e.message }; }
-  const req = buildRequest(cfg, creds, { to: mobile, message, templateId: t.template.id });
+  const req = buildRequest(cfg, creds, { to: mobile, message, templateId: t.template.id, messageType: t.template.type });
   try {
     const res = await fetchImpl(req.url, req.init);
     const verdict = judgeGatewayReply(res.status, await res.text());
@@ -109,4 +124,4 @@ async function sendDltSms({ cfg, creds, kind, to, vars, fetchImpl }) {
   }
 }
 
-module.exports = { KINDS, DEFAULT_TEXT, DEFAULT_API_URL, DEFAULT_MESSAGE_TYPE, countVars, renderTemplate, cleanMobile, isIndianMobile, normalizeConfig, templateFor, buildRequest, judgeGatewayReply, sendDltSms };
+module.exports = { KINDS, DEFAULT_TEXT, DEFAULT_TYPE, DEFAULT_API_URL, countVars, cleanVar, renderTemplate, cleanMobile, isIndianMobile, normalizeConfig, templateFor, buildRequest, judgeGatewayReply, sendDltSms };

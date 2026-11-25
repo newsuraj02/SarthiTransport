@@ -103,7 +103,8 @@ module.exports = function register({ db, FieldValue, lookupMobileRoles, mobileHa
     const batchId = `${Date.now()}`; let sent = 0; let failure = null;
     for (let i = 0; i < list.length; i += 5) {
       await Promise.all(list.slice(i, i + 5).map(async (m) => {
-        const r = await sendOne(cfg, smsKind, m, [ev.kycLink(m)]);
+        let dsnap = null; try { dsnap = await db.collection("drivers").doc(m).get(); } catch { /* the name is only a greeting */ }
+        const r = await sendOne(cfg, smsKind, m, ev.kycVars(dsnap && dsnap.exists ? dsnap.data() : null));
         if (r.ok) sent++; else failure = { reason: r.reason, detail: String(r.detail || "").slice(0, 220) };
         try {
           const at = Date.now(); const ref = db.collection("whatsappStatus").doc(m); // the ticks / red "!" in Admin's driver rows read this record (delivery receipts are not available, so "accepted by the gateway" = one tick)
@@ -121,7 +122,7 @@ module.exports = function register({ db, FieldValue, lookupMobileRoles, mobileHa
     if (!gw.KINDS.includes(kind)) throw new HttpsError("invalid-argument", "Unknown message kind.");
     const cfg = await loadConfig();
     const n = gw.countVars(cfg.templates[kind].text);
-    const sample = { otp: ["123456"], bookingConfirmed: ["Test Driver", "MH12AB1234", "4821"], newLoad: ["Pune", "Mumbai"], kycReminder: ["https://sarthi-transport-74865.web.app"] }[kind].slice(0, n);
+    const sample = { otp: ["123456"], bookingConfirmed: ["Test Driver", "MH12AB1234"], newLoad: ["Pune", "Mumbai"], kycReminder: ["Test Driver"] }[kind].slice(0, n);
     while (sample.length < n) sample.push("test");
     const r = await sendOne(cfg, kind, mobile, sample);
     if (r.ok && kind === "otp") await db.collection("smsConfig").doc("main").set({ otpTestedAt: Date.now() }, { merge: true });
