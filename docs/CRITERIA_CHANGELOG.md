@@ -823,3 +823,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- docs for the brutal ride deletion
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-25 -- Admin Bookings: added All rides (every status) list with per-ride Delete
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings

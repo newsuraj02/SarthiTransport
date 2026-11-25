@@ -1760,6 +1760,31 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
     renderItem: liveRow,
   }));
 
+  // ALL RIDES, EVERY STATUS (owner 2026-11-25: "it's not showing the delete button for every booking in the bookings tab"): the four live groups + today's lists only show SOME bookings
+  // (a ride finished before today, or with an unusual status, was in none of them, so it could never be deleted from here). This list holds EVERY booking, newest first, each with its Delete.
+  const ALL_RIDES_SHOWN = 300;
+  const rideMs = (b) => (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : Number(b.createdAt) || 0);
+  const allRides = [...(bookings || [])].sort((a, b) => rideMs(b) - rideMs(a));
+  const allRidesSection = {
+    key: "all-rides",
+    title: lang === "en" ? "All rides · every status" : lang === "mr" ? "सर्व राइड · प्रत्येक स्थिती" : "सभी राइड · हर स्थिति",
+    emptyMsg: lang === "en" ? "No rides." : lang === "mr" ? "कोणतीही राइड नाही." : "कोई राइड नहीं।",
+    count: allRides.length,
+    allIds: allRides.map((b) => b.id),
+    note: allRides.length > ALL_RIDES_SHOWN ? (lang === "en" ? `Showing the newest ${ALL_RIDES_SHOWN} of ${allRides.length}. "Delete all ${allRides.length}" removes every ride, including the ones not shown.` : lang === "mr" ? `${allRides.length} पैकी नवीन ${ALL_RIDES_SHOWN} दाखवत आहे. "सर्व ${allRides.length} डिलीट करा" न दिसणाऱ्या राइडसह सर्व काढते.` : `${allRides.length} में से नई ${ALL_RIDES_SHOWN} दिखा रहे हैं। "सभी ${allRides.length} डिलीट करें" न दिखने वाली राइड समेत हर राइड हटा देता है।`) : null,
+    items: allRides.slice(0, ALL_RIDES_SHOWN),
+    renderItem: (b) => (
+      <div key={b.id} data-all-ride={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
+        <div className="flex items-center justify-between gap-2 mt-1.5 flex-wrap">
+          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: statusMeta[b.status]?.bg || C.inkSoft, color: statusMeta[b.status]?.color || "#FFFFFF" }}>{statusMeta[b.status]?.label || b.status || "—"}</span>
+          <span className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{rideMs(b) ? new Date(rideMs(b)).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : "—"}{b.scheduledFor ? ` · 📅 ${b.scheduledFor}` : ""}</span>
+        </div>
+        <div className="text-[11px] mt-1 break-words" style={{ color: C.inkSoft }}>{b.customerName || "—"} {b.customerMobile ? `· ${b.customerMobile}` : ""} · {b.driverName || (lang === "en" ? "No driver" : lang === "mr" ? "ड्रायव्हर नाही" : "ड्राइवर नहीं")}{fleetTag(b)} · {fareKmText(b, lang)}</div>
+      </div>
+    ),
+  };
+
   const sections = [
     ...liveSections,
     {
@@ -1798,6 +1823,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
         </div>
       ),
     },
+    allRidesSection,
   ];
 
   return (
@@ -1826,7 +1852,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
           ) : (
             <div className="flex items-center justify-between p-4 pb-0 mb-3">
               <h3 className="text-sm font-bold" style={{ color: C.ink }}>{s.title}</h3>
-              <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
+              <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.count ?? s.items.length}</span>
             </div>
           )}
           {open && (
@@ -1835,7 +1861,8 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
                 <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
               ) : (
                 <>
-                  <DeleteRideControls ids={s.items.map((it) => it.id).filter(Boolean)} onDelete={deleteRideIds} lang={lang} all />
+                  {s.note && <p data-ride-list-note className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{s.note}</p>}
+                  <DeleteRideControls ids={(s.allIds || s.items.map((it) => it.id)).filter(Boolean)} onDelete={deleteRideIds} lang={lang} all />
                   <SearchableList items={s.items} renderItem={(it) => (<div key={it.id}>{s.renderItem(it)}<DeleteRideControls ids={[it.id]} onDelete={deleteRideIds} lang={lang} /></div>)} textOf={bookingSearchText} lang={lang} />
                 </>
               )}
