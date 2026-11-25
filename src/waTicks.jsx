@@ -39,14 +39,27 @@ function Check({ x, color }) {
   return <path d={`M${x + 1} 8.5 L${x + 4} 11.5 L${x + 10} 4.5`} fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />;
 }
 
+const WHY_TEXT = ["Why it failed", "फेल क्यों हुआ", "अयशस्वी का?"];
+const NO_REASON_TEXT = ["No reason was reported (the number may not be on WhatsApp, or the template was not accepted)", "कारण नहीं बताया गया (नंबर WhatsApp पर नहीं होगा, या टेम्पलेट मंज़ूर नहीं हुआ)", "कारण दिले नाही (नंबर WhatsApp वर नसेल, किंवा टेम्पलेट मंजूर नाही)"];
+
 export function WaTicks({ mobile, lang = "en", compact = false }) {
   const map = useWaStatus();
+  const [showWhy, setShowWhy] = useState(false); // red "!" only: hover (computer) or tap (phone) shows the reason right there (owner 2026-11-25)
   const st = latestWaState(map, mobile);
   if (!st) return null;
   const color = tickColor(st.status);
   const label = `${pickText(STATUS_TEXT[st.status] || STATUS_TEXT.submitted, lang)}${KIND_TEXT[st.kind] ? ` · ${pickText(KIND_TEXT[st.kind], lang)}` : ""}${st.status === "failed" && st.reason ? ` · ${st.reason}` : ""}`;
+  const failed = st.status === "failed";
+  const whyText = failed ? (st.reason ? String(st.reason) : pickText(NO_REASON_TEXT, lang)) : "";
   return (
-    <span data-wa-ticks={st.status} data-wa-kind={st.kind} title={label} aria-label={label} className="inline-flex items-center gap-1 shrink-0" style={{ color }}>
+    <span data-wa-ticks={st.status} data-wa-kind={st.kind} title={label} aria-label={label} className={`inline-flex items-center gap-1 shrink-0${failed ? " relative cursor-pointer" : ""}`} style={{ color }}
+      {...(failed ? { role: "button", tabIndex: 0, onClick: (e) => { e.stopPropagation(); if (e.nativeEvent && e.nativeEvent.pointerType === "mouse") setShowWhy(true); else setShowWhy((v) => !v); }, onPointerEnter: (e) => { if (e.pointerType === "mouse") setShowWhy(true); }, onPointerLeave: (e) => { if (e.pointerType === "mouse") setShowWhy(false); } } : {})}>
+      {failed && showWhy && (
+        <span data-wa-fail-reason className="absolute left-0 top-full mt-1 z-40 w-56 rounded-lg px-2.5 py-2 text-[11px] font-semibold leading-snug break-words shadow-lg text-left" style={{ background: C.paper, color: C.ink, border: `1px solid ${C.safety}` }}>
+          <span className="block font-extrabold mb-0.5" style={{ color: C.safety }}>{pickText(WHY_TEXT, lang)}{KIND_TEXT[st.kind] ? ` · ${pickText(KIND_TEXT[st.kind], lang)}` : ""}</span>
+          {whyText}
+        </span>
+      )}
       <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
         {st.status === "submitted" && <g fill="none" stroke="#8696A0" strokeWidth="1.5" strokeLinecap="round"><circle cx="9" cy="7" r="4.6" /><path d="M9 4.6 V7 L10.8 8.2" /></g>}
         {st.status === "sent" && <Check x={3} color={color} />}

@@ -840,3 +840,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-25 -- Vehicle picker: no brand names, Other option last
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/VehicleModelPicker.jsx, code:src/vehicleModels.js
+
+## 2026-11-25 -- WaTicks: red ! shows failure reason on hover / tap
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/waTicks.jsx#WaTicks
+- added (2): code:src/waTicks.jsx#WHY_TEXT, code:src/waTicks.jsx#NO_REASON_TEXT
