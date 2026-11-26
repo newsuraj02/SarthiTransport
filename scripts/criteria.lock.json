@@ -342,7 +342,7 @@
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
   "code:docs/SMS_ACTIVATION.md": "fd6621898e5456dc",
-  "code:docs/SYSTEM_CONTRACTS.md": "511573287819d780",
+  "code:docs/SYSTEM_CONTRACTS.md": "053143a7fcd6cfc0",
   "code:firebase.json": "900e217b868337c1",
   "code:firestore.rules": "d9ceec2f7254d6e1",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -609,7 +609,7 @@
   "code:package.json": "c0883e26037cddab",
   "code:postcss.config.js": "33e39ff2f29058a0",
   "code:public/.well-known/assetlinks.json": "2926adc1e7f315fd",
-  "code:public/customer.html": "802981a715e6ebc9",
+  "code:public/customer.html": "33a433cf6fd741ea",
   "code:public/delete-data.html": "93771526ac1d4a5b",
   "code:public/driver.html": "cce0547d55aaa2e4",
   "code:public/favicon.svg": "579ce2988fac83eb",
@@ -793,7 +793,7 @@
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "605a3e5eeea82853",
   "code:scripts/verifyInvariants.mjs#VM_ALL_LABELS": "0252744b92ef8156",
-  "code:scripts/verifyInvariants.mjs#checks": "3df2a85f487a4126",
+  "code:scripts/verifyInvariants.mjs#checks": "dadefa519c2b9900",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/whyNoDriver.js": "7eaf1835626f2adf",
@@ -1435,6 +1435,7 @@
   "code:src/phoneOtp.js#endOtpSession": "f44125a143b75e5d",
   "code:src/placeSpecificity.js": "984cc86ac3b3a3be",
   "code:src/serviceArea.js": "37cede12105014f9",
+  "code:src/transporters.js": "ba9dd02faa18a4f1",
   "code:src/vehicleArt.jsx#imports": "9abf3e6700d98954",
   "code:src/vehicleArt.jsx#VEHICLE_ART_SPECS": "5962e96b0e189c4c",
   "code:src/vehicleArt.jsx#INK": "86abbc45a569dbc2",
@@ -1458,7 +1459,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:src/transporters.js": "ba9dd02faa18a4f1"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

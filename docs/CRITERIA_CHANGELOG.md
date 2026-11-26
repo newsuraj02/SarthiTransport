@@ -952,3 +952,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-26 -- Transporter list: only owners with 2 or more vehicles, one shared rule for the button count and the list (owner 2026-11-26)
 - changed (7): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/FleetOwner.jsx#imports, code:src/FleetOwner.jsx#AdminFleetVehicles
 - added (1): code:src/transporters.js
+
+## 2026-11-26 -- customer landing page /customer.html: says Pune (not 'across India') and tags the Play button utm_source=google (owner 2026-11-26, Google Ads search campaign)
+- changed (1): code:public/customer.html
+
+## 2026-11-26 -- pin the landing-page invariant + contract N70 (docs only, no rule changed)
+- changed (2): code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
