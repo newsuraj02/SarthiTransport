@@ -17,6 +17,7 @@ import {
 import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { AdminFleetVehicles } from "./FleetOwner.jsx";
+import { groupTransporters } from "./transporters.js";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
@@ -4773,7 +4774,7 @@ export function AdminPanel({ deleteEveryRide, deleteRideIds, toggleCustomerBlock
           </div>)
         : <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} updateDriverKyc={updateDriverKyc} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet}
             topExtra={<button data-all-transporters-btn onClick={() => setShowTransporters(true)} className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
-              <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({new Set((fleetVehicles || []).map((v) => v.ownerMobile)).size})
+              <Truck size={16} /> {lang === "en" ? "All Transporters" : lang === "mr" ? "सर्व ट्रान्सपोर्टर" : "सभी ट्रांसपोर्टर"} ({groupTransporters(fleetVehicles).length})
             </button>} />)}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} toggleCustomerBlock={toggleCustomerBlock} />}
       {tab === "finance" && <><AdminMoneyRequests withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} rejectRecharge={rejectRecharge} lang={lang} /><AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} deleteSelectedRides={deleteSelectedRides} deleteEveryRide={deleteEveryRide} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} /></>}

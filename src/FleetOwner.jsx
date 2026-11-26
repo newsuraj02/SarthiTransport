@@ -11,6 +11,7 @@ import { cleanNameInput, isValidPersonName, digitsOnly, cleanVehicleNumberInput,
 import VehicleModelPicker from "./VehicleModelPicker.jsx";
 import { ListSearchBox, noMatchText } from "./AdminSearchableList.jsx";
 import { needsListSearch, filterByQuery } from "./adminListSearch.js";
+import { groupTransporters } from "./transporters.js";
 import { resolveVehicleChoice, categoryIndexForKg } from "./vehicleModels.js";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
@@ -253,9 +254,8 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
   const [q, setQ] = useState(""); // search bar (owner 2026-11-23): only when there are more than 20 transporters
   const privById = Object.fromEntries((fleetPrivate || []).map((p) => [p.id, p]));
   const ownerName = (m) => (drivers || []).find((d) => d.mobile === m)?.name || m;
-  const byOwner = {};
-  (fleetVehicles || []).forEach((v) => { (byOwner[v.ownerMobile] = byOwner[v.ownerMobile] || []).push(v); });
-  const owners = Object.entries(byOwner).map(([mobile, vs]) => ({
+  // only owners with TWO OR MORE vehicles are transporters (owner 2026-11-26; src/transporters.js is the one rule, shared with the "All Transporters (N)" button)
+  const owners = groupTransporters(fleetVehicles).map(({ mobile, vehicles: vs }) => ({
     mobile, name: ownerName(mobile), pending: vs.filter((v) => v.kyc === "Pending").length,
     vehicles: [...vs].sort((a, b) => (a.kyc === "Pending" ? -1 : 1) - (b.kyc === "Pending" ? -1 : 1)),
   })).sort((a, b) => (b.pending > 0) - (a.pending > 0) || String(a.name).localeCompare(String(b.name)));
@@ -266,7 +266,7 @@ export function AdminFleetVehicles({ fleetVehicles, fleetPrivate, drivers, lang,
   return (
     <div className="p-4 space-y-2" data-admin-fleet>
       <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, `All Transporters (${owners.length})`, `सभी ट्रांसपोर्टर (${owners.length})`, `सर्व ट्रान्सपोर्टर (${owners.length})`)}</div>
-      {owners.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter vehicles yet.", "अभी कोई ट्रांसपोर्टर गाड़ी नहीं।", "अजून कोणतीही ट्रान्सपोर्टर गाडी नाही.")}</div>}
+      {owners.length === 0 && <div className="text-xs" style={{ color: C.inkSoft }}>{T(lang, "No transporter with 2 or more vehicles yet.", "अभी कोई ट्रांसपोर्टर नहीं जिसके पास 2 या ज़्यादा गाड़ियाँ हों।", "अजून कोणताही ट्रान्सपोर्टर नाही ज्याच्याकडे 2 किंवा अधिक गाड्या आहेत.")}</div>}
       {searchBar && <ListSearchBox value={q} onChange={setQ} lang={lang} shown={shownOwners.length} total={owners.length} />}
       {searchBar && q.trim() && shownOwners.length === 0 && <div className="text-xs text-center py-4" style={{ color: C.inkSoft }}>{noMatchText(lang)}</div>}
       {shownOwners.map((o) => {
