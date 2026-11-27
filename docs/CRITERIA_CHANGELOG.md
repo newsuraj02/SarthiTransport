@@ -958,3 +958,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-26 -- pin the landing-page invariant + contract N70 (docs only, no rule changed)
 - changed (2): code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-27 -- AndroidManifest: add AD_ID permission (Play Advertising ID declaration = Yes), contract N71 + invariant (owner 2026-11-27, build 45)
+- changed (4): file:android/app/src/main/AndroidManifest.xml, code:android/app/src/main/AndroidManifest.xml, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks

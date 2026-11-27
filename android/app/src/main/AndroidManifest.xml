@@ -175,4 +175,9 @@
          driver is using another app. "Display over other apps" is the only way
          Android allows that (PermissionGate opens its settings screen once). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Owner 2026-11-27 (Play Console Advertising ID declaration = Yes: Analytics + Advertising or
+         marketing; the app contains the Meta SDK and Firebase Analytics). Android 13+ hands an app that
+         lacks this permission a string of zeros instead of the advertising ID, and Play blocks the release.
+         It is only a permission line: nothing else in the app reads or writes it. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 </manifest>
