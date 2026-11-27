@@ -13,7 +13,7 @@ import {
   gpsStatus, haversineKm, localDateKey, fmt, formatTripKm, getAdminRouteOverride,
 } from "./App.jsx";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
-import { adminBookForCustomer } from "./firebaseClient";
+import { adminBookForCustomer, adminRingDriver } from "./firebaseClient";
 import { categoryIndexForKg } from "./vehicleModels.js";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 import { whatsappLink } from "./fleetDispatch.js";
@@ -49,6 +49,8 @@ function failText(res, lang) {
     vehicle_no_driver_details: T(lang, "That vehicle has no driver details saved.", "उस गाड़ी के ड्राइवर की जानकारी सेव नहीं है।", "त्या वाहनाच्या ड्रायव्हरची माहिती सेव्ह नाही."),
     owner_not_transporter: T(lang, "That owner is not a transporter.", "वह मालिक ट्रांसपोर्टर नहीं है।", "तो मालक ट्रान्सपोर्टर नाही."),
     fare: T(lang, "The fare does not add up -- check the Round trip and try again.", "भाड़ा मेल नहीं खा रहा — राउंड ट्रिप जाँचकर फिर कोशिश करें।", "भाडे जुळत नाही — राउंड ट्रिप तपासून पुन्हा प्रयत्न करा."),
+    no_push_token: T(lang, "This driver's phone cannot be rung (no push token: app not opened since install, or logged out). Call him.", "इस ड्राइवर के फ़ोन पर घंटी नहीं जा सकती (पुश टोकन नहीं)। उसे कॉल करें।", "या ड्रायव्हरच्या फोनवर रिंग जाऊ शकत नाही (पुश टोकन नाही). त्याला कॉल करा."),
+    not_in_ring_rule: T(lang, "A ring would do nothing: this driver would not see the load in his app (off duty, other category, too far, or busy). Use Book instead.", "घंटी बेकार जाएगी: यह ड्राइवर अपने ऐप में यह लोड देख नहीं पाएगा (ड्यूटी बंद, दूसरी श्रेणी, दूर या व्यस्त)। बुक का उपयोग करें।", "रिंग वाया जाईल: हा ड्रायव्हर त्याच्या अ‍ॅपमध्ये हा लोड पाहू शकणार नाही (ड्युटी बंद, वेगळी श्रेणी, लांब किंवा व्यस्त). बुक वापरा."),
     "permission-denied": T(lang, "Only Admin can do this.", "यह सिर्फ़ एडमिन कर सकता है।", "हे फक्त अ‍ॅडमिन करू शकतो."),
   };
   return m[r] || (res && res.message) || T(lang, "Could not book -- please try again.", "बुक नहीं हो सका — फिर कोशिश करें।", "बुक होऊ शकले नाही — पुन्हा प्रयत्न करा.");
@@ -163,6 +165,24 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
     setError(failText(res, lang)); setConfirming(null);
   };
 
+  // RING (owner 2026-11-27): rings ONLY this driver's phone for an open request; he accepts it himself (Book assigns the trip at once instead).
+  const doRing = async () => {
+    if (!confirming || !confirming.ring || !ready || working) return;
+    setWorking(true); setError("");
+    const res = await adminRingDriver({
+      customerMobile, customerName: customerName.trim(), driverMobile: confirming.mobile,
+      pickup, drop, pickupLat: pickupCoords.lat, pickupLng: pickupCoords.lng, dropLat: dropCoords.lat, dropLng: dropCoords.lng,
+      pickupPlaceId, dropPlaceId, placeLang: lang,
+      fare: chosenFare.fare, tierMaxKg: chosenFare.tierMaxKg, listCategory: chosen.index,
+      listCategoryKg: chosen.index >= options.length - 1 ? 999999 : chosen.capacityKg,
+      distance: km, scheduledFor,
+      ...(returnTrip ? { returnTrip: true, oneWayFare: chosenFare.oneWayFare, returnFare: chosenFare.returnFare, returnPct: Number(returnPct) || 0 } : {}),
+    });
+    setWorking(false);
+    if (res && res.ok) { setDone({ ring: true, bookingId: res.bookingId, driverName: confirming.name, rung: !!res.rung, appOpen: !!res.appOpen }); setConfirming(null); return; }
+    setError(failText(res, lang)); setConfirming(null);
+  };
+
   const label = "text-[11px] font-bold mb-1";
   return (
     <div data-admin-book-for-customer className="fixed inset-0 z-[80] flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
@@ -174,10 +194,17 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
         <div className="p-4 space-y-3 overflow-y-auto">
           {done ? (
             <div data-admin-book-done className="rounded-xl p-4 text-center space-y-2" style={{ background: "#E8F7EE", border: `1px solid ${C.success}` }}>
-              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, "Booked", "बुक हो गया", "बुक झाले")} · {done.bookingId}</div>
-              <div className="text-xs" style={{ color: C.inkSoft }}>
+              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{done.ring ? T(lang, "Rung", "घंटी बजाई", "रिंग केली") : T(lang, "Booked", "बुक हो गया", "बुक झाले")} · {done.bookingId}</div>
+              {done.ring && (
+                <div data-admin-ring-done className="text-xs" style={{ color: C.inkSoft }}>
+                  {done.appOpen
+                    ? T(lang, `${done.driverName} has the app open, so no ring: the load shows on his screen with a sound. He accepts it himself.`, `${done.driverName} का ऐप खुला है, इसलिए घंटी नहीं: लोड उसकी स्क्रीन पर आवाज़ के साथ दिखेगा। वह खुद स्वीकार करेगा।`, `${done.driverName} चे अ‍ॅप उघडे आहे, म्हणून रिंग नाही: लोड त्याच्या स्क्रीनवर आवाजासह दिसेल. तो स्वतः स्वीकारेल.`)
+                    : T(lang, `${done.driverName}'s phone has been rung. He accepts it himself in the app. Nothing is assigned until he does. If nobody accepts within 1 hour the request is deleted.`, `${done.driverName} के फ़ोन पर घंटी भेज दी गई है। वह खुद ऐप में स्वीकार करेगा। उसके स्वीकार करने तक कुछ असाइन नहीं होता। 1 घंटे में कोई स्वीकार न करे तो रिक्वेस्ट हट जाती है।`, `${done.driverName} च्या फोनवर रिंग पाठवली आहे. तो स्वतः अ‍ॅपमध्ये स्वीकारेल. तो स्वीकारेपर्यंत काहीही नियुक्त होत नाही. 1 तासात कोणी न स्वीकारल्यास विनंती हटते.`)}
+                </div>
+              )}
+              {!done.ring && <div className="text-xs" style={{ color: C.inkSoft }}>
                 {T(lang, `${done.driverName} now has this trip. Tell the driver to open the app. The customer pays the driver directly.`, `${done.driverName} के पास यह ट्रिप आ गई है। ड्राइवर को ऐप खोलने को कहें। ग्राहक ड्राइवर को सीधे भुगतान करेगा।`, `${done.driverName} कडे ही ट्रिप आली आहे. ड्रायव्हरला अ‍ॅप उघडायला सांगा. ग्राहक ड्रायव्हरला थेट पैसे देईल.`)}
-              </div>
+              </div>}
               {done.fleet && done.dispatch && (
                 <div data-admin-book-fleet-dispatch className="text-xs space-y-1.5 text-left rounded-lg p-2.5" style={{ background: "#FFFFFF", border: `1px solid ${C.line}`, color: C.ink }}>
                   {done.dispatch.sent
@@ -296,16 +323,17 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <a href={`tel:+91${d.mobile}`} data-admin-book-call className="p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#fff" }} aria-label="Call"><Phone size={16} /></a>
+                            <button type="button" data-admin-ring-btn onClick={() => { setConfirming({ mobile: d.mobile, name: d.name, ring: true }); setError(""); }} className="px-3 py-2.5 rounded-lg text-xs font-extrabold" style={{ background: C.marigold, color: C.ink }}>{T(lang, "Ring", "रिंग", "रिंग")}</button>
                             <button type="button" data-admin-book-btn onClick={() => { setConfirming({ mobile: d.mobile, name: d.name }); setError(""); }} className="px-3 py-2.5 rounded-lg text-xs font-extrabold" style={{ background: C.navy, color: "#fff" }}>{T(lang, "Book", "बुक", "बुक")}</button>
                           </div>
                         </div>
                         {confirming && !confirming.fleetVehicleId && confirming.mobile === d.mobile && (
                           <div data-admin-book-confirm className="mt-2 rounded-lg p-2.5 space-y-2" style={{ background: "#FFF8E1", border: `1px solid ${C.marigoldDeep}` }}>
                             <div className="text-xs" style={{ color: C.ink }}>
-                              {T(lang, `Book ${d.name} for ${customerName.trim()} (${customerMobile}) at ${fmt(chosenFare.fare)}? Only if the driver agreed on the call. The customer pays the driver directly.`, `${customerName.trim()} (${customerMobile}) के लिए ${d.name} को ${fmt(chosenFare.fare)} में बुक करें? सिर्फ़ तब जब ड्राइवर कॉल पर मान गया हो। ग्राहक ड्राइवर को सीधे भुगतान करेगा।`, `${customerName.trim()} (${customerMobile}) साठी ${d.name} ला ${fmt(chosenFare.fare)} मध्ये बुक करायचे? फक्त ड्रायव्हरने कॉलवर होकार दिला असेल तरच. ग्राहक ड्रायव्हरला थेट पैसे देईल.`)}
+                              {confirming.ring ? T(lang, `Ring ${d.name} for ${customerName.trim()} (${customerMobile}) at ${fmt(chosenFare.fare)}? Only this driver's phone rings; he accepts it himself and nothing is assigned until he does. Other drivers who qualify can still see the open request in their app (no ring).`, `${customerName.trim()} (${customerMobile}) के लिए ${d.name} को ${fmt(chosenFare.fare)} में घंटी भेजें? सिर्फ़ इसी ड्राइवर के फ़ोन पर घंटी बजेगी; वह खुद स्वीकार करेगा, तब तक कुछ असाइन नहीं होता। बाकी योग्य ड्राइवर रिक्वेस्ट अपने ऐप में देख सकते हैं (घंटी नहीं)।`, `${customerName.trim()} (${customerMobile}) साठी ${d.name} ला ${fmt(chosenFare.fare)} मध्ये रिंग करायची? फक्त याच ड्रायव्हरच्या फोनवर रिंग वाजेल; तो स्वतः स्वीकारेल, तोपर्यंत काहीही नियुक्त होत नाही. इतर पात्र ड्रायव्हर विनंती त्यांच्या अ‍ॅपमध्ये पाहू शकतात (रिंग नाही).`) : T(lang, `Book ${d.name} for ${customerName.trim()} (${customerMobile}) at ${fmt(chosenFare.fare)}? Only if the driver agreed on the call. The customer pays the driver directly.`, `${customerName.trim()} (${customerMobile}) के लिए ${d.name} को ${fmt(chosenFare.fare)} में बुक करें? सिर्फ़ तब जब ड्राइवर कॉल पर मान गया हो। ग्राहक ड्राइवर को सीधे भुगतान करेगा।`, `${customerName.trim()} (${customerMobile}) साठी ${d.name} ला ${fmt(chosenFare.fare)} मध्ये बुक करायचे? फक्त ड्रायव्हरने कॉलवर होकार दिला असेल तरच. ग्राहक ड्रायव्हरला थेट पैसे देईल.`)}
                             </div>
                             <div className="flex gap-2">
-                              <button type="button" disabled={working} data-admin-book-confirm-yes onClick={doBook} className="flex-1 rounded-lg py-2 text-xs font-extrabold" style={{ background: working ? "#E5EAF2" : C.success, color: working ? "#9AA3B0" : "#fff" }}>{working ? T(lang, "Booking…", "बुक हो रहा है…", "बुक होत आहे…") : T(lang, "Yes, book", "हाँ, बुक करें", "हो, बुक करा")}</button>
+                              <button type="button" disabled={working} data-admin-book-confirm-yes onClick={confirming.ring ? doRing : doBook} className="flex-1 rounded-lg py-2 text-xs font-extrabold" style={{ background: working ? "#E5EAF2" : C.success, color: working ? "#9AA3B0" : "#fff" }}>{working ? (confirming.ring ? T(lang, "Ringing…", "घंटी भेज रहे हैं…", "रिंग करत आहे…") : T(lang, "Booking…", "बुक हो रहा है…", "बुक होत आहे…")) : confirming.ring ? T(lang, "Yes, ring", "हाँ, घंटी भेजें", "हो, रिंग करा") : T(lang, "Yes, book", "हाँ, बुक करें", "हो, बुक करा")}</button>
                               <button type="button" disabled={working} onClick={() => setConfirming(null)} className="flex-1 rounded-lg py-2 text-xs font-extrabold" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>{T(lang, "Cancel", "रद्द करें", "रद्द करा")}</button>
                             </div>
                           </div>

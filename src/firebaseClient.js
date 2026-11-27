@@ -216,6 +216,21 @@ export async function adminBookForCustomer(data) {
   }
 }
 
+// ADMIN RINGS ONE DRIVER (owner 2026-11-27; functions/index.js: adminRingDriver). Same input as adminBookForCustomer; creates an OPEN request and rings only that driver's phone.
+// Never throws: { ok, bookingId?, rung?, appOpen?, reason?, message? }.
+export async function adminRingDriver(data) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "adminRingDriver");
+    const result = await call(data);
+    return result.data;
+  } catch (e) {
+    console.error("[adminRingDriver] callable failed", e);
+    return { ok: false, reason: String(e?.code || "error").replace("functions/", ""), message: String(e?.message || "").slice(0, 220) };
+  }
+}
+
 // ADMIN SWITCH ROLE (owner 2026-11-19; functions/index.js: adminSwitchRole, decisions in functions/roleSwitch.js): moves a number between Driver and Customer. Never throws:
 // { ok, to?, reason?, issues? } -- reason "driver-not-settled" / "customer-has-booking" / "has-both-roles" / "not-found" / "error"; `issues` lists what a Driver still has to settle.
 export async function adminSwitchRole(mobile, to) {

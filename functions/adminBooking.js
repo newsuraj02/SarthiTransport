@@ -131,4 +131,32 @@ function buildAdminBookingDoc(v, driver, stamp, fleet = null) {
   };
 }
 
-module.exports = { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc, cleanMobile, MAX_FARE };
+// ADMIN RINGS ONE DRIVER (owner 2026-11-27: "a Ring button ... which rings that particular driver"). Not a booking assigned by Admin: an OPEN request (AwaitingDriver) in the
+// shape the customer's own request has, that only ONE driver's phone is rung for; the driver accepts it himself (his Accept = the ordinary one). `pendingDriverName` carries a
+// placeholder ONLY while the document is created, so the new-load broadcast trigger (which skips a booking with a pendingDriverName) rings nobody else; the callable clears it
+// right away. `adminRing` makes the escalation job leave it alone (no wider rounds), `adminRingMobile` says who was rung.
+const ADMIN_RING_PLACEHOLDER = "admin-ring";
+function buildAdminRingDoc(v, stamp) {
+  return {
+    pickup: v.pickup, drop: v.drop, vehicle: null,
+    tierMaxKg: v.tierMaxKg,
+    ...(v.listCategory != null ? { listCategory: v.listCategory } : {}),
+    listCategoryKg: v.listCategoryKg,
+    weight: v.listCategoryKg, weightIsCapacity: true,
+    distance: v.distance, status: "AwaitingDriver", bids: [], fare: v.fare,
+    pendingDriverName: ADMIN_RING_PLACEHOLDER, pendingDriverMobile: null, pendingBidId: null,
+    hours: 0, extraHourRate: 0, acceptedAt: stamp, createdAt: stamp,
+    declinedBy: [],
+    driverName: null, progress: 0,
+    scheduledFor: v.scheduledFor || null,
+    returnTrip: !!v.returnTrip, ...(v.returnTrip ? { oneWayFare: v.oneWayFare, returnFare: v.returnFare, returnPct: v.returnPct } : {}),
+    customerMobile: v.customerMobile, customerName: v.customerName,
+    pickupLat: v.pickupLat, pickupLng: v.pickupLng, dropLat: v.dropLat, dropLng: v.dropLng,
+    pickupPlaceId: v.pickupPlaceId, dropPlaceId: v.dropPlaceId, placeLang: v.placeLang,
+    driverLocation: null,
+    adminBooked: true, paymentBy: "customer", adminBookedAt: stamp,
+    adminRing: true, adminRingMobile: v.driverMobile,
+  };
+}
+
+module.exports = { buildAdminRingDoc, ADMIN_RING_PLACEHOLDER, validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc, cleanMobile, MAX_FARE };

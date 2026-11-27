@@ -961,3 +961,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-27 -- AndroidManifest: add AD_ID permission (Play Advertising ID declaration = Yes), contract N71 + invariant (owner 2026-11-27, build 45)
 - changed (4): file:android/app/src/main/AndroidManifest.xml, code:android/app/src/main/AndroidManifest.xml, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-27 -- Admin Ring button: new callable adminRingDriver + one skip line (adminRing) in escalateUnmatchedBookings, contract N72 + invariant (owner 2026-11-27, explicit ring request)
+- changed (10): fn:escalateUnmatchedBookings, file:src/firebaseClient.js, code:docs/SYSTEM_CONTRACTS.md, code:functions/adminBooking.js#exportsList, code:functions/index.js#other, code:functions/index.js#fn:escalateUnmatchedBookings, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#failText, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer
+- added (6): fn:adminRingDriver, code:functions/adminBooking.js#ADMIN_RING_PLACEHOLDER, code:functions/adminBooking.js#buildAdminRingDoc, code:functions/index.js#fn:adminRingDriver, code:src/firebaseClient.js#adminRingDriver, code:scripts/serverTests/adminRingDriver.cjs
+
+## 2026-11-27 -- CLAUDE.md paragraph for the Admin Ring button
+- changed (1): code:CLAUDE.md

@@ -212,7 +212,7 @@ const { buildFleetConversion } = require("./fleetConvert");
 const { lookupMobileRoles, refusesSecondRole } = require("./roleLock");
 const { planOtpSignIn, isClientPinSignup } = require("./phoneSignup");
 const { planRoleSwitch, plainSnapshot } = require("./roleSwitch");
-const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc } = require("./adminBooking");
+const { validateAdminBookingInput, driverBlockReason, fleetBlockReason, buildAdminBookingDoc, buildAdminRingDoc } = require("./adminBooking");
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -588,6 +588,7 @@ exports.escalateUnmatchedBookings = onSchedule(
     snap.forEach((doc) => {
       const load = doc.data();
       const bookingId = doc.id;
+      if (load.adminRing) return; // Admin rang ONE driver (adminRingDriver, owner 2026-11-27): never widened to other drivers
       const createdAtMs = load.createdAt?.toMillis ? load.createdAt.toMillis() : null;
       if (!createdAtMs) return;
       const ageSec = (now - createdAtMs) / 1000;
@@ -1852,6 +1853,77 @@ exports.adminBookForCustomer = onCall({ region: "asia-south1" }, async (request)
     }
   }
   return { ok: true, bookingId };
+});
+
+// ADMIN RINGS ONE DRIVER (owner 2026-11-27: "a Ring button ... which rings that particular driver"). Admin-only. Creates an OPEN request (AwaitingDriver) from the Book-for-a-customer
+// form and rings ONLY the chosen driver's phone (push + the live-watch backup, same order as the normal ring: ringTargets -> push -> alertedDriverMobiles); the driver accepts it
+// himself. The driver must satisfy the SAME rule that decides who sees / is rung for a load (evaluateNewLoadDriver: duty on, KYC approved, not blocked, free, the picked category,
+// inside the radius), otherwise his app would never show the load and the ring's Accept would do nothing -- then NOTHING is created and the reason comes back. A driver whose app is
+// open on Home is not rung (the one-Accept rule): the load shows on his screen. No escalation (`adminRing`). Other eligible drivers can still SEE the open request in their app
+// list (no ring) -- the open pool is one shared collection.
+exports.adminRingDriver = onCall({ region: "asia-south1", timeoutSeconds: 60 }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const checked = validateAdminBookingInput(request.data);
+  if (!checked.ok) return { ok: false, reason: checked.reason, message: checked.message };
+  const v = checked.v;
+  if (v.fleetVehicleId || !v.driverMobile) return { ok: false, reason: "driver_mobile", message: "Choose a driver to ring." };
+  try {
+    const [isCustomer, isDriver] = await Promise.all([mobileHasRoleAccount(v.customerMobile, "customer"), mobileHasRoleAccount(v.customerMobile, "driver")]);
+    if (isDriver && !isCustomer) return { ok: false, reason: "number_is_driver", message: "That number belongs to a Driver, so it cannot be booked as a customer." };
+  } catch (e) {
+    console.error("[adminRingDriver] role lookup failed:", e.message);
+    return { ok: false, reason: "lookup_failed", message: "Could not check the number -- try again." };
+  }
+  const driverSnap = await db.collection("drivers").doc(v.driverMobile).get();
+  const driver = driverSnap.exists ? driverSnap.data() : null;
+  const ongoing = driver ? (await db.collection("bookings").where("driverMobile", "==", v.driverMobile).where("status", "==", "Ongoing").get()).docs.map((d) => d.data()) : [];
+  const conflict = driver ? hasLoadConflict({ scheduledFor: v.scheduledFor }, ongoing, notificationLockHours(Number(driver.vehicleSpec?.capacityKg) || 0)) : false;
+  const block = driverBlockReason(driver, conflict);
+  if (block) return { ok: false, reason: block, message: "That driver cannot be rung (" + block.replace(/^driver_/, "").replace(/_/g, " ") + ")." };
+  if (!driver.fcmToken) return { ok: false, reason: "no_push_token", message: "This driver's phone has no push token (the app was not opened since install, or he logged out), so it cannot ring. Call him instead." };
+
+  const stamp = FieldValue.serverTimestamp();
+  const doc = buildAdminRingDoc(v, stamp);
+  // Would the driver's own app list this load, and would the normal ring pick him? One rule for both (tripLock.js). The app-open test is done separately below.
+  const mine = [...ongoing];
+  const verdict = evaluateNewLoadDriver(driver, { ...doc, createdAt: null, pendingDriverName: null }, { mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: () => false, fleetVehicles: [], fleetMine: () => [] });
+  if (!verdict.ok) return { ok: false, reason: "not_in_ring_rule", message: "He would not see this load in his app, so a ring would do nothing (" + String(verdict.reason || "rule").slice(0, 160) + "). Use Book instead, or pick a driver the list says is on duty, near and in this category." };
+  const appOpen = isAppOpenNow(driver, Date.now());
+
+  let bookingId = null;
+  for (let attempt = 0; attempt < 6 && !bookingId; attempt++) {
+    const id = "TS-" + crypto.randomInt(10000, 100000);
+    try {
+      await db.collection("bookings").doc(id).create(doc);
+      bookingId = id;
+    } catch (e) {
+      if (e.code !== 6 && !/already exists/i.test(e.message || "")) throw e;
+    }
+  }
+  if (!bookingId) return { ok: false, reason: "id_clash", message: "Could not create the request -- try again." };
+  const ref = db.collection("bookings").doc(bookingId);
+  const load = { ...doc, createdAt: null, acceptedAt: null, adminBookedAt: null };
+  try {
+    // Open it to the pool; the broadcast trigger already ran on the placeholder at creation (it fires once, on create) and rang nobody.
+    await ref.update({ pendingDriverName: null, ...(appOpen ? {} : { ringTargets: [v.driverMobile], ringDeliveredCount: 0 }) });
+  } catch (e) {
+    console.error("[adminRingDriver] opening the request failed:", e.message);
+    await ref.delete().catch(() => {});
+    return { ok: false, reason: "error", message: "Could not open the request -- nothing was sent. Try again." };
+  }
+  if (appOpen) return { ok: true, bookingId, rung: false, appOpen: true };
+  try {
+    const ackKey = crypto.randomBytes(12).toString("hex");
+    await db.collection("ringDeliveries").doc(`${bookingId}_${v.driverMobile}`).set({ bookingId, driverMobile: v.driverMobile, key: ackKey, sentAt: Date.now(), attempts: 1, ackAt: null }).catch((e) => console.error("[adminRingDriver] ringDeliveries", e.message));
+    await Promise.all([
+      sendDirectRequestAlert(driver.fcmToken, load, bookingId, v.driverMobile),
+      sendDirectRequestRingAlert(driver.fcmToken, load, bookingId, v.driverMobile, ackKey),
+    ]);
+    await sleep(WATCHER_BACKUP_DELAY_MS);
+  } finally {
+    await ref.update({ alertedDriverMobiles: [v.driverMobile] }).catch((e) => console.error("[adminRingDriver] alertedDriverMobiles", e.message));
+  }
+  return { ok: true, bookingId, rung: true, appOpen: false };
 });
 
 // Admin-only: turn a CSV the Admin screen already built into a real, short-lived
