@@ -161,7 +161,7 @@
   "code:.github/workflows/check-16kb.yml": "aad711246a4158e2",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "85eb3c01be479796",
-  "code:CLAUDE.md": "d313279e68eddb94",
+  "code:CLAUDE.md": "8717ee773cd4a75d",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -343,7 +343,7 @@
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
   "code:docs/SMS_ACTIVATION.md": "fd6621898e5456dc",
-  "code:docs/SYSTEM_CONTRACTS.md": "7cec1ec5c128349b",
+  "code:docs/SYSTEM_CONTRACTS.md": "8c976c058dc6fd09",
   "code:firebase.json": "900e217b868337c1",
   "code:firestore.rules": "d9ceec2f7254d6e1",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -720,6 +720,7 @@
   "code:scripts/rulesTest/whatsappTicks.mjs": "ae360e5c0bb3950d",
   "code:scripts/serverTests/adminBookForCustomer.cjs": "774db85aab75ea33",
   "code:scripts/serverTests/adminDeleteAccount.cjs": "fcf179b4a820b862",
+  "code:scripts/serverTests/adminRingDriver.cjs": "bc3eaf3c4fdb78f3",
   "code:scripts/serverTests/adminSwitchRole.cjs": "29e167d942924053",
   "code:scripts/serverTests/helper.cjs#Module": "f5ee1697084d9bd4",
   "code:scripts/serverTests/helper.cjs#path": "6b7d0275f974a07f",
@@ -1464,7 +1465,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:scripts/serverTests/adminRingDriver.cjs": "bc3eaf3c4fdb78f3"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

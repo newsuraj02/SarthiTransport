@@ -968,3 +968,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-27 -- CLAUDE.md paragraph for the Admin Ring button
 - changed (1): code:CLAUDE.md
+
+## 2026-11-27 -- record owner confirmation: Admin Ring button works (2026-11-27)
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
