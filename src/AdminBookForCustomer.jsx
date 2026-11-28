@@ -17,6 +17,7 @@ import { adminBookForCustomer, adminRingDriver } from "./firebaseClient";
 import { categoryIndexForKg } from "./vehicleModels.js";
 import { cleanNameInput, isValidPersonName, digitsOnly } from "./inputRules.js";
 import { whatsappLink } from "./fleetDispatch.js";
+import AdminPickupOtp from "./AdminPickupOtp.jsx";
 
 const T = (lang, en, hi, mr) => (lang === "en" ? en : lang === "mr" ? (mr || hi) : hi);
 const inputCls = "w-full rounded-lg p-2.5 text-sm font-bold outline-none";
@@ -228,6 +229,7 @@ export default function AdminBookForCustomer({ bookings = [], drivers, fleetVehi
               <div className="text-xs" style={{ color: C.inkSoft }}>
                 {T(lang, `${done.driverName} now has this trip. Tell the driver to open the app. The customer pays the driver directly.`, `${done.driverName} के पास यह ट्रिप आ गई है। ड्राइवर को ऐप खोलने को कहें। ग्राहक ड्राइवर को सीधे भुगतान करेगा।`, `${done.driverName} कडे ही ट्रिप आली आहे. ड्रायव्हरला अ‍ॅप उघडायला सांगा. ग्राहक ड्रायव्हरला थेट पैसे देईल.`)}
               </div>
+              <AdminPickupOtp bookingId={done.bookingId} lang={lang} />
               {done.fleet && done.dispatch && (
                 <div data-admin-book-fleet-dispatch className="text-xs space-y-1.5 text-left rounded-lg p-2.5" style={{ background: "#FFFFFF", border: `1px solid ${C.line}`, color: C.ink }}>
                   {done.dispatch.sent
@@ -363,6 +365,7 @@ export default function AdminBookForCustomer({ bookings = [], drivers, fleetVehi
                             <span className="text-[10px] font-bold shrink-0" style={{ color: tn.fg }}>{ringEntry.bookingId}</span>
                           </div>
                         ); })()}
+                        {ringSt && (ringSt.key === "accepted" || ringSt.key === "enroute") && <AdminPickupOtp bookingId={ringEntry.bookingId} lang={lang} />}
                         {ringErr && ringErr.mobile === d.mobile && <p data-admin-ring-error className="mt-2 text-xs font-bold" style={{ color: C.safety }}>{ringErr.text}</p>}
                         {confirming && !confirming.fleetVehicleId && confirming.mobile === d.mobile && (
                           <div data-admin-book-confirm className="mt-2 rounded-lg p-2.5 space-y-2" style={{ background: "#FFF8E1", border: `1px solid ${C.marigoldDeep}` }}>

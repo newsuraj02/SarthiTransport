@@ -21,6 +21,7 @@ import { groupTransporters } from "./transporters.js";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { BOOKING_GROUP_KEYS, groupLiveBookings } from "./bookingGroups";
 import AdminBookForCustomer from "./AdminBookForCustomer.jsx";
+import AdminPickupOtp, { needsAdminPickupOtp } from "./AdminPickupOtp.jsx";
 import { useBackHandler } from "./backButton.js";
 import { WaStatusContext, WaTicks, WaSummary } from "./waTicks.jsx";
 import AdminSmsSettings from "./AdminSmsSettings.jsx";
@@ -1631,6 +1632,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
       <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
         {b.scheduledFor ? `${b.scheduledFor} · ` : ""}{b.driverName || (lang === "en" ? "No driver yet" : lang === "mr" ? "ड्रायव्हर अजून नाही" : "अभी ड्राइवर नहीं")}{fleetTag(b)}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""} · {statusMeta[b.status]?.label || (b.status === "AwaitingDriver" ? (lang === "en" ? "Searching" : lang === "mr" ? "शोधत आहे" : "खोज जारी") : b.status)}
       </div>
+      {needsAdminPickupOtp(b) && <AdminPickupOtp bookingId={b.id} lang={lang} />}
     </div>
   );
   const liveSections = BOOKING_GROUP_KEYS.map((key) => ({

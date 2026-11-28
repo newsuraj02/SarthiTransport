@@ -978,3 +978,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-28 -- Admin Ring status invariant + docs (owner 2026-11-28)
 - changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-28 -- Admin sees the pickup OTP of Admin-booked / rung trips (bug: customer without an app never got the OTP), contract N73 + invariant (owner 2026-11-28)
+- changed (7): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminBookForCustomer.jsx#imports, code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminBookings
+- added (1): code:src/AdminPickupOtp.jsx
+
+## 2026-11-28 -- OTP box lives in liveRow (keeps the list line unchanged)
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminBookings
