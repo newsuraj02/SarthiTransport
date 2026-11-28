@@ -56,7 +56,30 @@ function failText(res, lang) {
   return m[r] || (res && res.message) || T(lang, "Could not book -- please try again.", "बुक नहीं हो सका — फिर कोशिश करें।", "बुक होऊ शकले नाही — पुन्हा प्रयत्न करा.");
 }
 
-export default function AdminBookForCustomer({ drivers, fleetVehicles = [], fleetPrivate = [], fareTiers, adminRouteFares, dieselPricePerLitre, returnPct = 0, prefill = null, lang, onClose }) {
+// LIVE STATUS of a ringed request (owner 2026-11-28: "add a status button after the ring like Ringing, Accepted, On the way to Pickup and OTP entered - Ride Active"). Read from the ONE booking
+// document the ring created: AwaitingDriver = Ringing; Ongoing by the ringed driver = Accepted, then On the way to Pickup once his GPS writes the trip's driverLocation (the frozen GPS effect does that),
+// then OTP entered - Ride Active when loadingStartedAt is set; Completed / Cancelled; someone ELSE accepted it = say who; the document gone (the 1-hour unmatched delete) = No response.
+export function ringStatusOf(entry, booking, now = Date.now()) {
+  if (!entry) return null;
+  if (!booking && now - (entry.at || 0) < 25000) return { key: "ringing", tone: "orange", en: "Ringing", hi: "घंटी बज रही है", mr: "रिंग वाजत आहे" }; // just sent: the booking has not reached this list yet
+  if (!booking) return { key: "expired", tone: "grey", en: "No response — request expired", hi: "कोई जवाब नहीं — रिक्वेस्ट हट गई", mr: "प्रतिसाद नाही — विनंती हटली" };
+  if (booking.status === "AwaitingDriver") {
+    return entry.appOpen
+      ? { key: "ringing", tone: "orange", en: "Shown on his screen (app open)", hi: "उसकी स्क्रीन पर दिख रहा है (ऐप खुला)", mr: "त्याच्या स्क्रीनवर दिसत आहे (अ‍ॅप उघडे)" }
+      : { key: "ringing", tone: "orange", en: "Ringing", hi: "घंटी बज रही है", mr: "रिंग वाजत आहे" };
+  }
+  if (booking.status === "Cancelled") return { key: "cancelled", tone: "red", en: "Cancelled", hi: "रद्द", mr: "रद्द" };
+  const mine = booking.driverMobile === entry.mobile;
+  if (!mine) return { key: "other", tone: "grey", en: `Taken by another driver${booking.driverName ? " (" + booking.driverName + ")" : ""}`, hi: `दूसरे ड्राइवर ने ले लिया${booking.driverName ? " (" + booking.driverName + ")" : ""}`, mr: `दुसऱ्या ड्रायव्हरने घेतले${booking.driverName ? " (" + booking.driverName + ")" : ""}` };
+  if (booking.status === "Completed") return { key: "completed", tone: "green", en: "Trip completed", hi: "ट्रिप पूरी हुई", mr: "ट्रिप पूर्ण झाली" };
+  if (booking.loadingStartedAt) return { key: "active", tone: "green", en: "OTP entered — Ride Active", hi: "OTP डाला गया — राइड चालू", mr: "OTP टाकला — राइड सुरू" };
+  const gps = booking.driverLocation && booking.driverLocation.lat != null && booking.driverLocation.lng != null;
+  if (gps) return { key: "enroute", tone: "blue", en: "On the way to Pickup", hi: "पिकअप की ओर जा रहा है", mr: "पिकअपकडे जात आहे" };
+  return { key: "accepted", tone: "blue", en: "Accepted", hi: "स्वीकार किया", mr: "स्वीकारले" };
+}
+const RING_TONES = { orange: { bg: "#FFF3D6", fg: "#8A5A00", bd: "#E8A317" }, blue: { bg: "#E6EFFF", fg: "#0B3D91", bd: "#0052CC" }, green: { bg: "#E8F7EE", fg: "#0B6B3A", bd: "#1FA85A" }, red: { bg: "#FDECEC", fg: "#9B1C1C", bd: "#D64545" }, grey: { bg: "#EEF1F6", fg: "#475569", bd: "#CBD5E1" } };
+
+export default function AdminBookForCustomer({ bookings = [], drivers, fleetVehicles = [], fleetPrivate = [], fareTiers, adminRouteFares, dieselPricePerLitre, returnPct = 0, prefill = null, lang, onClose }) {
   useBackHandler(true, onClose, 30); // Android Back = Close (owner 2026-11-13)
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
@@ -77,6 +100,10 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(null); // { bookingId, driverName }
+  const [ringed, setRinged] = useState({}); // driver mobile -> { bookingId, mobile, name, appOpen } of the requests Admin rang from this sheet (their live status shows on the driver's row)
+  const [, setTick] = useState(0); // re-evaluates a ringed request's status every 5 s (the 25 s "just sent" grace, the 1-hour expiry)
+  useEffect(() => { if (!Object.keys(ringed).length) return undefined; const t = setInterval(() => setTick((n) => n + 1), 5000); return () => clearInterval(t); }, [ringed]);
+  const [ringErr, setRingErr] = useState(null); // { mobile, text } -- a failed Ring, shown on that driver's row
 
   useEffect(() => {
     if (!mapsReady || pickupCoords || !pickup.trim()) return;
@@ -168,9 +195,10 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
   // RING (owner 2026-11-27): rings ONLY this driver's phone for an open request; he accepts it himself (Book assigns the trip at once instead).
   const doRing = async () => {
     if (!confirming || !confirming.ring || !ready || working) return;
-    setWorking(true); setError("");
+    const target = confirming;
+    setWorking(true); setError(""); setRingErr(null);
     const res = await adminRingDriver({
-      customerMobile, customerName: customerName.trim(), driverMobile: confirming.mobile,
+      customerMobile, customerName: customerName.trim(), driverMobile: target.mobile,
       pickup, drop, pickupLat: pickupCoords.lat, pickupLng: pickupCoords.lng, dropLat: dropCoords.lat, dropLng: dropCoords.lng,
       pickupPlaceId, dropPlaceId, placeLang: lang,
       fare: chosenFare.fare, tierMaxKg: chosenFare.tierMaxKg, listCategory: chosen.index,
@@ -179,13 +207,15 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
       ...(returnTrip ? { returnTrip: true, oneWayFare: chosenFare.oneWayFare, returnFare: chosenFare.returnFare, returnPct: Number(returnPct) || 0 } : {}),
     });
     setWorking(false);
-    if (res && res.ok) { setDone({ ring: true, bookingId: res.bookingId, driverName: confirming.name, rung: !!res.rung, appOpen: !!res.appOpen }); setConfirming(null); return; }
-    setError(failText(res, lang)); setConfirming(null);
+    setConfirming(null);
+    // The sheet STAYS OPEN (owner 2026-11-28: it must stay until the cross is tapped): the result shows as a live status on this driver's row.
+    if (res && res.ok) { setRinged((r) => ({ ...r, [target.mobile]: { bookingId: res.bookingId, mobile: target.mobile, name: target.name, appOpen: !!res.appOpen, at: Date.now() } })); return; }
+    setRingErr({ mobile: target.mobile, text: failText(res, lang) });
   };
 
   const label = "text-[11px] font-bold mb-1";
   return (
-    <div data-admin-book-for-customer className="fixed inset-0 z-[80] flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
+    <div data-admin-book-for-customer className="fixed inset-0 z-[80] flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[92vh] flex flex-col relative" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
           <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{T(lang, "Book for a customer", "ग्राहक के लिए बुक करें", "ग्राहकासाठी बुक करा")}</h3>
@@ -194,17 +224,10 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
         <div className="p-4 space-y-3 overflow-y-auto">
           {done ? (
             <div data-admin-book-done className="rounded-xl p-4 text-center space-y-2" style={{ background: "#E8F7EE", border: `1px solid ${C.success}` }}>
-              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{done.ring ? T(lang, "Rung", "घंटी बजाई", "रिंग केली") : T(lang, "Booked", "बुक हो गया", "बुक झाले")} · {done.bookingId}</div>
-              {done.ring && (
-                <div data-admin-ring-done className="text-xs" style={{ color: C.inkSoft }}>
-                  {done.appOpen
-                    ? T(lang, `${done.driverName} has the app open, so no ring: the load shows on his screen with a sound. He accepts it himself.`, `${done.driverName} का ऐप खुला है, इसलिए घंटी नहीं: लोड उसकी स्क्रीन पर आवाज़ के साथ दिखेगा। वह खुद स्वीकार करेगा।`, `${done.driverName} चे अ‍ॅप उघडे आहे, म्हणून रिंग नाही: लोड त्याच्या स्क्रीनवर आवाजासह दिसेल. तो स्वतः स्वीकारेल.`)
-                    : T(lang, `${done.driverName}'s phone has been rung. He accepts it himself in the app. Nothing is assigned until he does. If nobody accepts within 1 hour the request is deleted.`, `${done.driverName} के फ़ोन पर घंटी भेज दी गई है। वह खुद ऐप में स्वीकार करेगा। उसके स्वीकार करने तक कुछ असाइन नहीं होता। 1 घंटे में कोई स्वीकार न करे तो रिक्वेस्ट हट जाती है।`, `${done.driverName} च्या फोनवर रिंग पाठवली आहे. तो स्वतः अ‍ॅपमध्ये स्वीकारेल. तो स्वीकारेपर्यंत काहीही नियुक्त होत नाही. 1 तासात कोणी न स्वीकारल्यास विनंती हटते.`)}
-                </div>
-              )}
-              {!done.ring && <div className="text-xs" style={{ color: C.inkSoft }}>
+              <div className="text-sm font-extrabold" style={{ color: C.ink }}>{T(lang, "Booked", "बुक हो गया", "बुक झाले")} · {done.bookingId}</div>
+              <div className="text-xs" style={{ color: C.inkSoft }}>
                 {T(lang, `${done.driverName} now has this trip. Tell the driver to open the app. The customer pays the driver directly.`, `${done.driverName} के पास यह ट्रिप आ गई है। ड्राइवर को ऐप खोलने को कहें। ग्राहक ड्राइवर को सीधे भुगतान करेगा।`, `${done.driverName} कडे ही ट्रिप आली आहे. ड्रायव्हरला अ‍ॅप उघडायला सांगा. ग्राहक ड्रायव्हरला थेट पैसे देईल.`)}
-              </div>}
+              </div>
               {done.fleet && done.dispatch && (
                 <div data-admin-book-fleet-dispatch className="text-xs space-y-1.5 text-left rounded-lg p-2.5" style={{ background: "#FFFFFF", border: `1px solid ${C.line}`, color: C.ink }}>
                   {done.dispatch.sent
@@ -309,6 +332,10 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                   {rows.length === 0 && fleetRows.length === 0 && <p className="text-xs text-center py-3" style={{ color: C.inkSoft }}>{T(lang, "No Approved driver in this category. Tick \"All vehicles\".", "इस श्रेणी में कोई अप्रूव्ड ड्राइवर नहीं। \"सभी गाड़ियाँ\" टिक करें।", "या श्रेणीत मंजूर ड्रायव्हर नाही. \"सर्व गाड्या\" टिक करा.")}</p>}
                   {rows.map(({ d, kmAway }) => {
                     const g = gpsStatus(d, lang);
+                    const ringEntry = ringed[d.mobile] || null;
+                    const ringBooking = ringEntry ? (bookings || []).find((x) => x.id === ringEntry.bookingId) || null : null;
+                    const ringSt = ringStatusOf(ringEntry, ringBooking);
+                    const ringActive = !!ringSt && ["ringing", "accepted", "enroute", "active"].includes(ringSt.key); // while a request is live for him there is no second Ring
                     return (
                       <div key={d.mobile} data-admin-book-driver={d.mobile} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                         <div className="flex items-center justify-between gap-2">
@@ -323,10 +350,20 @@ export default function AdminBookForCustomer({ drivers, fleetVehicles = [], flee
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <a href={`tel:+91${d.mobile}`} data-admin-book-call className="p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success, color: "#fff" }} aria-label="Call"><Phone size={16} /></a>
-                            <button type="button" data-admin-ring-btn onClick={() => { setConfirming({ mobile: d.mobile, name: d.name, ring: true }); setError(""); }} className="px-3 py-2.5 rounded-lg text-xs font-extrabold" style={{ background: C.marigold, color: C.ink }}>{T(lang, "Ring", "रिंग", "रिंग")}</button>
+                            {!ringActive && <button type="button" data-admin-ring-btn onClick={() => { setConfirming({ mobile: d.mobile, name: d.name, ring: true }); setError(""); }} className="px-3 py-2.5 rounded-lg text-xs font-extrabold" style={{ background: C.marigold, color: C.ink }}>{T(lang, "Ring", "रिंग", "रिंग")}</button>}
                             <button type="button" data-admin-book-btn onClick={() => { setConfirming({ mobile: d.mobile, name: d.name }); setError(""); }} className="px-3 py-2.5 rounded-lg text-xs font-extrabold" style={{ background: C.navy, color: "#fff" }}>{T(lang, "Book", "बुक", "बुक")}</button>
                           </div>
                         </div>
+                        {ringSt && (() => { const tn = RING_TONES[ringSt.tone] || RING_TONES.grey; return (
+                          <div data-admin-ring-status={ringSt.key} className="mt-2 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: tn.bg, border: `1px solid ${tn.bd}` }}>
+                            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold min-w-0 break-words" style={{ background: "#fff", color: tn.fg, border: `1px solid ${tn.bd}` }}>
+                              <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 9999, background: tn.bd, display: "inline-block" }} />
+                              {T(lang, ringSt.en, ringSt.hi, ringSt.mr)}
+                            </span>
+                            <span className="text-[10px] font-bold shrink-0" style={{ color: tn.fg }}>{ringEntry.bookingId}</span>
+                          </div>
+                        ); })()}
+                        {ringErr && ringErr.mobile === d.mobile && <p data-admin-ring-error className="mt-2 text-xs font-bold" style={{ color: C.safety }}>{ringErr.text}</p>}
                         {confirming && !confirming.fleetVehicleId && confirming.mobile === d.mobile && (
                           <div data-admin-book-confirm className="mt-2 rounded-lg p-2.5 space-y-2" style={{ background: "#FFF8E1", border: `1px solid ${C.marigoldDeep}` }}>
                             <div className="text-xs" style={{ color: C.ink }}>

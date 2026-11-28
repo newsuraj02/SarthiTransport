@@ -971,3 +971,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-27 -- record owner confirmation: Admin Ring button works (2026-11-27)
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-28 -- Admin Ring: sheet stays open after Ring (no result screen, outside tap no longer closes), live status strip per ringed driver (owner 2026-11-28)
+- changed (2): code:src/AdminBookForCustomer.jsx#AdminBookForCustomer, code:src/AdminPanel.jsx#AdminBookings
+- added (2): code:src/AdminBookForCustomer.jsx#ringStatusOf, code:src/AdminBookForCustomer.jsx#RING_TONES
+
+## 2026-11-28 -- Admin Ring status invariant + docs (owner 2026-11-28)
+- changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks

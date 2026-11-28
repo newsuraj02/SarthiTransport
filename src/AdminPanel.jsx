@@ -1713,7 +1713,7 @@ function AdminBookings({ flowSessions, deleteCustomerFlowSessions, customers, bo
         <Eye size={16} /> {lang === "en" ? "Customer activity (every tap)" : lang === "mr" ? "ग्राहक हालचाल (प्रत्येक टॅप)" : "ग्राहक गतिविधि (हर टैप)"} · {(flowSessions || []).length}
       </button>
       {customerActivityOpen && <AdminCustomerFlow sessions={flowSessions || []} bookings={bookings} lang={lang} onBookFor={(pf) => setBookForCustomer(pf)} onDeleteSessions={deleteCustomerFlowSessions} onClose={() => setCustomerActivityOpen(false)} />}
-      {bookForCustomer && <AdminBookForCustomer prefill={bookForCustomer} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomer(null)} />}
+      {bookForCustomer && <AdminBookForCustomer prefill={bookForCustomer} drivers={drivers} fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} bookings={bookings} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} lang={lang} onClose={() => setBookForCustomer(null)} />}
       {sections.map((s) => {
         // The four live groups are DROPDOWNS (owner 2026-11-23: "the list needs to be in the dropdown and only one of them is open at a time"): closed by default, a tap on the header opens
         // that group's list and closes the one that was open, a tap on the open one closes it. Booked today / Cancelled today / Total advance bookings stay plain lists.
